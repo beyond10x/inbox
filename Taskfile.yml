@@ -10,11 +10,32 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target.
+    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: projections-drift
+      - task: drift
       - task: conform-interpreted
+      - cargo fmt --check
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+      - cargo test --workspace --locked
+      - task: build-generated
+
+  generate:
+    desc: Rewrite generated/rust/inbox from a fresh synthesis of ess/; its Cargo.lock is kept and brought up to date.
+    cmds:
+      - cargo run -q --locked -p inbox-xtask -- generate
+      - cargo metadata -q --format-version 1 --manifest-path generated/rust/inbox/Cargo.toml > /dev/null
+
+  drift:
+    desc: Fail when generated/rust/inbox differs from a fresh synthesis of ess/.
+    cmds:
+      - cargo run -q --locked -p inbox-xtask -- drift
+
+  build-generated:
+    desc: Build generated/rust/inbox with its server feature into the repository's target/.
+    cmds:
+      - cargo build --locked --manifest-path generated/rust/inbox/Cargo.toml --features server --target-dir '{{.ROOT_DIR}}/target'
 
   spec:
     desc: Validate the ESS specification.

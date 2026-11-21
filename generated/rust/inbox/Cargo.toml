@@ -1,0 +1,24 @@
+# generated from inbox v1
+# contract digest 5d0a606ec95b4f3d1fc798803ab374eda0253182924a6940cb5d87c35b449778
+# do not edit: regenerate with `ess synthesize --layout crate`
+
+[package]
+name = "inbox"
+description = "The `inbox` specification, v1, synthesised as one crate; its HTTP surface is the `server` feature."
+version = "1.0.0"
+edition = "2021"
+
+[features]
+server = ["dep:clap", "dep:uuid", "dep:time"]
+
+[dependencies]
+clap = { version = "^4.6.7", features = ["derive"], optional = true }
+uuid = { version = "^1.26.1", features = ["v4"], optional = true }
+time = { version = "^0.3.45", features = ["formatting"], optional = true }
+
+[[bin]]
+name = "inbox-service-server"
+path = "src/bin/inbox-service-server.rs"
+required-features = ["server"]
+
+[workspace]

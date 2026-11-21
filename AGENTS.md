@@ -17,6 +17,10 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
 | `ess/scenarios/`, `ess/ess-inputs.yaml` | The 23 authored scenarios and the manifest that lists them | `task scenarios` |
 | `tools/scenarios.py` | Source of the authored scenarios and of their `covers:` claims | authored |
 | `generated/{openapi,asyncapi,schema}/` | ESS projections of `ess/`; `generated/openapi` is the wire API of the service | `task projections` |
+| `generated/rust/inbox/` | The crate `ess generate synthesize --target rust --layout crate` writes from `ess/`: model types, command behaviours, view queries, storage and context ports; the route table, JSON codecs, transport-free `handle` and the binary `inbox-service-server` behind the `server` feature. On ESS 0.96.0: 85 of 87 capabilities, obligations `PostMessage` and `Expire` (`PLAN.md`). Its `Cargo.lock` is checked in and kept by `task generate`; `.ess-output/` is not checked in | `task generate` |
+| `Cargo.toml`, `Cargo.lock` | The Cargo workspace: members `crates/*`; `generated/rust` is excluded, because the synthesized `Cargo.toml` declares its own `[workspace]` | authored, `cargo` |
+| `rust-toolchain.toml` | Rust 1.99.1 with `rustfmt` and `clippy`; `.github/workflows/check.yml` installs the same version from checksummed release archives | authored |
+| `crates/inbox-xtask/` | Repository tasks: `generate` and `drift` synthesize `ess/` into `target/inbox-xtask/` and compare it with `generated/rust/inbox` | authored |
 | `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.96.0 cannot express | authored |
 | `docs/plan/` | One wave plan page per stage: the waves in order, and per unit its branch, worktree id and stage | the wave's coordinator |
 | `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
@@ -25,9 +29,12 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
 
 | Command | Does |
 |---|---|
-| `task check` | The gate: `task spec`, `task projections-drift`, `task conform-interpreted` |
+| `task check` | The gate: `task spec`, `task projections-drift`, `task drift`, `task conform-interpreted`, `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, `task build-generated`. Run it as `slot task check` on a shared host |
 | `task spec` | `ess specify validate --path ess --strict-requires` |
-| `task projections` | Rewrite `generated/` after a change to `ess/` |
+| `task projections` | Rewrite `generated/{openapi,asyncapi,schema}` after a change to `ess/` |
+| `task generate` | Rewrite `generated/rust/inbox` after a change to `ess/` or to the `ess` version, then bring its `Cargo.lock` up to date with `cargo metadata` |
+| `task drift` | Fail with `generated/rust/inbox drifted from a fresh synthesis of ess/` and one `edited:`, `missing:` or `not generated:` line per file when the crate differs from a fresh synthesis; its top-level `Cargo.lock` and `.ess-output/` are not compared |
+| `task build-generated` | `cargo build --features server` of `generated/rust/inbox`, into the repository's own `target/` (`--target-dir`), never into a `target/` inside `generated/` |
 | `task conform-interpreted` | Synthesize the suite into `.out/conform/` and run it on the ESS interpreted target. On ESS 0.96.0: 92 scenarios (23 authored), 92 passed |
 | `task coverage` | Synthesize with declared coverage. Exits 1 on ESS 0.96.0: 50 of 97 refused generated scenarios are covered by nothing (all `ESS-SYNTH-013`). Not in `task check` |
 | `task scenarios` | Rewrite `ess/scenarios/` and `ess/ess-inputs.yaml` from `tools/scenarios.py`. Needs `python3` with PyYAML |
@@ -36,6 +43,12 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
 ## Rules
 
 - Change `ess/` first. Never edit `generated/` by hand; `task check` fails on drift.
+- `generated/rust/inbox` is never formatted, linted or edited: the synthesized code fails
+  `cargo fmt --check` and `cargo clippy -- -D warnings` on ESS 0.96.0, and it stays outside the
+  workspace, so neither step reads it. A crate depends on it by path
+  (`inbox = { path = "../../generated/rust/inbox", features = ["server"] }`), implements the
+  obligations named in its `PLAN.md` outside it, and adds itself under `crates/` without editing
+  `Cargo.toml`.
 - A scenario changes in `tools/scenarios.py`, then `task scenarios`; commit both. The script
   removes no file: delete the file of a scenario taken out of it.
 - An `UNMAPPED:` marker in `ess/` is a rule ESS cannot express yet. It stays until ESS can, and
