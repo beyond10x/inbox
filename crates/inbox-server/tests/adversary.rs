@@ -326,7 +326,6 @@ fn adv_a_third_principal_cannot_tell_a_message_between_others_from_no_message() 
 }
 
 #[test]
-#[ignore = "pre-existing, story:dedup-key-scope"]
 fn adv_a_third_principal_cannot_take_another_senders_dedup_key() {
     let world = World::new();
     let server = world.start(|_| {});

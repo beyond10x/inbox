@@ -780,6 +780,28 @@ s.check("Settled", sender(), contains={"message_id": m2, "state": "Refused",
 s.empty("Pending", inbox(WORKER)).empty("Replies", thread(m))
 names.append(s.write())
 
+# 28
+m = mid("KS", 1)
+m2 = mid("KS", 2)
+m3 = mid("KS", 3)
+m4 = mid("KS", 4)
+key = "deploy-2026-11-21"
+s = Scenario("dedup-key-is-the-senders",
+             "A dedup key refuses only a second post of its own sender, to any inbox. A third principal's key in its own inbox refuses no post of another sender.")
+s.open(WORKER).open(OTHER)
+s.post(m, OTHER, "note", sender=OTHER, dedup_key=key)
+s.post(m2, WORKER, "note", dedup_key=key)
+s.post(m3, WORKER, "note", dedup_key=key, outcome="duplicate-key", error="Duplicate")
+s.post(m4, OTHER, "note", dedup_key=key, outcome="duplicate-key", error="Duplicate")
+s.exactly("Pending", inbox(OTHER), 1)
+s.check("Pending", inbox(OTHER), contains={"message_id": m, "from": OTHER, "dedup_key": key})
+s.exactly("Pending", inbox(WORKER), 1)
+s.check("Pending", inbox(WORKER), contains={"message_id": m2, "from": PLANNER, "dedup_key": key})
+s.exactly("Outbox", sender(), 1)
+s.check("Outbox", sender(), excludes={"message_id": m3})
+s.check("Outbox", sender(), excludes={"message_id": m4})
+names.append(s.write())
+
 for name in COVERS:
     assert name in names, name
 claimed = [i for ids_ in COVERS.values() for i in ids_]

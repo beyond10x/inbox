@@ -12,6 +12,7 @@ scenarios:
 - scenarios/closed-inbox-refuses-posts.yaml
 - scenarios/decision-answered-by-the-operator.yaml
 - scenarios/decision-taken-on-silence.yaml
+- scenarios/dedup-key-is-the-senders.yaml
 - scenarios/envelope-must-fit-its-kind.yaml
 - scenarios/handled-message-is-gone.yaml
 - scenarios/marks-repeat-without-effect.yaml

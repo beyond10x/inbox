@@ -102,9 +102,13 @@ Each can be changed; the alternative is named where there is one.
    still gets `not-recipient` from the 4 commands of the owner, and the owner `not-sender` from
    `Collect`: each of them knows the message exists. A message id is a ULID and not a secret.
 6. **Dedup holds among live messages only**, by `message_id` and by `dedup_key`. A refused post
-   stores nothing. Open: a post answers `duplicate` for a message id that is stored, whoever
-   sent it, so a client that knows or guesses a message id still learns from a post whether it
-   is in use (`story:post-does-not-tell-a-message-id-exists`).
+   stores nothing. A dedup key belongs to its sender: `duplicate-key` compares the key among the
+   stored messages whose `from` is the `from` of the post, which `not-sender` holds to the
+   caller. A sender that uses one key for two inboxes is refused the second post; the key of
+   another sender, a third principal's in its own inbox included, refuses nothing, and a post
+   tells nobody whether another sender uses a key. Open: a post answers `duplicate` for a
+   message id that is stored, whoever sent it, so a client that knows or guesses a message id
+   still learns from a post whether it is in use (`story:post-does-not-tell-a-message-id-exists`).
 7. **`on_behalf_of` is always present** and equals `from` when the sender speaks for nobody else.
    A reply is the input of `Answer`, not a stored kind. `Body` is at most 65536 bytes.
 8. **The wire API is the one ESS derives**: `POST /messaging/commands/<wire>` and
@@ -153,9 +157,9 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 97 scenarios (27 authored) and refuses 95,
+- **`task coverage` on ESS 0.97.1**: synthesis writes 98 scenarios (28 authored) and refuses 95,
   and authored scenarios cover all 95, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 97 passed and reports `conformance_status: passed`.
+  runs on the interpreted target as 98 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 

@@ -429,7 +429,7 @@ commands:
       - name: duplicate-key
         when_related:
           entity: inbox.messaging.Message
-          where: dedup_key == input.dedup_key
+          where: {all: [dedup_key == input.dedup_key, from == input.from]}
           exists: true
         error: inbox.messaging.Duplicate
       - name: unknown-inbox

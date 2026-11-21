@@ -130,7 +130,8 @@ const EXPIRE: &str = "inbox.messaging.Expire";
 ///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `unknown-option`,
 ///    `signature-invalid`, `authority-invalid`;
 /// 3. the row refusals: `duplicate` (`existing_instance`), `unknown-inbox` (`exists: false`),
-///    `duplicate-key` (over `list`), `inbox-closed`;
+///    `duplicate-key` (over `list`: a stored message with the post's `dedup_key` and the post's
+///    `from`; the key of one sender refuses no post of another), `inbox-closed`;
 /// 4. `posted`.
 ///
 /// Where the contract text in `PLAN.md` differs (it puts `duplicate` and `unknown-inbox` before
@@ -185,6 +186,8 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
             return Ok(PostMessageOutcome::AuthorityInvalid { error: NoAuthority });
         }
 
+        // The row refusals, in the order of step 3 above. `duplicate` is the first of them and
+        // is decided by `message_id` alone; `duplicate-key` is decided per sender.
         if MessageStorage::get(&self.backend, &input.message_id).is_some() {
             return Ok(PostMessageOutcome::Duplicate { error: Duplicate });
         }
@@ -195,7 +198,7 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
         };
         if MessageStorage::list(&self.backend)
             .iter()
-            .any(|row| row.data.dedup_key == input.dedup_key)
+            .any(|row| row.data.dedup_key == input.dedup_key && row.data.from == input.from)
         {
             return Ok(PostMessageOutcome::DuplicateKey { error: Duplicate });
         }
