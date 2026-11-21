@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T08:10:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:rust-workspace-and-model",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator, scratch copies with one optional field added to the Inbox entity and task projections run: baseline 8abe907 task check exit 0 (92 scenarios: 92 passed, 0 failed, 0 error, 0 unsupported); treatment d469eab task check exit 201 (generated/rust/inbox drifted from a fresh synthesis of ess/)",
+    "reference": "d469eab"
+  }
+}
