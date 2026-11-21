@@ -1,0 +1,16 @@
+[package]
+name = "inbox-server"
+description = "The HTTP service of the inbox: a listener in front of the generated server feature, with request authentication, the read rule, the wait, the expiry task and the limits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+inbox = { path = "../../generated/rust/inbox", features = ["server"] }
+inbox-core = { path = "../inbox-core" }
+inbox-verify = { path = "../inbox-verify" }
+
+[lints]
+workspace = true

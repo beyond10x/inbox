@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T09:58:35Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator claim check, cargo test -p inbox-server --locked: base c582901 exit 101 (no such package); unit exit 0, 21 passed (4 + 1 + 16); a copy whose verifier accepts every envelope exit 101, the acceptance case FAILED; a copy without the duplicate-member check exit 101, a_body_with_a_member_twice_is_refused_before_any_command_runs FAILED"
+  }
+}
