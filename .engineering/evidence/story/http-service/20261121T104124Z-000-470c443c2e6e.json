@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:41:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1 (no case pins that a refused request stays watched while it lingers): the adversary's cases adv2_stop_returns_while_a_refused_connection_keeps_sending and adv2_a_refused_connection_that_keeps_sending_gives_its_slot_back_at_the_request_timeout stay in the suite, green, red on the mutant with the watch dropped before linger; tests/adversary2.rs 7 passed",
+    "review": "review-result:adversary-http-service-pass-2",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:41:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (the value of request_timeout is pinned only loosely): the adversary's case adv2_the_408_comes_at_the_request_timeout_and_not_before stays in the suite, green, red on the mutant with the deadline at twice the bound; tests/adversary2.rs 7 passed",
+    "review": "review-result:adversary-http-service-pass-2",
+    "outcome": "fixed"
+  }
+}
