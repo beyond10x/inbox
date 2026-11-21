@@ -18,28 +18,22 @@ enum Task {
     Drift,
 }
 
-/// The repository root: two levels above this crate's manifest. `cargo run` sets
-/// `CARGO_MANIFEST_DIR` for the tree it runs in, so a binary built in another tree is not misled.
-fn repository_root() -> PathBuf {
-    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    manifest_dir
-        .ancestors()
-        .nth(2)
-        .expect("crates/inbox-xtask sits two levels below the repository root")
-        .to_path_buf()
-}
-
-fn main() -> ExitCode {
-    let cli = Cli::parse();
-    let root = repository_root();
-    let result = match cli.task {
+/// The tree the binary is run in: the runtime `CARGO_MANIFEST_DIR` (`cargo run` sets it), else
+/// the current directory. Never the tree the binary was compiled in.
+fn run(task: Task) -> Result<String, String> {
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").map(PathBuf::from);
+    let current =
+        std::env::current_dir().map_err(|e| format!("read the current directory: {e}"))?;
+    let root = inbox_xtask::repository_root(manifest_dir.as_deref(), &current)?;
+    match task {
         Task::Generate => inbox_xtask::generate(&root)
             .map(|()| format!("{} rewritten from ess/", inbox_xtask::GENERATED)),
         Task::Drift => inbox_xtask::drift(&root),
-    };
-    match result {
+    }
+}
+
+fn main() -> ExitCode {
+    match run(Cli::parse().task) {
         Ok(message) => {
             println!("{message}");
             ExitCode::SUCCESS

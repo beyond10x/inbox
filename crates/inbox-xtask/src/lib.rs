@@ -1,9 +1,11 @@
 //! Synthesis of `generated/rust/inbox` from `ess/`, and the drift check that holds the checked-in
 //! crate to a fresh synthesis.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
+use std::io;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -11,17 +13,21 @@ use std::process::Command;
 pub const SPECIFICATION: &str = "ess";
 /// The synthesized crate, relative to the repository root.
 pub const GENERATED: &str = "generated/rust/inbox";
+/// The directories a repository root holds, by which it is found.
+const MARKERS: [&str; 2] = [SPECIFICATION, "generated/rust"];
 /// Written by every synthesis with a per-run anchor; never checked in.
 const STATE: &str = ".ess-output";
 /// The generated crate's own lock file: held by `cargo --locked`, not by synthesis.
 const LOCK: &str = "Cargo.lock";
+/// A build directory cargo writes when it is run inside the crate; git-ignored.
+const BUILD: &str = "target";
 /// Top-level entries of the crate directory the comparison does not read.
-const IGNORED: [&str; 2] = [STATE, LOCK];
+const IGNORED: [&str; 3] = [STATE, LOCK, BUILD];
 
 /// One way the checked-in crate differs from a fresh synthesis.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Difference {
-    /// Both carry the file, with different bytes.
+    /// Both carry the path, with different bytes, or one of them not as a regular file.
     Edited(PathBuf),
     /// The synthesis writes the file; the checked-in crate lacks it.
     Missing(PathBuf),
@@ -37,6 +43,54 @@ impl fmt::Display for Difference {
             Difference::NotGenerated(path) => write!(f, "not generated: {}", path.display()),
         }
     }
+}
+
+/// The repository root the tasks run on. With `manifest_dir` (the runtime `CARGO_MANIFEST_DIR`
+/// that `cargo run` sets), the directory two levels above it; without, the nearest directory from
+/// `current` upwards. Either way the root must hold `ess/` and `generated/rust/`.
+pub fn repository_root(manifest_dir: Option<&Path>, current: &Path) -> Result<PathBuf, String> {
+    let Some(manifest_dir) = manifest_dir else {
+        return current
+            .ancestors()
+            .find(|dir| missing(dir).is_empty())
+            .map(Path::to_path_buf)
+            .ok_or_else(|| {
+                format!(
+                    "no directory from {} upwards holds both `{}/` and `{}/`; run inbox-xtask inside the repository",
+                    current.display(),
+                    MARKERS[0],
+                    MARKERS[1]
+                )
+            });
+    };
+    let root = manifest_dir.ancestors().nth(2).ok_or_else(|| {
+        format!(
+            "CARGO_MANIFEST_DIR {} has no directory two levels above it",
+            manifest_dir.display()
+        )
+    })?;
+    let absent = missing(root);
+    if absent.is_empty() {
+        Ok(root.to_path_buf())
+    } else {
+        Err(format!(
+            "{} (two levels above CARGO_MANIFEST_DIR) is no repository root: it holds no {}",
+            root.display(),
+            absent
+                .iter()
+                .map(|name| format!("`{name}/`"))
+                .collect::<Vec<_>>()
+                .join(" and no ")
+        ))
+    }
+}
+
+fn missing(dir: &Path) -> Vec<&'static str> {
+    MARKERS
+        .iter()
+        .copied()
+        .filter(|name| !dir.join(name).is_dir())
+        .collect()
 }
 
 /// The scratch directory under the repository's own `target/`.
@@ -65,7 +119,8 @@ pub fn synthesize(root: &Path, out: &Path) -> Result<(), String> {
 }
 
 /// Rewrite `generated/rust/inbox` from a fresh synthesis. The crate's `Cargo.lock` is kept and the
-/// synthesis state is dropped; on a failed synthesis the checked-in crate is left as it was.
+/// synthesis state is dropped. On a failed synthesis, or a failed move into place, the checked-in
+/// crate is left as it was.
 pub fn generate(root: &Path) -> Result<(), String> {
     let staged = scratch(root, "generate");
     synthesize(root, &staged)?;
@@ -78,14 +133,54 @@ pub fn generate(root: &Path) -> Result<(), String> {
     if lock.exists() {
         fs::copy(&lock, staged.join(LOCK)).map_err(|e| format!("copy {}: {e}", lock.display()))?;
     }
-    if target.exists() {
-        fs::remove_dir_all(&target).map_err(|e| format!("remove {}: {e}", target.display()))?;
-    }
+    replace(&staged, &target, &scratch(root, "previous"), |from, to| {
+        fs::rename(from, to)
+    })
+}
+
+/// Put `staged` at `target`: the held `target` is moved to `aside` first, `staged` takes its place,
+/// and `aside` is removed only after that succeeded. When the second move fails, `aside` is moved
+/// back; when the first fails, nothing has changed.
+fn replace(
+    staged: &Path,
+    target: &Path,
+    aside: &Path,
+    mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+) -> Result<(), String> {
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
     }
-    fs::rename(&staged, &target)
-        .map_err(|e| format!("move {} to {}: {e}", staged.display(), target.display()))
+    if aside.symlink_metadata().is_ok() {
+        fs::remove_dir_all(aside).map_err(|e| format!("remove {}: {e}", aside.display()))?;
+    }
+    let held = target.symlink_metadata().is_ok();
+    if held {
+        rename(target, aside).map_err(|e| {
+            format!(
+                "move {} aside to {}: {e}; {} is unchanged",
+                target.display(),
+                aside.display(),
+                target.display()
+            )
+        })?;
+    }
+    if let Err(e) = rename(staged, target) {
+        let failed = format!("move {} to {}: {e}", staged.display(), target.display());
+        if !held {
+            return Err(failed);
+        }
+        return match rename(aside, target) {
+            Ok(()) => Err(format!("{failed}; {} is restored", target.display())),
+            Err(back) => Err(format!(
+                "{failed}; moving the held crate back from {} failed too: {back}",
+                aside.display()
+            )),
+        };
+    }
+    if held {
+        fs::remove_dir_all(aside).map_err(|e| format!("remove {}: {e}", aside.display()))?;
+    }
+    Ok(())
 }
 
 /// Compare `generated/rust/inbox` with a fresh synthesis. `Ok` carries the one-line verdict;
@@ -107,23 +202,48 @@ pub fn drift(root: &Path) -> Result<String, String> {
     }
 }
 
-/// Every file that differs between the two crate directories, sorted by path. The synthesis state
-/// and the lock file at the top of either directory are not read.
+/// What a path below a crate directory is. Read with `symlink_metadata`: a link is never followed.
+#[derive(Debug, PartialEq, Eq)]
+enum Entry {
+    /// A regular file, and whether any executable bit (0o111) is set: the one mode bit git
+    /// records. The other bits follow the umask of the checkout and are not read.
+    File {
+        executable: bool,
+    },
+    Link(PathBuf),
+    /// Anything else that is not a directory: a socket, a FIFO, a device.
+    Other,
+}
+
+/// Every path that differs between the two crate directories, sorted by path. The synthesis
+/// state, the lock file and a build directory at the top of either directory are not read. A
+/// path that is a symbolic link or no regular file on one side only, or a file whose executable
+/// bit differs, is `Edited`.
 pub fn differences(fresh: &Path, held: &Path) -> Result<Vec<Difference>, String> {
-    let written = files(fresh)?;
-    let kept = files(held)?;
+    let written = entries(fresh)?;
+    let kept = entries(held)?;
+    let mut paths: Vec<&PathBuf> = written.keys().chain(kept.keys()).collect();
+    paths.sort();
+    paths.dedup();
     let mut found = Vec::new();
-    for path in written.union(&kept) {
-        match (written.contains(path), kept.contains(path)) {
-            (true, false) => found.push(Difference::Missing(path.clone())),
-            (false, true) => found.push(Difference::NotGenerated(path.clone())),
-            _ => {
-                let a = read(&fresh.join(path))?;
-                let b = read(&held.join(path))?;
-                if a != b {
-                    found.push(Difference::Edited(path.clone()));
-                }
+    for path in paths {
+        let same = match (written.get(path), kept.get(path)) {
+            (Some(_), None) => {
+                found.push(Difference::Missing(path.clone()));
+                continue;
             }
+            (None, Some(_)) => {
+                found.push(Difference::NotGenerated(path.clone()));
+                continue;
+            }
+            (Some(Entry::File { executable: a }), Some(Entry::File { executable: b })) => {
+                a == b && read(&fresh.join(path))? == read(&held.join(path))?
+            }
+            (Some(Entry::Link(a)), Some(Entry::Link(b))) => a == b,
+            _ => false,
+        };
+        if !same {
+            found.push(Difference::Edited(path.clone()));
         }
     }
     Ok(found)
@@ -133,28 +253,118 @@ fn read(path: &Path) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|e| format!("read {}: {e}", path.display()))
 }
 
-/// The files under `dir`, relative to it; an absent directory has none.
-fn files(dir: &Path) -> Result<BTreeSet<PathBuf>, String> {
-    let mut found = BTreeSet::new();
-    if !dir.exists() {
-        return Ok(found);
+/// The non-directory entries under `dir`, relative to it; an absent directory has none, and a
+/// `dir` that is itself a symbolic link is refused.
+fn entries(dir: &Path) -> Result<BTreeMap<PathBuf, Entry>, String> {
+    let mut found = BTreeMap::new();
+    match dir.symlink_metadata() {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(found),
+        Err(e) => return Err(format!("read {}: {e}", dir.display())),
+        Ok(meta) if meta.file_type().is_symlink() => {
+            return Err(format!(
+                "{} is a symbolic link, not a directory",
+                dir.display()
+            ));
+        }
+        Ok(_) => {}
     }
     let mut pending = vec![dir.to_path_buf()];
     while let Some(current) = pending.pop() {
-        let entries =
+        let listing =
             fs::read_dir(&current).map_err(|e| format!("read {}: {e}", current.display()))?;
-        for entry in entries {
-            let path = entry.map_err(|e| e.to_string())?.path();
+        for item in listing {
+            let item = item.map_err(|e| format!("read {}: {e}", current.display()))?;
+            let path = item.path();
             let relative = path.strip_prefix(dir).map_err(|e| e.to_string())?;
             if IGNORED.iter().any(|ignored| relative == Path::new(ignored)) {
                 continue;
             }
-            if path.is_dir() {
+            let meta =
+                fs::symlink_metadata(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+            let kind = meta.file_type();
+            let entry = if kind.is_dir() {
                 pending.push(path);
+                continue;
+            } else if kind.is_symlink() {
+                Entry::Link(
+                    fs::read_link(&path).map_err(|e| format!("read {}: {e}", path.display()))?,
+                )
+            } else if kind.is_file() {
+                Entry::File {
+                    executable: meta.permissions().mode() & 0o111 != 0,
+                }
             } else {
-                found.insert(relative.to_path_buf());
-            }
+                Entry::Other
+            };
+            found.insert(relative.to_path_buf(), entry);
         }
     }
     Ok(found)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh directory under the repository's own `target/`.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/inbox-xtask-unit")
+            .join(name);
+        if dir.exists() {
+            fs::remove_dir_all(&dir).unwrap();
+        }
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn layout(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+        let dir = scratch_dir(name);
+        let staged = dir.join("staged");
+        let target = dir.join("generated/rust/inbox");
+        fs::create_dir_all(&staged).unwrap();
+        fs::create_dir_all(&target).unwrap();
+        fs::write(staged.join("lib.rs"), "new\n").unwrap();
+        fs::write(target.join("lib.rs"), "held\n").unwrap();
+        (staged, target, dir.join("previous"))
+    }
+
+    #[test]
+    fn replace_puts_the_staged_crate_in_place_and_drops_the_held_one() {
+        let (staged, target, aside) = layout("replace-ok");
+        replace(&staged, &target, &aside, |a, b| fs::rename(a, b)).unwrap();
+        assert_eq!(fs::read_to_string(target.join("lib.rs")).unwrap(), "new\n");
+        assert!(!aside.exists());
+        assert!(!staged.exists());
+    }
+
+    #[test]
+    fn a_failed_move_into_place_restores_the_held_crate() {
+        let (staged, target, aside) = layout("replace-restores");
+        let mut calls = 0;
+        let error = replace(&staged, &target, &aside, |a, b| {
+            calls += 1;
+            if calls == 2 {
+                Err(io::Error::new(io::ErrorKind::CrossesDevices, "injected"))
+            } else {
+                fs::rename(a, b)
+            }
+        })
+        .unwrap_err();
+        assert!(error.ends_with("is restored"), "{error}");
+        assert_eq!(fs::read_to_string(target.join("lib.rs")).unwrap(), "held\n");
+        assert_eq!(fs::read_to_string(staged.join("lib.rs")).unwrap(), "new\n");
+    }
+
+    #[test]
+    fn a_failed_move_aside_changes_nothing() {
+        let (staged, target, aside) = layout("replace-aside-fails");
+        let error = replace(&staged, &target, &aside, |_, _| {
+            Err(io::Error::new(io::ErrorKind::CrossesDevices, "injected"))
+        })
+        .unwrap_err();
+        assert!(error.ends_with("is unchanged"), "{error}");
+        assert_eq!(fs::read_to_string(target.join("lib.rs")).unwrap(), "held\n");
+        assert!(!aside.exists());
+    }
 }

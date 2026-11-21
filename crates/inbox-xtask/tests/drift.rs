@@ -1,7 +1,8 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use inbox_xtask::{Difference, GENERATED, differences, drift, generate};
+use inbox_xtask::{Difference, GENERATED, differences, drift, generate, repository_root};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -113,6 +114,125 @@ fn each_difference_names_its_kind() {
     assert_eq!(
         Difference::NotGenerated(PathBuf::from("src/b.rs")).to_string(),
         "not generated: src/b.rs"
+    );
+}
+
+fn set_mode(path: &Path, mode: u32) {
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[test]
+fn mode_bits_other_than_the_executable_bit_are_no_drift() {
+    let (fresh, held) = pair("mode-umask");
+    set_mode(&fresh.join("src/a.rs"), 0o644);
+    set_mode(&held.join("src/a.rs"), 0o664);
+    assert_eq!(
+        differences(&fresh, &held).unwrap(),
+        Vec::<Difference>::new()
+    );
+}
+
+#[test]
+fn an_executable_bit_the_held_crate_lacks_is_drift() {
+    let (fresh, held) = pair("mode-lost");
+    set_mode(&fresh.join("src/a.rs"), 0o755);
+    set_mode(&held.join("src/a.rs"), 0o644);
+    assert_eq!(
+        differences(&fresh, &held).unwrap(),
+        vec![Difference::Edited(PathBuf::from("src/a.rs"))]
+    );
+}
+
+#[test]
+fn a_build_directory_below_the_top_of_the_crate_is_compared() {
+    let (fresh, held) = pair("nested-target");
+    write(&held.join("src/target/x.rs"), "pub struct X;\n");
+    assert_eq!(
+        differences(&fresh, &held).unwrap(),
+        vec![Difference::NotGenerated(PathBuf::from("src/target/x.rs"))]
+    );
+}
+
+#[test]
+fn a_symbolic_link_to_a_directory_is_not_followed() {
+    let (fresh, held) = pair("directory-link");
+    let outside = held.parent().unwrap().join("outside");
+    fs::rename(held.join("src"), &outside).unwrap();
+    std::os::unix::fs::symlink(&outside, held.join("src")).unwrap();
+    assert_eq!(
+        differences(&fresh, &held).unwrap(),
+        vec![
+            Difference::NotGenerated(PathBuf::from("src")),
+            Difference::Missing(PathBuf::from("src/a.rs")),
+            Difference::Missing(PathBuf::from("src/lib.rs")),
+        ]
+    );
+}
+
+#[test]
+fn a_held_crate_that_is_itself_a_symbolic_link_is_refused() {
+    let (fresh, held) = pair("crate-link");
+    let link = held.parent().unwrap().join("link");
+    std::os::unix::fs::symlink(&held, &link).unwrap();
+    let error = differences(&fresh, &link).unwrap_err();
+    assert!(
+        error.ends_with("is a symbolic link, not a directory"),
+        "{error}"
+    );
+}
+
+fn repository_layout(name: &str) -> PathBuf {
+    let root = scratch(name);
+    fs::create_dir_all(root.join("ess")).unwrap();
+    fs::create_dir_all(root.join("generated/rust")).unwrap();
+    fs::create_dir_all(root.join("crates/inbox-xtask/src")).unwrap();
+    root
+}
+
+#[test]
+fn the_root_is_found_from_a_directory_below_it() {
+    let root = repository_layout("root-walk");
+    let below = root.join("crates/inbox-xtask/src");
+    assert_eq!(repository_root(None, &below).unwrap(), root);
+}
+
+#[test]
+fn the_root_is_two_levels_above_the_runtime_manifest_directory() {
+    let root = repository_layout("root-manifest");
+    let elsewhere = scratch("root-manifest-elsewhere");
+    assert_eq!(
+        repository_root(Some(&root.join("crates/inbox-xtask")), &elsewhere).unwrap(),
+        root
+    );
+}
+
+/// Started from `/`, which no repository holds: every scratch directory lies inside this one.
+#[test]
+fn no_root_found_names_what_is_missing() {
+    let error = repository_root(None, Path::new("/")).unwrap_err();
+    assert!(
+        error.contains("holds both `ess/` and `generated/rust/`"),
+        "{error}"
+    );
+    let lone = scratch("root-none");
+    fs::create_dir_all(lone.join("ess")).unwrap();
+    let error = repository_root(Some(&lone.join("crates/inbox-xtask")), &lone).unwrap_err();
+    assert!(error.ends_with("it holds no `generated/rust/`"), "{error}");
+}
+
+#[test]
+fn the_binary_outside_any_repository_exits_nonzero_and_says_why() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_inbox-xtask"))
+        .arg("drift")
+        .env_remove("CARGO_MANIFEST_DIR")
+        .current_dir("/")
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("holds both `ess/` and `generated/rust/`"),
+        "{stderr}"
     );
 }
 
