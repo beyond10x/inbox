@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest 0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1847,6 +1847,20 @@ pub fn encode_outcome_inbox_messaging_answer(value: &crate::messaging::AnswerOut
             encode_error_inbox_messaging_unknown_message(error, out);
             out.push('}');
         }
+        crate::messaging::AnswerOutcome::ForeignMessage { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "foreign-message");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownMessage");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_message(error, out);
+            out.push('}');
+        }
         crate::messaging::AnswerOutcome::NotRecipient { error } => {
             json::member(out, "outcome");
             json::push_text(out, "not-recipient");
@@ -2033,6 +2047,20 @@ pub fn encode_outcome_inbox_messaging_collect(value: &crate::messaging::CollectO
         crate::messaging::CollectOutcome::UnknownMessage { error } => {
             json::member(out, "outcome");
             json::push_text(out, "unknown-message");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownMessage");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_message(error, out);
+            out.push('}');
+        }
+        crate::messaging::CollectOutcome::ForeignMessage { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "foreign-message");
             json::member(out, "published");
             out.push('[');
             out.push(']');
@@ -2233,6 +2261,20 @@ pub fn encode_outcome_inbox_messaging_mark_delivered(value: &crate::messaging::M
             encode_error_inbox_messaging_unknown_message(error, out);
             out.push('}');
         }
+        crate::messaging::MarkDeliveredOutcome::ForeignMessage { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "foreign-message");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownMessage");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_message(error, out);
+            out.push('}');
+        }
         crate::messaging::MarkDeliveredOutcome::NotRecipient { error } => {
             json::member(out, "outcome");
             json::push_text(out, "not-recipient");
@@ -2303,6 +2345,20 @@ pub fn encode_outcome_inbox_messaging_mark_read(value: &crate::messaging::MarkRe
         crate::messaging::MarkReadOutcome::UnknownMessage { error } => {
             json::member(out, "outcome");
             json::push_text(out, "unknown-message");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownMessage");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_message(error, out);
+            out.push('}');
+        }
+        crate::messaging::MarkReadOutcome::ForeignMessage { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "foreign-message");
             json::member(out, "published");
             out.push('[');
             out.push(']');
@@ -2819,6 +2875,20 @@ pub fn encode_outcome_inbox_messaging_refuse(value: &crate::messaging::RefuseOut
         crate::messaging::RefuseOutcome::UnknownMessage { error } => {
             json::member(out, "outcome");
             json::push_text(out, "unknown-message");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownMessage");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_message(error, out);
+            out.push('}');
+        }
+        crate::messaging::RefuseOutcome::ForeignMessage { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "foreign-message");
             json::member(out, "published");
             out.push('[');
             out.push(']');

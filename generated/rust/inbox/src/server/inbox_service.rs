@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest 0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `inbox-service` component of `inbox` v1, on the wire.
@@ -57,7 +57,7 @@ pub const ROUTES: &[(&str, &str)] = &[
 /// Everything outside `runtime` is the same in every language this plan is emitted into, and
 /// `cargo xtask synth --check` starts both and compares them.
 pub const STARTUP: &[&str] = &[
-    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"inbox\",\"version\":\"v1\",\"model_digest\":\"0dd9ebd4bdc11b34d415bfd4d002340a0c76e30afe909357f4e4653c06c6ed59\",\"contract_digest\":\"ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5\",\"components\":[\"inbox-service\"],\"capabilities\":{\"generated\":85,\"obligations\":2,\"refused\":0}",
+    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"inbox\",\"version\":\"v1\",\"model_digest\":\"fd6bd9e4b8d41c364ae219c477a6b69d8de7d658eac3e2d5192501150f08b4d7\",\"contract_digest\":\"0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9\",\"components\":[\"inbox-service\"],\"capabilities\":{\"generated\":85,\"obligations\":2,\"refused\":0}",
     "{\"log\":\"ess/1\",\"event\":\"surface.serving\",\"component\":\"inbox-service\",\"reached_by\":\"network\",\"transport\":\"http/1.1\",\"routes\":20,\"paths\":[{\"method\":\"GET\",\"path\":\"/docs\",\"serves\":\"documentation\",\"name\":\"docs\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/answer\",\"serves\":\"command\",\"name\":\"inbox.messaging.Answer\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/close-inbox\",\"serves\":\"command\",\"name\":\"inbox.messaging.CloseInbox\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/collect\",\"serves\":\"command\",\"name\":\"inbox.messaging.Collect\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/expire\",\"serves\":\"command\",\"name\":\"inbox.messaging.Expire\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/mark-delivered\",\"serves\":\"command\",\"name\":\"inbox.messaging.MarkDelivered\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/open-inbox\",\"serves\":\"command\",\"name\":\"inbox.messaging.OpenInbox\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/post\",\"serves\":\"command\",\"name\":\"inbox.messaging.PostMessage\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/read\",\"serves\":\"command\",\"name\":\"inbox.messaging.MarkRead\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/refuse\",\"serves\":\"command\",\"name\":\"inbox.messaging.Refuse\"},{\"method\":\"GET\",\"path\":\"/messaging/views/due\",\"serves\":\"view\",\"name\":\"inbox.messaging.Due\"},{\"method\":\"GET\",\"path\":\"/messaging/views/inboxes\",\"serves\":\"view\",\"name\":\"inbox.messaging.Inboxes\"},{\"method\":\"GET\",\"path\":\"/messaging/views/messages\",\"serves\":\"view\",\"name\":\"inbox.messaging.Messages\"},{\"method\":\"GET\",\"path\":\"/messaging/views/outbox\",\"serves\":\"view\",\"name\":\"inbox.messaging.Outbox\"},{\"method\":\"GET\",\"path\":\"/messaging/views/pending\",\"serves\":\"view\",\"name\":\"inbox.messaging.Pending\"},{\"method\":\"GET\",\"path\":\"/messaging/views/replies\",\"serves\":\"view\",\"name\":\"inbox.messaging.Replies\"},{\"method\":\"GET\",\"path\":\"/messaging/views/settled\",\"serves\":\"view\",\"name\":\"inbox.messaging.Settled\"},{\"method\":\"GET\",\"path\":\"/messaging/views/thread\",\"serves\":\"view\",\"name\":\"inbox.messaging.Thread\"},{\"method\":\"GET\",\"path\":\"/messaging/views/unanswered\",\"serves\":\"view\",\"name\":\"inbox.messaging.Unanswered\"},{\"method\":\"GET\",\"path\":\"/openapi.json\",\"serves\":\"contract\",\"name\":\"openapi\"}]",
     "{\"log\":\"ess/1\",\"event\":\"system.ready\",\"system\":\"inbox\",\"surfaces\":1",
 ];
@@ -679,6 +679,16 @@ fn answer_inbox_messaging_answer(outcome: &crate::messaging::AnswerOutcome) -> (
             json::push_text(&mut body, "inbox.messaging.UnknownMessage");
             404
         }
+        crate::messaging::AnswerOutcome::ForeignMessage { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "foreign-message");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "inbox.messaging.UnknownMessage");
+            403
+        }
         crate::messaging::AnswerOutcome::NotRecipient { .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "not-recipient");
@@ -919,6 +929,16 @@ fn answer_inbox_messaging_collect(outcome: &crate::messaging::CollectOutcome) ->
             json::push_text(&mut body, "inbox.messaging.UnknownMessage");
             404
         }
+        crate::messaging::CollectOutcome::ForeignMessage { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "foreign-message");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "inbox.messaging.UnknownMessage");
+            403
+        }
         crate::messaging::CollectOutcome::NotSender { .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "not-sender");
@@ -1142,6 +1162,16 @@ fn answer_inbox_messaging_mark_delivered(outcome: &crate::messaging::MarkDeliver
             json::member(&mut body, "error");
             json::push_text(&mut body, "inbox.messaging.UnknownMessage");
             404
+        }
+        crate::messaging::MarkDeliveredOutcome::ForeignMessage { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "foreign-message");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "inbox.messaging.UnknownMessage");
+            403
         }
         crate::messaging::MarkDeliveredOutcome::NotRecipient { .. } => {
             json::member(&mut body, "outcome");
@@ -1563,6 +1593,16 @@ fn answer_inbox_messaging_mark_read(outcome: &crate::messaging::MarkReadOutcome)
             json::push_text(&mut body, "inbox.messaging.UnknownMessage");
             404
         }
+        crate::messaging::MarkReadOutcome::ForeignMessage { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "foreign-message");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "inbox.messaging.UnknownMessage");
+            403
+        }
         crate::messaging::MarkReadOutcome::NotRecipient { .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "not-recipient");
@@ -1684,6 +1724,16 @@ fn answer_inbox_messaging_refuse(outcome: &crate::messaging::RefuseOutcome) -> (
             json::member(&mut body, "error");
             json::push_text(&mut body, "inbox.messaging.UnknownMessage");
             404
+        }
+        crate::messaging::RefuseOutcome::ForeignMessage { .. } => {
+            json::member(&mut body, "outcome");
+            json::push_text(&mut body, "foreign-message");
+            json::member(&mut body, "published");
+            body.push('[');
+            body.push(']');
+            json::member(&mut body, "error");
+            json::push_text(&mut body, "inbox.messaging.UnknownMessage");
+            403
         }
         crate::messaging::RefuseOutcome::NotRecipient { .. } => {
             json::member(&mut body, "outcome");

@@ -9,7 +9,7 @@ covers:
 domain: inbox.messaging
 scenario: only-the-owner-handles-its-inbox
 summary: Only the owner of an inbox marks, reads, answers or refuses its messages and opens or closes
-  it, and only the sender collects. Another caller is refused and the message stays as posted.
+  it, and only the sender collects. The sender, the owner or another caller is refused and nothing moves.
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -61,8 +61,8 @@ timeline:
   command: inbox.messaging.MarkDelivered
   actor: inbox.messaging.Client
   caller:
-    principal: agent:box/other
-    inbox: agent:box/other
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
   input:
     message_id: 01JGT0NP000000000000000001
   outcome: not-recipient
@@ -74,8 +74,8 @@ timeline:
   command: inbox.messaging.MarkRead
   actor: inbox.messaging.Client
   caller:
-    principal: agent:box/other
-    inbox: agent:box/other
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
   input:
     message_id: 01JGT0NP000000000000000001
   outcome: not-recipient
@@ -88,13 +88,13 @@ timeline:
   command: inbox.messaging.Answer
   actor: inbox.messaging.Client
   caller:
-    principal: agent:box/other
-    inbox: agent:box/other
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
   input:
     in_reply_to: 01JGT0NP000000000000000001
     reply_id: 01JGT0NP000000000000000002
-    from: agent:box/other
-    on_behalf_of: agent:box/other
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
     created: '2026-01-05T09:05:00Z'
     expires: '2026-01-06T09:05:00Z'
     body: It is in the delivery module.
@@ -110,8 +110,8 @@ timeline:
   command: inbox.messaging.Refuse
   actor: inbox.messaging.Client
   caller:
-    principal: agent:box/other
-    inbox: agent:box/other
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
   input:
     message_id: 01JGT0NP000000000000000001
     reason: Not mine.
@@ -124,8 +124,8 @@ timeline:
   command: inbox.messaging.Collect
   actor: inbox.messaging.Client
   caller:
-    principal: agent:box/other
-    inbox: agent:box/other
+    principal: agent:box/worker
+    inbox: agent:box/worker
   input:
     message_id: 01JGT0NP000000000000000001
   outcome: not-sender

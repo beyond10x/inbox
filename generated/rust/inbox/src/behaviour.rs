@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest 0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -165,6 +165,10 @@ where
             return Ok(crate::messaging::AnswerOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
+        // `foreign-message`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
+        }
         // `not-recipient`: selected by the addressed row.
         if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Answer")? {
             return Ok(crate::messaging::AnswerOutcome::NotRecipient { error: crate::messaging::NotRecipient });
@@ -262,6 +266,10 @@ where
             return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
+        // `foreign-message`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Collect")? {
+            return Ok(crate::messaging::CollectOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
+        }
         // `not-sender`: selected by the addressed row.
         if decided(equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Collect")? {
             return Ok(crate::messaging::CollectOutcome::NotSender { error: crate::messaging::NotSender });
@@ -303,6 +311,10 @@ where
             return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
+        // `foreign-message`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.MarkDelivered")? {
+            return Ok(crate::messaging::MarkDeliveredOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
+        }
         // `not-recipient`: selected by the addressed row.
         if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.MarkDelivered")? {
             return Ok(crate::messaging::MarkDeliveredOutcome::NotRecipient { error: crate::messaging::NotRecipient });
@@ -348,6 +360,10 @@ where
             return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
+        // `foreign-message`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.MarkRead")? {
+            return Ok(crate::messaging::MarkReadOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
+        }
         // `not-recipient`: selected by the addressed row.
         if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.MarkRead")? {
             return Ok(crate::messaging::MarkReadOutcome::NotRecipient { error: crate::messaging::NotRecipient });
@@ -476,6 +492,10 @@ where
             return Ok(crate::messaging::RefuseOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
+        // `foreign-message`: selected by the addressed row.
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Refuse")? {
+            return Ok(crate::messaging::RefuseOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
+        }
         // `not-recipient`: selected by the addressed row.
         if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Refuse")? {
             return Ok(crate::messaging::RefuseOutcome::NotRecipient { error: crate::messaging::NotRecipient });

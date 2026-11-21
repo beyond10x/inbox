@@ -1,6 +1,6 @@
 <!--
 generated from inbox v1
-contract digest slice-sha256/2:ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+contract digest slice-sha256/2:0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
 do not edit: regenerate with `ess generate`
 -->
 
@@ -585,7 +585,7 @@ It takes:
 - `body` — `inbox.messaging.Body`
 - `signature` — `inbox.messaging.Signature`
 
-It has 11 outcomes.
+It has 12 outcomes.
 
 **`not-sender`** — Taken when `from != caller.principal` holds of the input. No entity in this specification changes. It reports `inbox.messaging.NotSender`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
@@ -598,6 +598,8 @@ It has 11 outcomes.
 **`authority-invalid`** — Decided outside the input: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.NoAuthority`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -635,9 +637,11 @@ It takes:
 
 - `message_id` — `inbox.messaging.MessageId`
 
-It has four outcomes.
+It has five outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-sender`** — Taken when the existing subject's stored fields satisfy `from != caller.principal`. No entity in this specification changes. It reports `inbox.messaging.NotSender`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -673,9 +677,11 @@ It takes:
 
 - `message_id` — `inbox.messaging.MessageId`
 
-It has four outcomes.
+It has five outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -691,9 +697,11 @@ It takes:
 
 - `message_id` — `inbox.messaging.MessageId`
 
-It has five outcomes.
+It has six outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -781,9 +789,11 @@ It takes:
 - `message_id` — `inbox.messaging.MessageId`
 - `reason` — `String`
 
-It has four outcomes.
+It has five outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
+
+**`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -1058,17 +1068,17 @@ No live message has this id: it was never posted, it was handled, or it expired.
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
-Reported by `inbox.messaging.Answer` on its `unknown-message` outcome.
+Reported by `inbox.messaging.Answer` on its `unknown-message` and `foreign-message` outcomes.
 
-Reported by `inbox.messaging.Collect` on its `unknown-message` outcome.
+Reported by `inbox.messaging.Collect` on its `unknown-message` and `foreign-message` outcomes.
 
 Reported by `inbox.messaging.Expire` on its `unknown-message` outcome.
 
-Reported by `inbox.messaging.MarkDelivered` on its `unknown-message` outcome.
+Reported by `inbox.messaging.MarkDelivered` on its `unknown-message` and `foreign-message` outcomes.
 
-Reported by `inbox.messaging.MarkRead` on its `unknown-message` outcome.
+Reported by `inbox.messaging.MarkRead` on its `unknown-message` and `foreign-message` outcomes.
 
-Reported by `inbox.messaging.Refuse` on its `unknown-message` outcome.
+Reported by `inbox.messaging.Refuse` on its `unknown-message` and `foreign-message` outcomes.
 
 ## Actors
 
@@ -1100,4 +1110,4 @@ It may read [`Due`](#due) and [`Messages`](#messages), which an actor whose gran
 
 ---
 
-Generated from inbox v1 · contract digest `slice-sha256/2:ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from inbox v1 · contract digest `slice-sha256/2:0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9`. Do not edit this file; change the specification and regenerate it with `ess generate`.

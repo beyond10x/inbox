@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest 0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! inbox-service — the `inbox-service` component of `inbox` v1.
@@ -85,6 +85,7 @@ where
             crate::messaging::AnswerOutcome::SignatureInvalid { .. } => {}
             crate::messaging::AnswerOutcome::AuthorityInvalid { .. } => {}
             crate::messaging::AnswerOutcome::UnknownMessage { .. } => {}
+            crate::messaging::AnswerOutcome::ForeignMessage { .. } => {}
             crate::messaging::AnswerOutcome::NotRecipient { .. } => {}
             crate::messaging::AnswerOutcome::AlreadySettled { .. } => {}
             crate::messaging::AnswerOutcome::Note { .. } => {}
@@ -123,6 +124,7 @@ where
         let outcome = self.behaviors.collect(input)?;
         match &outcome {
             crate::messaging::CollectOutcome::UnknownMessage { .. } => {}
+            crate::messaging::CollectOutcome::ForeignMessage { .. } => {}
             crate::messaging::CollectOutcome::NotSender { .. } => {}
             crate::messaging::CollectOutcome::Collected { message_handled, .. } => {
                 self.outbox.push(PublishedEvent::MessageHandled(message_handled.clone()));
@@ -161,6 +163,7 @@ where
         let outcome = self.behaviors.mark_delivered(input)?;
         match &outcome {
             crate::messaging::MarkDeliveredOutcome::UnknownMessage { .. } => {}
+            crate::messaging::MarkDeliveredOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkDeliveredOutcome::NotRecipient { .. } => {}
             crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered, .. } => {
                 self.outbox.push(PublishedEvent::MessageDelivered(message_delivered.clone()));
@@ -179,6 +182,7 @@ where
         let outcome = self.behaviors.mark_read(input)?;
         match &outcome {
             crate::messaging::MarkReadOutcome::UnknownMessage { .. } => {}
+            crate::messaging::MarkReadOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkReadOutcome::NotRecipient { .. } => {}
             crate::messaging::MarkReadOutcome::Handled { message_handled, .. } => {
                 self.outbox.push(PublishedEvent::MessageHandled(message_handled.clone()));
@@ -247,6 +251,7 @@ where
         let outcome = self.behaviors.refuse(input)?;
         match &outcome {
             crate::messaging::RefuseOutcome::UnknownMessage { .. } => {}
+            crate::messaging::RefuseOutcome::ForeignMessage { .. } => {}
             crate::messaging::RefuseOutcome::NotRecipient { .. } => {}
             crate::messaging::RefuseOutcome::Refused { message_refused, .. } => {
                 self.outbox.push(PublishedEvent::MessageRefused(message_refused.clone()));

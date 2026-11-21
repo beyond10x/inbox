@@ -295,7 +295,6 @@ fn adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal() {
 // ---- what a refusal tells a third principal ---------------------------------------------------
 
 #[test]
-#[ignore = "pre-existing, story:foreign-message-id-answers-as-unknown"]
 fn adv_a_third_principal_cannot_tell_a_message_between_others_from_no_message() {
     let world = World::new();
     let server = world.start(|_| {});

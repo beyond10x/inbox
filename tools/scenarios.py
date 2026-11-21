@@ -156,6 +156,10 @@ COVERS = {
     ],
     "read-decision-waits-for-its-answer": envelope("Unanswered"),
     "answer-from-another-principal-refused": [out("Answer", "not-sender")],
+    "a-third-principal-finds-no-message": [
+        out(command, "foreign-message")
+        for command in ("MarkDelivered", "MarkRead", "Answer", "Refuse", "Collect")
+    ],
 }
 
 PLANNER = "agent:ws/planner"
@@ -558,13 +562,13 @@ names.append(s.write())
 # 14
 m = mid("NP", 1)
 s = Scenario("only-the-owner-handles-its-inbox",
-             "Only the owner of an inbox marks, reads, answers or refuses its messages and opens or closes it, and only the sender collects. Another caller is refused and the message stays as posted.")
+             "Only the owner of an inbox marks, reads, answers or refuses its messages and opens or closes it, and only the sender collects. The sender, the owner or another caller is refused and nothing moves.")
 s.open(WORKER).post(m, WORKER, "request", reply_shape=LINES_3)
-s.delivered(m, caller=OTHER, outcome="not-recipient", error="NotRecipient")
-s.read(m, caller=OTHER, outcome="not-recipient", error="NotRecipient")
-s.answer(m, mid("NP", 2), caller=OTHER, outcome="not-recipient", error="NotRecipient")
-s.refuse(m, "Not mine.", caller=OTHER, outcome="not-recipient", error="NotRecipient")
-s.collect(m, caller=OTHER, outcome="not-sender", error="NotSender")
+s.delivered(m, caller=PLANNER, outcome="not-recipient", error="NotRecipient")
+s.read(m, caller=PLANNER, outcome="not-recipient", error="NotRecipient")
+s.answer(m, mid("NP", 2), caller=PLANNER, outcome="not-recipient", error="NotRecipient")
+s.refuse(m, "Not mine.", caller=PLANNER, outcome="not-recipient", error="NotRecipient")
+s.collect(m, caller=WORKER, outcome="not-sender", error="NotSender")
 s.open(WORKER, caller=OTHER, outcome="not-owner", error="NotRecipient")
 s.close(WORKER, caller=OTHER, outcome="not-owner", error="NotRecipient")
 s.check("Pending", inbox(WORKER), contains={"message_id": m, "state": "Sent"})
@@ -734,6 +738,46 @@ s.answer(m, mid("FA", 2), caller=OTHER, from_=WORKER, outcome="not-sender", erro
 s.answer(m, mid("FA", 3), caller=WORKER, from_=OTHER, outcome="not-sender", error="NotSender")
 s.check("Pending", inbox(WORKER), contains={"message_id": m, "state": "Sent", "expires": ts(24 * 60)})
 s.empty("Settled", sender()).empty("Replies", thread(m))
+names.append(s.write())
+
+# 27
+m = mid("TP", 1)
+m2 = mid("TP", 2)
+m3 = mid("TP", 3)
+s = Scenario("a-third-principal-finds-no-message",
+             "A caller that is neither the sender nor the recipient is answered as for no message in every state a message is in, and moves nothing; once it is collected or expired, there is none.")
+replies = iter(range(100, 200))
+
+
+def third(message_id, outcome="foreign-message"):
+    s.delivered(message_id, caller=OTHER, outcome=outcome, error="UnknownMessage")
+    s.read(message_id, caller=OTHER, outcome=outcome, error="UnknownMessage")
+    s.answer(message_id, mid("TP", next(replies)), caller=OTHER, outcome=outcome,
+             error="UnknownMessage")
+    s.refuse(message_id, "Not mine.", caller=OTHER, outcome=outcome, error="UnknownMessage")
+    s.collect(message_id, caller=OTHER, outcome=outcome, error="UnknownMessage")
+
+
+s.open(WORKER).post(m, WORKER, "request", reply_shape=LINES_3)
+s.post(m2, WORKER, "request", reply_shape=LINES_3).post(m3, WORKER, "note")
+third(m)
+s.delivered(m)
+third(m)
+s.read(m)
+third(m)
+s.answer(m, mid("TP", 4))
+third(m)
+s.refuse(m2, "Outside this session's repository.")
+third(m2)
+s.collect(m)
+third(m, "unknown-message")
+third(m3)
+s.expire(m3, 24 * 60, "expired")
+third(m3, "unknown-message")
+s.exactly("Settled", sender(), 1)
+s.check("Settled", sender(), contains={"message_id": m2, "state": "Refused",
+                                       "refusal": "Outside this session's repository."})
+s.empty("Pending", inbox(WORKER)).empty("Replies", thread(m))
 names.append(s.write())
 
 for name in COVERS:

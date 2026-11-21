@@ -25,6 +25,7 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | 4. A body that is JSON: `inbox_verify::duplicate_member` | an object, at any depth, carries a member name twice | `400` | `{"refused": "duplicate member", "member": "<dotted path>"}` |
 | 5. A post: the message count, inside the backend's section | the store holds `max_messages` messages or more | `503` | `{"refused": "message limit", "limit": <max_messages>}` |
 | 6. The generated `dispatch`, inside the backend's section | everything the generated surface answers: `404`, `405`, `400`, `403` (not granted), the declared outcomes, `501` | as generated | as generated |
+| 6a. A command answer of the outcome `foreign-message` | the caller is neither party to the message (the model's guard) | `404` | the generated body with `outcome` `unknown-message` |
 | 7. A view answer: the read rule | rows the caller may not see are removed | `200` | the generated body without them |
 
 So an unauthenticated request never reaches the duplicate check's answer, the message limit or a
@@ -81,7 +82,27 @@ and an `inbox` address, the same text in version 1"). The caller is the sender: 
 `not-sender` (`403`, `NotSender`), answered before every other refusal of the command and
 storing nothing. The rule is the model's (`ess/domains/messaging.yaml`); the listener holds no
 copy of it. So a principal that sends another principal's signed envelope under its own request
-signature is refused, whether or not the first message is still held. No request over HTTP is the
+signature is refused, whether or not the first message is still held.
+
+A caller that is neither the owner of the inbox in `to` nor the sender in `from` of a stored
+message gets the model's `foreign-message` from `mark-delivered`, `read`, `answer`, `refuse` and
+`collect` (decision 5 of `docs/design/inbox.md`). Step 6a is the one place where this service's
+answer differs from the generated one: the generated surface answers that outcome `403` under its
+own name, and the service answers it with the status and the body of `unknown-message`, byte for
+byte what an id no message carries gets from the same route: `404`
+`{"outcome":"unknown-message","published":[],"error":"inbox.messaging.UnknownMessage"}`. So a
+third principal cannot tell a message between others from no message, in any state of the
+message. ESS 0.96.0 can give two outcomes one answer only through an `ess-http/1` binding this
+repository does not have. The listener renames the outcome and nothing else: it compares no caller
+with no message, and who is a party is decided in the model. The headers depend only on the
+status and the body, the outcome publishes nothing, and it moves nothing a view or a wait reads.
+The sender still gets `not-recipient` (`403`) from the 4 commands of the owner and the owner
+`not-sender` (`403`) from `collect`. Over HTTP the conformance run reads `unknown-message` where a
+scenario expects `foreign-message`; the scenario that expects it,
+`a-third-principal-finds-no-message`, is unsupported there (it has a step as the Sweeper), and
+`crates/inbox-server/tests/foreign_message.rs` witnesses the answer.
+
+No request over HTTP is the
 `inbox.messaging.Sweeper`: `Expire`, `Due` and `Messages` are answered `403` with the generated
 refusal `{"refused": "not granted", "actor": "inbox.messaging.Client"}`. Only the expiry task sends
 `Expire`.
