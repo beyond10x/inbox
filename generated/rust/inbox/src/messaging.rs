@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 0c82df6c630e3857fe5406f8adc42b037d2ff1786bd61c52ae04e85fd2828fd9
+// contract digest f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -912,7 +912,7 @@ pub enum AnswerOutcome {
     },
     /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
     ///
-    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message.
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
     ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
@@ -1006,7 +1006,7 @@ pub enum CollectOutcome {
     },
     /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
     ///
-    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message.
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
     ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
@@ -1097,7 +1097,7 @@ pub enum MarkDeliveredOutcome {
     },
     /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
     ///
-    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message.
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
     ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
@@ -1141,7 +1141,7 @@ pub enum MarkReadOutcome {
     },
     /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
     ///
-    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message.
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
     ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
@@ -1348,7 +1348,7 @@ pub enum RefuseOutcome {
     },
     /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
     ///
-    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message.
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
     ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,

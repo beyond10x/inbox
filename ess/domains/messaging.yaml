@@ -484,7 +484,7 @@ commands:
               - to != caller.inbox
               - from != caller.principal
         error: inbox.messaging.UnknownMessage
-        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message."
+        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message."
       - name: not-recipient
         when_subject:
           predicate: to != caller.inbox
@@ -515,7 +515,7 @@ commands:
               - to != caller.inbox
               - from != caller.principal
         error: inbox.messaging.UnknownMessage
-        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message."
+        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message."
       - name: not-recipient
         when_subject:
           predicate: to != caller.inbox
@@ -587,7 +587,7 @@ commands:
               - to != caller.inbox
               - from != caller.principal
         error: inbox.messaging.UnknownMessage
-        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message."
+        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message."
       - name: not-recipient
         when_subject:
           predicate: to != caller.inbox
@@ -644,7 +644,7 @@ commands:
               - to != caller.inbox
               - from != caller.principal
         error: inbox.messaging.UnknownMessage
-        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message."
+        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message."
       - name: not-recipient
         when_subject:
           predicate: to != caller.inbox
@@ -680,7 +680,7 @@ commands:
               - to != caller.inbox
               - from != caller.principal
         error: inbox.messaging.UnknownMessage
-        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message."
+        summary: "The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message."
       - name: not-sender
         when_subject:
           predicate: from != caller.principal

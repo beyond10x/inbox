@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:21875ba674d254e089dbae86ce77ea27d93739795a26871085342afc93e85a66
+# contract digest slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:21875ba674d254e089dbae86ce77ea27d93739795a26871085342afc93e85a66
+    contract_digest: slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -1391,7 +1391,7 @@ components:
       type: object
     inbox.messaging.Answer.foreign-message.Response:
       additionalProperties: false
-      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
       properties:
         error:
           const: inbox.messaging.UnknownMessage
@@ -1705,7 +1705,7 @@ components:
       type: object
     inbox.messaging.Collect.foreign-message.Response:
       additionalProperties: false
-      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
       properties:
         error:
           const: inbox.messaging.UnknownMessage
@@ -2175,7 +2175,7 @@ components:
       type: object
     inbox.messaging.MarkDelivered.foreign-message.Response:
       additionalProperties: false
-      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
       properties:
         error:
           const: inbox.messaging.UnknownMessage
@@ -2262,7 +2262,7 @@ components:
       type: object
     inbox.messaging.MarkRead.foreign-message.Response:
       additionalProperties: false
-      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
       properties:
         error:
           const: inbox.messaging.UnknownMessage
@@ -3211,7 +3211,7 @@ components:
       type: object
     inbox.messaging.Refuse.foreign-message.Response:
       additionalProperties: false
-      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
       properties:
         error:
           const: inbox.messaging.UnknownMessage

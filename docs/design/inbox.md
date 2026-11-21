@@ -97,12 +97,14 @@ Each can be changed; the alternative is named where there is one.
    `foreign-message` (error `UnknownMessage`) from `MarkDelivered`, `MarkRead`, `Answer`,
    `Refuse` and `Collect`, after `unknown-message` and before `not-recipient`, `not-sender` and
    every refusal of the message's state; the service answers it as `unknown-message`
-   (`docs/design/service.md`), so a third principal cannot tell a message between others from
-   no message. The sender still gets `not-recipient` from the 4 commands of the owner, and the
-   owner `not-sender` from `Collect`: each of them knows the message exists. A message id is a
-   ULID and not a secret.
+   (`docs/design/service.md`), so from these 5 commands a third principal cannot tell a message
+   between others from no message; `PostMessage` still can tell it (decision 6). The sender
+   still gets `not-recipient` from the 4 commands of the owner, and the owner `not-sender` from
+   `Collect`: each of them knows the message exists. A message id is a ULID and not a secret.
 6. **Dedup holds among live messages only**, by `message_id` and by `dedup_key`. A refused post
-   stores nothing.
+   stores nothing. Open: a post answers `duplicate` for a message id that is stored, whoever
+   sent it, so a client that knows or guesses a message id still learns from a post whether it
+   is in use (`story:post-does-not-tell-a-message-id-exists`).
 7. **`on_behalf_of` is always present** and equals `from` when the sender speaks for nobody else.
    A reply is the input of `Answer`, not a stored kind. `Body` is at most 65536 bytes.
 8. **The wire API is the one ESS derives**: `POST /messaging/commands/<wire>` and

@@ -90,12 +90,16 @@ message gets the model's `foreign-message` from `mark-delivered`, `read`, `answe
 answer differs from the generated one: the generated surface answers that outcome `403` under its
 own name, and the service answers it with the status and the body of `unknown-message`, byte for
 byte what an id no message carries gets from the same route: `404`
-`{"outcome":"unknown-message","published":[],"error":"inbox.messaging.UnknownMessage"}`. So a
-third principal cannot tell a message between others from no message, in any state of the
-message. ESS 0.96.0 can give two outcomes one answer only through an `ess-http/1` binding this
-repository does not have. The listener renames the outcome and nothing else: it compares no caller
-with no message, and who is a party is decided in the model. The headers depend only on the
-status and the body, the outcome publishes nothing, and it moves nothing a view or a wait reads.
+`{"outcome":"unknown-message","published":[],"error":"inbox.messaging.UnknownMessage"}`. So from
+these 5 commands a third principal cannot tell a message between others from no message, in any
+state of the message. It still can from a `post`: a post answers `duplicate` for a message id
+that is stored, whoever sent it, so a client that knows or guesses a message id learns from a
+post whether it is in use (`story:post-does-not-tell-a-message-id-exists`). ESS 0.96.0 can give
+two outcomes one answer only through an `ess-http/1` binding this repository does not have. The
+listener renames the outcome and nothing else: it compares no caller with no message, and who is
+a party is decided in the model. The headers depend only on the status and the body, and the
+outcome publishes nothing and changes no row. Like every answer to a request that is not a
+`GET`, it wakes the held-open waits, the same way an `unknown-message` answer does.
 The sender still gets `not-recipient` (`403`) from the 4 commands of the owner and the owner
 `not-sender` (`403`) from `collect`. Over HTTP the conformance run reads `unknown-message` where a
 scenario expects `foreign-message`; the scenario that expects it,

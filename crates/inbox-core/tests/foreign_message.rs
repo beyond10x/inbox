@@ -115,6 +115,17 @@ fn refused(backend: &MemoryBackend, who: &str, command: &str, id: &str) -> Strin
 
 /// The worker's inbox open, a request from the planner in it.
 fn world() -> MemoryBackend {
+    world_from(PLANNER, PLANNER)
+}
+
+/// The worker's inbox open, a request in it whose `from` and `on_behalf_of` are these; one that
+/// speaks for another names a delegation, which the accepting verifier lets pass.
+fn world_from(from: &str, on_behalf_of: &str) -> MemoryBackend {
+    let authority = if from == on_behalf_of {
+        String::new()
+    } else {
+        "\"authority\":\"delegation-7\",".to_owned()
+    };
     let backend = MemoryBackend::new();
     let opened = as_client(
         &backend,
@@ -125,11 +136,11 @@ fn world() -> MemoryBackend {
     assert_eq!(outcome(&opened), "opened");
     let posted = as_client(
         &backend,
-        PLANNER,
+        from,
         "inbox.messaging.PostMessage",
         &format!(
-            "{{\"message_id\":\"{REQUEST}\",\"from\":\"{PLANNER}\",\"on_behalf_of\":\"{PLANNER}\",\
-             \"to\":\"{WORKER}\",\"kind\":\"request\",\"thread\":\"{REQUEST}\",\
+            "{{\"message_id\":\"{REQUEST}\",\"from\":\"{from}\",\"on_behalf_of\":\"{on_behalf_of}\",\
+             {authority}\"to\":\"{WORKER}\",\"kind\":\"request\",\"thread\":\"{REQUEST}\",\
              \"reply_shape\":{{\"shape\":\"lines\",\"value\":3}},\
              \"created\":\"2026-01-05T09:00:00Z\",\"expires\":\"2026-01-06T09:00:00Z\",\
              \"dedup_key\":\"{REQUEST}\",\"body\":\"b\",\
@@ -255,4 +266,44 @@ fn the_input_guard_of_answer_stays_ahead_of_foreign_message() {
         assert_eq!(published(&answer), 0);
         assert_eq!(store(&backend), before);
     }
+}
+
+/// A session that relays a message for the operator: `from` is the session, `on_behalf_of` the
+/// operator.
+const RELAY: &str = "agent:ws/host-operator";
+const OPERATOR: &str = "human:operator";
+
+#[test]
+fn the_relaying_sender_of_a_message_is_its_sender_and_collects() {
+    let backend = world_from(RELAY, OPERATOR);
+    for command in [MARK_DELIVERED, MARK_READ, ANSWER, REFUSE] {
+        assert_eq!(
+            refused(&backend, RELAY, command, REQUEST),
+            "not-recipient",
+            "{command}"
+        );
+    }
+    assert_eq!(refused(&backend, RELAY, COLLECT, REQUEST), "not-settled");
+    let answered = as_client(&backend, WORKER, ANSWER, &input(ANSWER, REQUEST, WORKER));
+    assert_eq!(outcome(&answered), "answered");
+    let collected = as_client(&backend, RELAY, COLLECT, &input(COLLECT, REQUEST, RELAY));
+    assert_eq!(outcome(&collected), "collected");
+}
+
+#[test]
+fn the_principal_a_message_is_relayed_for_is_a_third_principal() {
+    let backend = world_from(RELAY, OPERATOR);
+    for command in COMMANDS {
+        assert_eq!(
+            refused(&backend, OPERATOR, command, REQUEST),
+            "foreign-message",
+            "{command}"
+        );
+    }
+    let answered = as_client(&backend, WORKER, ANSWER, &input(ANSWER, REQUEST, WORKER));
+    assert_eq!(outcome(&answered), "answered");
+    assert_eq!(
+        refused(&backend, OPERATOR, COLLECT, REQUEST),
+        "foreign-message"
+    );
 }
