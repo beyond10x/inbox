@@ -6,6 +6,16 @@
 //! lock of a file beside it (`<outbox>.lock`), reads the whole file, and replaces it with a
 //! file written beside it and renamed over it, so two `inbox` processes that write at once
 //! lose no entry and a reader never sees half a file.
+//!
+//! The epochs file beside it (`<outbox>.epochs`) records, per kept envelope whose post the
+//! service said arrived, the epoch of the start that said so ([`Epoch`], the answer's
+//! `Inbox-Epoch`), for `repost` to leave the envelope alone in that start: one line per
+//! envelope, its message id, a tab and the 32 hex digits. It is changed under the same lock and
+//! replaced the same way, after the outbox file where both change, so an interruption leaves an
+//! envelope without an epoch (posted again), never an epoch of an envelope that was not kept.
+//! Reading it never fails a command: a missing or unreadable file, a line of another form and
+//! the lines of a message id named twice give the envelopes concerned no epoch. Each time it is
+//! written it holds the entries of the envelopes the outbox file keeps and no other.
 
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -17,6 +27,7 @@ use inbox::server::json;
 use inbox::server::wire;
 use inbox_verify::Instant;
 
+use crate::client::Epoch;
 use crate::failure::Failure;
 
 /// The outbox file name under the state directory.
@@ -29,6 +40,8 @@ pub struct Kept {
     pub envelope: PostMessage,
     /// The text that was posted.
     pub text: String,
+    /// The epoch of the start that said the post arrived, as the epochs file records it.
+    pub epoch: Option<Epoch>,
 }
 
 /// A line of the outbox file that does not read as an envelope. It is never dropped: `outbox`
@@ -96,7 +109,7 @@ impl Outbox {
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn keep(&self, text: &str, now: Instant) -> Result<(), Failure> {
-        self.change(now, |lines| lines.push(text.to_owned()))
+        self.change(now, |lines, _| lines.push(text.to_owned()))
     }
 
     /// Drops the envelope with this message id, and what expired at `now`.
@@ -105,30 +118,61 @@ impl Outbox {
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn remove(&self, message_id: &str, now: Instant) -> Result<(), Failure> {
-        self.change(now, |lines| *lines = without(lines, message_id))
+        self.change(now, |lines, _| *lines = without(lines, message_id))
+    }
+
+    /// Records `epoch` in the epochs file for the envelope with this message id, in place of the
+    /// epoch it had, when the outbox file still keeps it; drops what expired at `now`.
+    ///
+    /// # Errors
+    ///
+    /// [`Failure::Local`] when a file cannot be read or written.
+    pub fn record_epoch(
+        &self,
+        message_id: &str,
+        epoch: &Epoch,
+        now: Instant,
+    ) -> Result<(), Failure> {
+        self.change(now, |lines, epochs| {
+            if lines.iter().any(|line| {
+                decode(line).is_some_and(|envelope| envelope.message_id.0 == message_id)
+            }) {
+                epochs.record(message_id, epoch);
+            }
+        })
     }
 
     /// The envelopes kept for `from` that have not expired at `now`, in the order they were
-    /// posted, and every line of the file that does not read as an envelope; drops what expired.
+    /// posted, each with the epoch the epochs file records for it, and every line of the file
+    /// that does not read as an envelope; drops what expired.
     ///
     /// # Errors
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn kept(&self, from: &str, now: Instant) -> Result<Contents, Failure> {
         let mut contents = Contents::default();
-        self.change(now, |lines| {
+        self.change(now, |lines, epochs| {
+            let mut kept = of_sender(lines, from);
+            for entry in &mut kept {
+                entry.epoch = epochs.of(&entry.envelope.message_id.0);
+            }
             contents = Contents {
-                kept: of_sender(lines, from),
+                kept,
                 unreadable: unreadable(lines),
             };
         })?;
         Ok(contents)
     }
 
-    /// Runs `change` over the lines of the file under the lock, after dropping every envelope
-    /// whose `expires` is at or before `now`, and writes the file again when they changed. A line
-    /// that does not read as an envelope is kept as it is.
-    fn change(&self, now: Instant, change: impl FnOnce(&mut Vec<String>)) -> Result<(), Failure> {
+    /// Runs `change` over the lines of the file and the epochs file under the lock, after
+    /// dropping every envelope whose `expires` is at or before `now`, and writes the file again
+    /// when its lines changed, then the epochs file when `change` recorded an epoch. A line that
+    /// does not read as an envelope is kept as it is.
+    fn change(
+        &self,
+        now: Instant,
+        change: impl FnOnce(&mut Vec<String>, &mut Epochs),
+    ) -> Result<(), Failure> {
         let shown = self.path.display();
         let local = |error: std::io::Error| Failure::Local(format!("{shown}: {error}"));
         if let Some(parent) = self
@@ -157,33 +201,98 @@ impl Outbox {
         };
         let before: Vec<String> = text.lines().map(str::to_owned).collect();
         let mut lines = unexpired(&before, now);
-        change(&mut lines);
+        let epochs_path = beside(&self.path, ".epochs");
+        let mut epochs = Epochs::parse(&fs::read_to_string(&epochs_path).unwrap_or_default());
+        change(&mut lines, &mut epochs);
         if lines != before {
-            let staged = beside(&self.path, ".new");
-            let mut file: File = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&staged)
-                .map_err(local)?;
-            let mut out = String::new();
-            for line in &lines {
-                out.push_str(line);
-                out.push('\n');
-            }
-            file.write_all(out.as_bytes()).map_err(local)?;
-            file.sync_all().map_err(local)?;
-            fs::rename(&staged, &self.path).map_err(local)?;
+            replace(&self.path, &lines).map_err(local)?;
+        }
+        if epochs.changed {
+            replace(&epochs_path, &epochs.lines(&lines))
+                .map_err(|error| Failure::Local(format!("{}: {error}", epochs_path.display())))?;
         }
         lock.unlock().map_err(local)
     }
+}
+
+/// Replaces the file at `path` with `lines`, each ended by a newline: written to `<path>.new`
+/// (mode 0600) and renamed over it.
+fn replace(path: &Path, lines: &[String]) -> std::io::Result<()> {
+    let staged = beside(path, ".new");
+    let mut file: File = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&staged)?;
+    let mut out = String::new();
+    for line in lines {
+        out.push_str(line);
+        out.push('\n');
+    }
+    file.write_all(out.as_bytes())?;
+    file.sync_all()?;
+    fs::rename(&staged, path)
 }
 
 fn beside(path: &Path, suffix: &str) -> PathBuf {
     let mut beside = path.to_owned();
     beside.as_mut_os_string().push(suffix);
     beside
+}
+
+/// What the epochs file says: the epoch of each message id one line of the form
+/// `<message id>\t<32 lower-case hex digits>` names, in the order of the file. A message id that
+/// two lines name, whatever their form, has none.
+#[derive(Debug, Default)]
+struct Epochs {
+    recorded: Vec<(String, Epoch)>,
+    changed: bool,
+}
+
+impl Epochs {
+    fn parse(text: &str) -> Self {
+        let named: Vec<(&str, &str)> = text
+            .lines()
+            .map(|line| line.split_once('\t').unwrap_or((line, "")))
+            .collect();
+        let recorded = named
+            .iter()
+            .filter(|(id, _)| !id.is_empty())
+            .filter(|(id, _)| named.iter().filter(|(other, _)| other == id).count() == 1)
+            .filter_map(|(id, digits)| Epoch::parse(digits).map(|epoch| ((*id).to_owned(), epoch)))
+            .collect();
+        Self {
+            recorded,
+            changed: false,
+        }
+    }
+
+    fn of(&self, message_id: &str) -> Option<Epoch> {
+        self.recorded
+            .iter()
+            .find(|(id, _)| id == message_id)
+            .map(|(_, epoch)| epoch.clone())
+    }
+
+    fn record(&mut self, message_id: &str, epoch: &Epoch) {
+        self.recorded.retain(|(id, _)| id != message_id);
+        self.recorded.push((message_id.to_owned(), epoch.clone()));
+        self.changed = true;
+    }
+
+    /// The lines of the file, for the envelopes `kept` holds and no other.
+    fn lines(&self, kept: &[String]) -> Vec<String> {
+        let ids: Vec<String> = kept
+            .iter()
+            .filter_map(|line| decode(line).map(|envelope| envelope.message_id.0))
+            .collect();
+        self.recorded
+            .iter()
+            .filter(|(id, _)| ids.contains(id))
+            .map(|(id, epoch)| format!("{id}\t{}", epoch.as_str()))
+            .collect()
+    }
 }
 
 /// The envelope a line holds, read by the generated decoder, or why it does not read.
@@ -236,7 +345,7 @@ fn without(lines: &[String], message_id: &str) -> Vec<String> {
         .collect()
 }
 
-/// The envelopes `from` sent, in their order.
+/// The envelopes `from` sent, in their order, without their epochs.
 fn of_sender(lines: &[String], from: &str) -> Vec<Kept> {
     lines
         .iter()
@@ -246,6 +355,7 @@ fn of_sender(lines: &[String], from: &str) -> Vec<Kept> {
                 .map(|envelope| Kept {
                     envelope,
                     text: line.clone(),
+                    epoch: None,
                 })
         })
         .collect()
@@ -260,7 +370,8 @@ mod tests {
     use inbox::server::wire;
     use inbox_verify::Instant;
 
-    use super::{of_sender, unexpired, unreadable, without};
+    use super::{Epochs, of_sender, unexpired, unreadable, without};
+    use crate::client::Epoch;
 
     #[test]
     fn a_line_that_does_not_decode_is_named_with_its_number_and_the_decoders_reason() {
@@ -344,6 +455,87 @@ mod tests {
         assert_eq!(
             without(&lines, &id(1)),
             [lines[1].clone(), lines[2].clone()]
+        );
+    }
+
+    const EPOCH: &str = "0123456789abcdef0123456789abcdef";
+    const OTHER: &str = "fedcba9876543210fedcba9876543210";
+
+    fn epoch(text: &str) -> Epoch {
+        Epoch::parse(text).unwrap()
+    }
+
+    #[test]
+    fn an_epochs_line_is_a_message_id_a_tab_and_32_hex_digits() {
+        let text = format!("{}\t{EPOCH}\n{}\t{OTHER}\n", id(1), id(2));
+        let epochs = Epochs::parse(&text);
+        assert_eq!(epochs.of(&id(1)), Some(epoch(EPOCH)));
+        assert_eq!(epochs.of(&id(2)), Some(epoch(OTHER)));
+        assert_eq!(epochs.of(&id(3)), None);
+        assert!(!epochs.changed);
+    }
+
+    #[test]
+    fn a_line_of_another_form_or_an_id_named_twice_gives_no_epoch() {
+        let text = [
+            format!("{}\t{}", id(1), EPOCH.to_uppercase()),
+            format!("{}\t{EPOCH}\textra", id(2)),
+            format!("{} {EPOCH}", id(3)),
+            format!("\t{EPOCH}"),
+            format!("{}\t{EPOCH}", id(4)),
+            format!("{}\t{OTHER}", id(4)),
+            format!("{}\t{EPOCH}", id(5)),
+            format!("{}\tnot hex", id(5)),
+            "\u{fffd} not an entry".to_owned(),
+            format!("{}\t{EPOCH}", id(6)),
+        ]
+        .join("\n");
+        let epochs = Epochs::parse(&text);
+        for n in 1..=5 {
+            assert_eq!(epochs.of(&id(n)), None, "{n}");
+        }
+        assert_eq!(epochs.of(""), None);
+        assert_eq!(epochs.of(&id(6)), Some(epoch(EPOCH)));
+        assert_eq!(Epochs::parse("").of(&id(6)), None);
+    }
+
+    #[test]
+    fn a_recorded_epoch_replaces_the_one_before_and_ids_named_twice() {
+        let text = format!(
+            "{}\t{EPOCH}\n{}\t{EPOCH}\n{}\t{OTHER}\n",
+            id(1),
+            id(2),
+            id(2)
+        );
+        let mut epochs = Epochs::parse(&text);
+        epochs.record(&id(1), &epoch(OTHER));
+        epochs.record(&id(2), &epoch(EPOCH));
+        assert!(epochs.changed);
+        assert_eq!(epochs.of(&id(1)), Some(epoch(OTHER)));
+        assert_eq!(epochs.of(&id(2)), Some(epoch(EPOCH)));
+        let kept = [
+            envelope(1, "agent:test/alice", "2026-11-22T12:00:00Z"),
+            envelope(2, "agent:test/alice", "2026-11-22T12:00:00Z"),
+        ];
+        assert_eq!(
+            epochs.lines(&kept),
+            [format!("{}\t{OTHER}", id(1)), format!("{}\t{EPOCH}", id(2))]
+        );
+    }
+
+    #[test]
+    fn an_entry_whose_envelope_the_outbox_does_not_keep_is_not_written() {
+        let text = format!("{}\t{EPOCH}\n{}\t{EPOCH}\n", id(1), id(9));
+        let mut epochs = Epochs::parse(&text);
+        epochs.record(&id(2), &epoch(OTHER));
+        let kept = [
+            envelope(1, "agent:test/alice", "2026-11-22T12:00:00Z"),
+            envelope(2, "agent:test/alice", "2026-11-22T12:00:00Z"),
+            "not an envelope".to_owned(),
+        ];
+        assert_eq!(
+            epochs.lines(&kept),
+            [format!("{}\t{EPOCH}", id(1)), format!("{}\t{OTHER}", id(2))]
         );
     }
 }

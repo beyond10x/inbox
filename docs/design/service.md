@@ -72,6 +72,25 @@ The service keeps **no record of requests it has seen**, and `inbox-verify` keep
 request may be sent again inside its 60 s window, and is answered again. Posts are idempotent by
 `message_id` and `dedup_key`; a repeated `Answer` is `already-settled`.
 
+## The epoch
+
+Every answer the service writes carries the response header `Inbox-Epoch`
+(`inbox_server::EPOCH_HEADER`): 32 lower-case hex digits, made once when the listener is bound
+(`Server::bind`) from 16 bytes of the OS random source. Every answer of one start carries the same
+value, and a new start makes a new one, so a caller that compares the value with the one an
+earlier answer carried tells whether the service was started again since. The memory backend
+loses every message on a restart; that is what the client's `inbox repost` reads it for: it posts
+again only the kept envelopes that the epochs file beside its outbox file (`<outbox>.epochs`, one
+line `<message id>\t<epoch>` per envelope whose post arrived) records at another epoch, or at
+none.
+
+The value is not made from the `Clock` of `Config` (a clock a test sets does not move between two
+starts) and carries no time and no secret. It is written in the one function that writes the head
+of an answer, so the answers of every status carry it: the refusals of step 1 to 5 included, `401`
+among them, which a caller without a key gets. Such a caller learns that the service was started
+again, and nothing else. A connection dropped without an answer (a thread that cannot be started)
+gets none. The generated `http::Response` and the generated `http::write` are not changed.
+
 ## The caller
 
 The key id resolves to the principal of its key entry (`KeyRing::verify_request`). The caller is the
@@ -97,8 +116,9 @@ that is stored, whoever sent it, so a client that knows or guesses a message id 
 post whether it is in use (`story:post-does-not-tell-a-message-id-exists`). ESS 0.96.0 can give
 two outcomes one answer only through an `ess-http/1` binding this repository does not have. The
 listener renames the outcome and nothing else: it compares no caller with no message, and who is
-a party is decided in the model. The headers depend only on the status and the body, and the
-outcome publishes nothing and changes no row. Like every answer to a request that is not a
+a party is decided in the model. The headers of the answer depend only on the status, the body
+and the start of the service (the epoch, above), and the outcome publishes nothing and changes no
+row. Like every answer to a request that is not a
 `GET`, it wakes the held-open waits, the same way an `unknown-message` answer does.
 The sender still gets `not-recipient` (`403`) from the 4 commands of the owner and the owner
 `not-sender` (`403`) from `collect`. Over HTTP the conformance run reads `unknown-message` where a

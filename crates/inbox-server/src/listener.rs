@@ -16,6 +16,20 @@ use crate::signals::{Cut, Signals};
 /// The shortest pause between two sweeps, whatever `sweep_interval` says.
 const MIN_SWEEP_INTERVAL: Duration = Duration::from_millis(1);
 
+/// The response header every answer carries: the epoch of the start that answers it, 32
+/// lower-case hex digits made from 16 random bytes when the listener is bound
+/// (`docs/design/service.md`, the epoch). It carries no time and no secret: a caller compares it
+/// with the one an earlier answer carried, to tell whether the service was started again since.
+pub const EPOCH_HEADER: &str = "Inbox-Epoch";
+
+/// A fresh epoch: 16 bytes of the OS random source as 32 lower-case hex digits.
+fn epoch() -> io::Result<String> {
+    let mut random = [0_u8; 16];
+    getrandom::fill(&mut random)
+        .map_err(|error| io::Error::other(format!("the OS random source failed: {error}")))?;
+    Ok(random.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
 /// A service bound to its address and not yet serving.
 #[derive(Debug)]
 pub struct Server<B> {
@@ -43,13 +57,15 @@ impl Stopper {
 }
 
 impl<B: Backend> Server<B> {
-    /// Binds `config.address` and holds `backend` for the service.
+    /// Binds `config.address` and holds `backend` for the service, and makes the epoch every
+    /// answer of this service carries ([`EPOCH_HEADER`]).
     ///
     /// # Errors
     ///
     /// [`io::ErrorKind::InvalidInput`] for an address that is not loopback, refused before
     /// anything is bound: this stage serves on a loopback address only. Otherwise what binding
-    /// refuses: the address is taken, or the port is privileged.
+    /// refuses: the address is taken, or the port is privileged; or the OS random source does not
+    /// answer.
     pub fn bind(config: Config, backend: B) -> io::Result<Self> {
         if !config.address.ip().is_loopback() {
             return Err(io::Error::new(
@@ -60,6 +76,7 @@ impl<B: Backend> Server<B> {
                 ),
             ));
         }
+        let epoch = epoch()?;
         let listener = TcpListener::bind(config.address)?;
         let address = listener.local_addr()?;
         Ok(Self {
@@ -69,6 +86,7 @@ impl<B: Backend> Server<B> {
                 backend,
                 config,
                 signals: Arc::default(),
+                epoch,
             }),
         })
     }
@@ -256,7 +274,7 @@ fn connection<B: Backend>(shared: &Shared<B>, stream: TcpStream) {
             // Read in full: in flight now, and no longer cut off by the timeout or the stop.
             drop(watch);
             let answered = answer(shared, &request);
-            let _ = write(reader.get_mut(), &answered);
+            let _ = write(reader.get_mut(), &answered, &shared.epoch);
         }
         Err(refusal) => {
             let answered = match watch.cut() {
@@ -268,7 +286,7 @@ fn connection<B: Backend>(shared: &Shared<B>, stream: TcpStream) {
             // A request refused while it was read may still be arriving: read and drop the rest
             // after the answer, so closing does not reset the connection before the caller reads
             // it. The watch stays until then, so the timeout and the stop end this too.
-            if write(&mut stream, &answered).is_ok() {
+            if write(&mut stream, &answered, &shared.epoch).is_ok() {
                 http::linger(&mut stream);
             }
             drop(watch);
@@ -277,8 +295,9 @@ fn connection<B: Backend>(shared: &Shared<B>, stream: TcpStream) {
 }
 
 /// Writes one answer as the generated `http::write` does, with the reason phrase of the statuses
-/// only this service answers (`401`, `408`, `503`).
-fn write(stream: &mut TcpStream, answer: &http::Response) -> io::Result<()> {
+/// only this service answers (`401`, `408`, `503`) and the service's `epoch` ([`EPOCH_HEADER`]).
+/// Every answer the service writes goes through here, whatever its status.
+fn write(stream: &mut TcpStream, answer: &http::Response, epoch: &str) -> io::Result<()> {
     let reason = match answer.status {
         401 => "Unauthorized",
         408 => "Request Timeout",
@@ -286,7 +305,7 @@ fn write(stream: &mut TcpStream, answer: &http::Response) -> io::Result<()> {
         status => http::reason(status),
     };
     let head = format!(
-        "HTTP/1.1 {} {reason}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "HTTP/1.1 {} {reason}\r\nContent-Type: {}\r\nContent-Length: {}\r\n{EPOCH_HEADER}: {epoch}\r\nConnection: close\r\n\r\n",
         answer.status,
         answer.content_type,
         answer.body.len()

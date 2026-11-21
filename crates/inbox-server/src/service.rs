@@ -44,6 +44,8 @@ pub(crate) struct Shared<B> {
     pub(crate) backend: B,
     pub(crate) config: Config,
     pub(crate) signals: Arc<Signals>,
+    /// The epoch of this start, written on every answer (`crate::listener::EPOCH_HEADER`).
+    pub(crate) epoch: String,
 }
 
 /// A refusal of this service: `refused` and, where there is one, the limit it met.

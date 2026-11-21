@@ -14,7 +14,9 @@
 //!   valid one is answered `401 {"refused": "unauthenticated"}`;
 //! - a body in which an object carries a member name twice is refused before any command runs;
 //! - the verifier port: [`RingVerifier`] over `inbox-verify`'s key ring;
-//! - the read rule, the wait on `Pending`, the expiry task ([`sweep`]) and the limits.
+//! - the read rule, the wait on `Pending`, the expiry task ([`sweep`]) and the limits;
+//! - the epoch: every answer carries [`EPOCH_HEADER`], a value made once per bound listener, so a
+//!   caller tells an answer of this start from one of an earlier start.
 //!
 //! [`Server::bind`] binds a loopback address (port 0 for an ephemeral one, [`Server::local_addr`]
 //! names it), and [`Server::run`] serves until a [`Stopper`] tells it to stop.
@@ -34,5 +36,5 @@ pub use auth::{KEY_ID_HEADER, RingVerifier, SIGNATURE_HEADER, TIMESTAMP_HEADER, 
 pub use clock::{Clock, ManualClock, SystemClock, format_instant};
 pub use config::Config;
 pub use expiry::sweep;
-pub use listener::{Running, Server, Stopper};
+pub use listener::{EPOCH_HEADER, Running, Server, Stopper};
 pub use service::Backend;
