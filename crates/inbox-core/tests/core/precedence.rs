@@ -279,6 +279,85 @@ fn an_input_refusal_answers_before_an_external_refusal() {
     }
 }
 
+/// The envelope carrying the external faults `faults` name, and no other fault, on a note's base:
+/// `UnknownOption` makes it a decision defaulting to a letter no option has, `SignatureInvalid`
+/// signs with a refused key, and `AuthorityInvalid` speaks for `human:operator` under a lapsed
+/// delegation.
+fn externals(message_id: &str, faults: &[Fault]) -> Post {
+    assert!(
+        faults.iter().all(|fault| matches!(
+            fault,
+            Fault::UnknownOption | Fault::SignatureInvalid | Fault::AuthorityInvalid
+        )),
+        "{faults:?} names a fault that is no external refusal"
+    );
+    let mut envelope = Post::note(message_id);
+    if faults
+        .iter()
+        .any(|fault| matches!(fault, Fault::UnknownOption))
+    {
+        let decision = Post::decision(message_id, Some("C"));
+        envelope.kind = decision.kind;
+        envelope.decision = decision.decision;
+        envelope.default_on_silence = decision.default_on_silence;
+    }
+    if faults
+        .iter()
+        .any(|fault| matches!(fault, Fault::SignatureInvalid))
+    {
+        envelope.key_id = "key-refused".to_owned();
+    }
+    if faults
+        .iter()
+        .any(|fault| matches!(fault, Fault::AuthorityInvalid))
+    {
+        envelope.on_behalf_of = "human:operator".to_owned();
+        envelope.authority = Some("delegation-lapsed".to_owned());
+    }
+    envelope
+}
+
+/// Posts the envelope the external `faults` make into a world with an open inbox, answers its
+/// outcome, and asserts that the refused post stored nothing.
+fn answer_externals(faults: &[Fault]) -> String {
+    let world = World::new(verifier());
+    open_worker(&world);
+    let answer = post(&world, &externals(SECOND, faults));
+    assert!(
+        MessageStorage::list(&world.backend).is_empty(),
+        "{faults:?} stored a message"
+    );
+    outcome(&answer).to_owned()
+}
+
+#[test]
+fn unknown_option_answers_before_signature_invalid() {
+    let answered = answer_externals(&[Fault::UnknownOption, Fault::SignatureInvalid]);
+    assert_eq!(answered, "unknown-option");
+}
+
+#[test]
+fn unknown_option_answers_before_authority_invalid() {
+    let answered = answer_externals(&[Fault::UnknownOption, Fault::AuthorityInvalid]);
+    assert_eq!(answered, "unknown-option");
+}
+
+#[test]
+fn signature_invalid_answers_before_authority_invalid() {
+    let answered = answer_externals(&[Fault::SignatureInvalid, Fault::AuthorityInvalid]);
+    assert_eq!(answered, "signature-invalid");
+}
+
+#[test]
+fn unknown_option_answers_before_both_other_external_refusals() {
+    let answered = answer_externals(&[
+        Fault::UnknownOption,
+        Fault::SignatureInvalid,
+        Fault::AuthorityInvalid,
+    ]);
+    assert_eq!(answered, "unknown-option");
+}
+
 /// `MemoryBackend`, counting every read.
 #[derive(Clone, Default)]
 struct Counting {
