@@ -111,7 +111,7 @@ Each can be changed; the alternative is named where there is one.
    `GET /messaging/views/<wire>` (`generated/openapi`). There is no `ess-http/1` binding file.
    Ids and addresses travel in bodies and query parameters, never in a path segment.
 
-## What the specification cannot say (ESS 0.96.0)
+## What the specification cannot say (ESS 0.97.1)
 
 Each item is a rule of the service that stage 2 implements and tests outside the suite, or a
 limit of synthesis that an authored scenario makes up for. Only the item on `from` is filed in
@@ -140,7 +140,7 @@ the `ess` repository (beyond10x/ess#804).
 - **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
   suite. The input `from` of `PostMessage` carries `example: principal-262144`, the value ESS
-  0.96.0 synthesis gives the first caller's `principal` and not an address anybody holds; it goes
+  0.97.1 synthesis gives the first caller's `principal` and not an address anybody holds; it goes
   when ESS writes those scenarios without it, which is the fix of beyond10x/ess#804. With it, a
   generated scenario posts as one caller only: 19 of them lost the second run under a second
   caller they had before the guard.
@@ -153,7 +153,7 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.96.0**: synthesis writes 97 scenarios (27 authored) and refuses 95,
+- **`task coverage` on ESS 0.97.1**: synthesis writes 97 scenarios (27 authored) and refuses 95,
   and authored scenarios cover all 95, so it exits 0; `task check` runs it. The suite it writes
   runs on the interpreted target as 97 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core

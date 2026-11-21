@@ -798,7 +798,7 @@ for name, ids_ in COVERS.items():
 
 manifest = {
     "format": "ess-inputs/2",
-    "requires": "ess 0.96.0",
+    "requires": "ess 0.97.1",
     "specification": ["system.yaml", "components.yaml", "domains/messaging.yaml"],
     "scenarios": [f"scenarios/{name}.yaml" for name in sorted(names)],
 }
