@@ -116,12 +116,13 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
     drop(stdout);
     let stopper = server.stopper();
     let handle = signals.handle();
-    let watcher = std::thread::Builder::new()
+    // The signal thread stops the service first, then writes its line. It is never joined: the
+    // process ends once `run` returns, whether that write has finished, failed (a reader that is
+    // gone) or is still blocked (a full pipe whose reader is alive), and the line is then lost.
+    std::thread::Builder::new()
         .name("inbox-signals".to_owned())
         .spawn(move || {
             if let Some(signal) = signals.forever().next() {
-                // Stop first: what is written after it cannot keep the service from stopping,
-                // and a write to a standard error whose reader is gone is ignored.
                 stopper.stop();
                 warn(&format!("inbox serve: signal {signal}: stopping"));
             }
@@ -129,6 +130,5 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
         .map_err(|error| Failure::Local(format!("the signal thread: {error}")))?;
     let served = server.run();
     handle.close();
-    let _ = watcher.join();
     served.map_err(|error| Failure::Local(format!("serving: {error}")))
 }

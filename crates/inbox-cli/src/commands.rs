@@ -371,17 +371,14 @@ fn reply_shape(text: &str) -> Result<inbox::messaging::ReplyShape, Failure> {
     )))
 }
 
-/// Whether a refusal of a post is final for the envelope's text, so the outbox file drops it: a
+/// Whether a refusal of a post is final for the envelope, so the outbox file drops it: only a
 /// declared refusal of the model other than `UnknownInbox` (a restarted service holds no inbox
-/// until its owner opens it again), and the service's own `400` and `413` (the same text is
-/// refused again). `401`, `408` and `503` say something of the service or the clock, not of the
-/// envelope, and keep it.
-fn final_refusal(name: &str, status: u16, answer: &Value) -> bool {
-    if declared_error(answer).is_some() {
-        name != UNKNOWN_INBOX
-    } else {
-        matches!(status, 400 | 413)
-    }
+/// until its owner opens it again). Every refusal of the service's own (`400`, `401`, `408`,
+/// `413`, `503`) keeps it: the generated decoder admitted the text before it was kept, so such an
+/// answer comes from this run's settings (`--max-request-bytes`) or the transport (bytes that
+/// stalled), not from the envelope.
+fn final_refusal(name: &str, answer: &Value) -> bool {
+    declared_error(answer).is_some() && name != UNKNOWN_INBOX
 }
 
 /// The encoded envelope read back by the generated decoder, as the service reads it: what the
@@ -400,8 +397,8 @@ fn admitted<T>(
 /// `inbox post`: writes the envelope (draws `id`, and `thread` when none is given; `created` is
 /// the clock reading and `expires` `created` plus 24 hours when none is given), signs it, reads
 /// it back through the generated decoder, keeps it in the outbox, and posts it. A final refusal
-/// ([`final_refusal`]) drops it from the outbox again; a transport failure and the other
-/// refusals keep it for `repost`.
+/// ([`final_refusal`]) drops it from the outbox again; a transport failure and every other
+/// refusal keep it for `repost`.
 pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     let reading = now();
     let message_id = ulid()?;
@@ -476,7 +473,7 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
             status,
             answer,
         }) => {
-            if final_refusal(&name, status, &answer) {
+            if final_refusal(&name, &answer) {
                 client.outbox.remove(&message_id, now())?;
             }
             Err(Failure::Refused {
@@ -578,7 +575,7 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
                 if declared_error(&answer).is_some() && name == DUPLICATE {
                     (true, answer, format!("arrived ({name})"))
                 } else {
-                    if final_refusal(&name, status, &answer) {
+                    if final_refusal(&name, &answer) {
                         client.outbox.remove(&message_id, now())?;
                     }
                     let said = format!("refused: {name} ({status})");

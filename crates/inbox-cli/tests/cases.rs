@@ -651,16 +651,20 @@ fn outbox_lines(path: &std::path::Path) -> Vec<String> {
 }
 
 #[test]
-fn a_400_or_413_is_final_for_the_envelope_and_401_408_503_keep_it() {
-    let dir = Dir::new("final-refusals");
+fn the_services_own_400_401_408_413_503_keep_the_envelope_on_post_and_on_repost() {
+    let dir = Dir::new("own-refusals");
     key_new(&dir.path, "alice.key", Some(("alice-1", ALICE)));
-    for (status, body, kept) in [
-        (400, r#"{"refused":"duplicate member","member":"body"}"#, 0),
-        (413, r#"{"refused":"body too large","limit":1}"#, 0),
-        (401, r#"{"refused":"unauthenticated"}"#, 1),
-        (408, r#"{"refused":"request timeout"}"#, 1),
-        (503, r#"{"refused":"stopping"}"#, 1),
-    ] {
+    let refusals = [
+        (
+            400,
+            r#"{"refused":"the body was shorter than `Content-Length` announced"}"#,
+        ),
+        (413, r#"{"refused":"body too large","limit":1}"#),
+        (401, r#"{"refused":"unauthenticated"}"#),
+        (408, r#"{"refused":"request timeout"}"#),
+        (503, r#"{"refused":"stopping"}"#),
+    ];
+    for (status, body) in refusals {
         let outbox = dir.join(&format!("alice-{status}.outbox"));
         let outbox_text = outbox.display().to_string();
         let (url, served) = stand_in(status, body);
@@ -680,21 +684,25 @@ fn a_400_or_413_is_final_for_the_envelope_and_401_408_503_keep_it() {
             posted.json().member("status"),
             Some(&Value::Number(status.to_string()))
         );
-        assert_eq!(outbox_lines(&outbox).len(), kept, "{status}");
+        assert_eq!(outbox_lines(&outbox).len(), 1, "{status} keeps it on post");
     }
 
-    // A kept envelope reposted and answered 400 leaves too.
-    let outbox = dir.join("alice-503.outbox").display().to_string();
-    let (url, served) = stand_in(400, r#"{"refused":"the body is not JSON"}"#);
-    let env = [
-        ("INBOX_URL", url.as_str()),
-        ("INBOX_SECRET_KEY_FILE", "alice.key"),
-        ("INBOX_OUTBOX", outbox.as_str()),
-    ];
-    let reposted = run(&dir.path, &["repost", "--json"], &env);
-    served.join().expect("the stand-in ends");
-    assert_eq!(reposted.status, REFUSED, "{reposted:#?}");
-    assert!(outbox_lines(std::path::Path::new(&outbox)).is_empty());
+    // The envelope kept on the 503 is reposted to each refusal in turn and stays every time.
+    let outbox = dir.join("alice-503.outbox");
+    let outbox_text = outbox.display().to_string();
+    let before = outbox_lines(&outbox);
+    for (status, body) in refusals {
+        let (url, served) = stand_in(status, body);
+        let env = [
+            ("INBOX_URL", url.as_str()),
+            ("INBOX_SECRET_KEY_FILE", "alice.key"),
+            ("INBOX_OUTBOX", outbox_text.as_str()),
+        ];
+        let reposted = run(&dir.path, &["repost", "--json"], &env);
+        served.join().expect("the stand-in ends");
+        assert_eq!(reposted.status, REFUSED, "{status}: {reposted:#?}");
+        assert_eq!(outbox_lines(&outbox), before, "{status} keeps it on repost");
+    }
 }
 
 #[test]

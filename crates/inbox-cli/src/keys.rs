@@ -436,7 +436,9 @@ fn append(
                 )
             }) {
                 return Err(Failure::Local(format!(
-                    "{shown}: the {:?} entry `{}` is not signed by this operator key ({:?});                      a key file holds the entries of one operator key, and nothing is appended                      to it with another",
+                    "{shown}: the {:?} entry `{}` is not signed by this operator key ({:?}); \
+                     a key file holds the entries of one operator key, and nothing is appended \
+                     to it with another",
                     foreign.kind, foreign.id, foreign.reason
                 )));
             }
@@ -462,7 +464,8 @@ fn append(
     };
     if !add(&mut file, &operator) {
         return Err(Failure::Local(format!(
-            "{shown} already carries the id `{id}`: an id is never reused, a new entry takes a              new id"
+            "{shown} already carries the id `{id}`: an id is never reused, a new entry takes a \
+             new id"
         )));
     }
     let mut text = String::new();

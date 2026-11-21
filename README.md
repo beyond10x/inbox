@@ -154,9 +154,10 @@ included), 3 when the service cannot be reached or gives an answer that is neith
 nor a refusal, and 4 when a local file cannot be read or written. `inbox --help` lists the other
 commands: `close`, `wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `replies`,
 `repost` and `keyfile add-delegation`. `inbox post` keeps each envelope in an outbox file
-(`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused or expired;
-`inbox repost` posts the kept ones again after the service was restarted. `repost` is for after
-a restart of the service: a note its recipient already read is delivered again.
+(`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused with a model
+error other than `UnknownInbox`, or expired. A failed connection or a refusal of the service's
+own (`400`, `401`, `408`, `413`, `503`) keeps it. `inbox repost` posts the kept ones again after
+the service was restarted: a note its recipient already read is delivered again.
 
 ## Check
 
