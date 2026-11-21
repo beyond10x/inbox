@@ -10,10 +10,10 @@ yet: build it from source.
 
 :::warning[Test keys and loopback only]
 
-The service is for a loopback address and test keys while findings 1 and 2 of the
-[limits](limits.md) are open. Make keys on the spot, as below, and never give it a key
-that matters. `inbox serve` refuses a `--listen` address outside loopback, and the client
-refuses an `INBOX_URL` outside loopback.
+The service is for a loopback address, and for the principals of one operator: finding 1 of
+the [limits](limits.md) is open for principals of different operators. Make keys on the spot,
+as below, and never give it a key that matters. `inbox serve` refuses a `--listen` address
+outside loopback, and the client refuses an `INBOX_URL` outside loopback.
 
 :::
 
@@ -82,7 +82,7 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 (`$XDG_STATE_HOME/inbox/outbox.jsonl` by default; `--outbox` or `INBOX_OUTBOX` names another).
 An envelope leaves the file when its answer is collected, when the service refuses it with an
 error of the specification other than `UnknownInbox`, or when it expires (24 hours after it was
-made, by default).
+made, by default). `id-taken` is such an error, so `post` and `repost` exit 1 and drop the line.
 
 `inbox repost` posts the kept envelopes again. It is for after a restart of the service, which
 loses every message. A note its recipient already read is delivered again

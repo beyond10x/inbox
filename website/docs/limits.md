@@ -10,55 +10,34 @@ Each open one names the story that would close it and the state of that story. T
 in
 [`.engineering/planning/story/`](https://github.com/beyond10x/inbox/tree/main/.engineering/planning/story).
 
-**Until findings 1 and 2 below are closed, the service must not listen outside loopback and
-must not be used by a real session, and no NATS backend, no deployment and no release come
-before them** (the host operator's decisions, 2026-11-21). In this stage the service refuses, before binding, any address
-that is not a loopback address.
+**The gate is open for one case: principals of one operator** (that operator's own sessions and
+hosts; the host operator's decision, 2026-11-21). `story:message-id-per-sender` is required
+before principals of different operators share one service. A release, a listener outside
+loopback and a deployment each still need the operator's own order. The service refuses, before
+binding, any address that is not a loopback address, and the client refuses an `INBOX_URL`
+outside loopback.
 
 ## Security findings, open
 
-### 1. A refusal tells a third principal whether a message exists
+### 1. A principal that holds a message id learns whether it is live
 
-Closed for 5 commands on `main`, open for `post`.
+A post into an open inbox answers `id-taken` (409, error `MessageIdTaken`) for a `message_id`
+that a stored message of another sender carries, and `posted`, which stores a message, for a free
+one. So a principal that holds a message id learns from a post whether the id is live, and it
+can take a free id first, after which the sender's post is refused `id-taken`. A message id is a
+ULID the sender's client makes, and it carries its creation time; the client has no flag to
+choose one.
 
-`read`, `collect`, `refuse`, `answer` and `mark-delivered` answer a caller that is neither the
-recipient nor the sender of a message with `unknown-message` (404), the answer of an id no
-message carries (`story:foreign-message-id-answers-as-unknown`, on `main` since wave 6 of stage
-2). Before, they answered that caller 403, which told any authenticated client that the message
-exists.
+The same post to an address no inbox has, or into a closed inbox, answers the same for a held
+and a free id: `unknown-inbox` or `inbox-closed`, or `duplicate-key` when a live message of the
+caller carries the post's dedup key. `duplicate` answers the sender's own stored message only,
+also after the recipient closed the inbox.
 
-`post` still tells. It answers `duplicate` for a `message_id` that a stored message carries,
-whoever sent it, and it answers that before `unknown-inbox`. A principal that posts as itself to
-an address no inbox has gets `duplicate` under the id of a message between two others and
-`unknown-inbox` under an id nobody used. Neither post stores anything. A message id is a ULID,
-which carries its creation time.
+- Accepted for principals of one operator.
+- Story: `story:message-id-per-sender` (a draft: a message id unique per sender) removes it, and
+  is required before principals of different operators share one service.
 
-- Story: `story:post-does-not-tell-a-message-id-exists` (accepted on 2026-11-21). It waits
-  for the ESS release that finding 2 waits for and runs in one wave with
-  `story:dedup-key-scope`.
-- The gate named at the top of this page stays closed on this story.
-- Proof: the case
-  `adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post` in
-  [`crates/inbox-server/tests/adversary_w6_foreign.rs`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-server/tests/adversary_w6_foreign.rs).
-  It is marked `#[ignore]` until the story lands, so `task check` does not run it.
-
-### 2. A dedup key is shared by every sender
-
-`duplicate-key` compares the dedup key alone over every stored message. A principal that posts
-into its own inbox under a key learns from `duplicate-key` whether any message carries that key,
-and by posting first it makes another sender's post under the same key fail.
-
-- Story: `story:dedup-key-scope` (accepted, held). Its rule is settled: the key is compared
-  among the stored messages of the post's `from`. With that rule in the specification, ESS
-  0.96.0 synthesis writes a generated scenario that ESS's own interpreted target fails
-  ([beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805)), so `task check` fails and the unit was stopped before any
-  commit. The story is taken up when an ESS release fixes that.
-- The gate named at the top of this page stays closed on this story.
-- Proof: the ignored case `adv_a_third_principal_cannot_take_another_senders_dedup_key` in
-  [`crates/inbox-server/tests/adversary.rs`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-server/tests/adversary.rs).
-- What to do until then: keep the service on loopback, and do not use it from a real session.
-
-### 3. A signed request is accepted again inside its 60 s window
+### 2. A signed request is accepted again inside its 60 s window
 
 The service keeps no record of the requests it has seen, and neither does the verifier. A
 request signature is valid from 60 s before to 60 s after the service's clock reading, both
@@ -69,8 +48,8 @@ Source: [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/
 
 ## Security findings, closed on `main`
 
-On `main` since wave 6 of stage 2 and in no release. Release 0.1.0 holds the listener without
-both.
+On `main` since waves 6 and 7 of stage 2 and in no release. Release 0.1.0 holds the listener
+without them.
 
 - **A signed envelope can be posted again under another caller**
   (`story:post-from-is-the-caller`). `post` and `answer` are refused `not-sender` (403) when the
@@ -81,9 +60,23 @@ both.
   `adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal` in
   `crates/inbox-server/tests/adversary.rs` runs in `task check`.
 - **5 commands told a third principal whether a message exists**
-  (`story:foreign-message-id-answers-as-unknown`): the closed part of finding 1 above. The case
+  (`story:foreign-message-id-answers-as-unknown`): `read`, `collect`, `refuse`, `answer` and
+  `mark-delivered` answer a caller that is neither the recipient nor the sender of a message
+  with `unknown-message` (404), the answer of an id no message carries. Before, they answered
+  that caller 403. The case
   `adv_a_third_principal_cannot_tell_a_message_between_others_from_no_message` in the same file
   runs in `task check`.
+- **A dedup key was shared by every sender** (`story:dedup-key-scope`, wave 7). `duplicate-key`
+  compares the dedup key among the stored messages of the post's sender. A sender that uses
+  one key for two inboxes is still refused the second post. Before, a key of any sender refused
+  the post, so a third principal learned from a post whether a key was in use and could take
+  another sender's key first.
+- **A post told whether a message id of another sender exists, for an address no inbox has or a
+  closed inbox** (`story:post-does-not-tell-a-message-id-exists`, wave 7). `duplicate` answers the
+  sender's own stored message only, and the new refusal `id-taken` comes last of the row
+  refusals: `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken`. Before,
+  `duplicate` answered for any stored id and came before `unknown-inbox`. The part that stays is
+  finding 1 above.
 
 ## What does not exist yet
 
@@ -107,8 +100,8 @@ both.
 
 ## What the checks do not cover
 
-- **The run over HTTP witnesses 22 of the 97 scenarios.** All 97 pass against the core in
-  process. Against a running `inbox serve`, 75 are unsupported and listed with their
+- **The run over HTTP witnesses 25 of the 103 scenarios.** All 103 pass against the core in
+  process. Against a running `inbox serve`, 78 are unsupported and listed with their
   reasons in
   [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv)
   ([what works](status.md) names the reasons). ESS reports that run as `failed`, and the
@@ -122,7 +115,7 @@ both.
   passes both (8 of the 12 changed services the adversary built). The tests of
   `crates/inbox-server` and `crates/inbox-verify` fail on each of the 8, and
   `task check` runs them.
-- Rules the specification cannot state on ESS 0.96.0 (who may read which rows, the blocking
+- Rules the specification cannot state on ESS 0.97.1 (who may read which rows, the blocking
   read, and others listed in
   [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md))
   are implemented by the service and tested outside the suite.
@@ -150,13 +143,12 @@ both.
     member out. The runner treats an absent top-level member and `null` as one value; one
     adversary case that needs the exact comparison is ignored until the issue is closed.
   - [beyond10x/ess#804](https://github.com/beyond10x/ess/issues/804): with the guard `not-sender` in the specification,
-    synthesis writes no stored message under it, and 49 generated scenarios leave the suite.
-    Until it is fixed the input `from` of `PostMessage` carries the example value
-    `principal-262144`, the value synthesis gives its first caller and not an address
-    anybody holds. It shows in the generated OpenAPI documents and the JSON Schema of
+    synthesis writes no stored message under it, and 49 generated scenarios leave the suite
+    (measured on ESS 0.96.0). Until it is fixed the input `from` of `PostMessage` carries the
+    example value `principal-262144`, the value synthesis gives its first caller and not an
+    address anybody holds. It shows in the generated OpenAPI documents and the JSON Schema of
     `PostMessage` (3 files) and changes no decoder. With it, 19 generated scenarios lost a
-    second run under a second caller.
-  - [beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805): findings 1 and 2 above wait for it.
+    second run under a second caller (also measured on ESS 0.96.0).
 
 ## Signing, by design of version 1
 

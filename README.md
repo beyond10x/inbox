@@ -7,23 +7,23 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. The 5 waves of stage 2 of 6 are on `main`, and 2 of the 3 stories of a sixth wave that
-closes security findings. Release 0.1.0 holds waves 1 to 3.
+Early. The 5 waves of stage 2 of 6 are on `main`, and 2 more waves that close security
+findings. Release 0.1.0 holds waves 1 to 3.
 
 What works on `main`:
 
 - The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 27 authored scenarios.
+  their lifecycle, every refusal, and 30 authored scenarios.
 - The Rust crate ESS generates from it, the core that implements its 2 obligations, the
   in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
   library, loopback only).
 - The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
   address over the in-memory backend, and the other commands are the client. It is built
   from source; no release holds it.
-- The conformance suite: 97 scenarios pass on ESS's interpreted target and against the core,
+- The conformance suite: 103 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
-  (`task coverage`: 95 of 95). ESS reports the run against the core as `passed`.
-- The same suite against a running `inbox serve` over HTTP: 22 scenarios pass, and 75
+  (`task coverage`: 93 of 93). ESS reports the run against the core as `passed`.
+- The same suite against a running `inbox serve` over HTTP: 25 scenarios pass, and 78
   cannot be witnessed over HTTP and are listed with their reasons
   (`crates/inbox-conformance/unsupported.tsv`).
 - 3 acceptance checks against the built binary (`task acceptance`): a signed request and
@@ -61,31 +61,36 @@ with that option at `expires`.
 - Not encrypted: envelopes are signed, not encrypted.
 - Not an identity service: keys and delegations come from one key file signed by the operator
   key, with no delegation chains.
-- Not ready for real use. See the limits below.
+- Not ready for principals of different operators to share one service. See the limits below.
 
 ## Known limits
 
 Open security findings, each with its story in `.engineering/planning/story/`:
 
-1. **A post tells whether a message id exists**
-   (`story:post-does-not-tell-a-message-id-exists`): `post` answers `duplicate` for a stored
-   message id, whoever sent it. `read`, `collect`, `refuse`, `answer` and `mark-delivered` no
-   longer tell: a third principal gets `unknown-message` (404) from them. The story waits
-   for the same ESS release as limit 2.
-2. **A dedup key is shared by every sender** (`story:dedup-key-scope`): a third principal learns
-   whether a key is in use, or takes it first. The story is held on a defect of ESS synthesis
-   ([beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805)). Until limits 1 and 2
-   are closed the service must not listen outside loopback and must not be used by a real
-   session.
-3. **No record of requests**: a signed request is accepted again inside its 60 s window.
+1. **A principal that holds a message id learns whether it is live**
+   (`story:message-id-per-sender`, a draft): from a post into an open inbox it learns whether
+   the id is live (`id-taken` against `posted`, which stores a message), and it can take a free
+   id first, after which the sender's post is refused `id-taken`. This is accepted for
+   principals of one operator. A message id unique per sender removes it, and the story is
+   required before principals of different operators share one service. A message id is a ULID
+   the sender's client makes; the client has no flag to choose one. A post to an address no inbox
+   has, or into a closed inbox, answers the same for a held and a free id.
+2. **No record of requests**: a signed request is accepted again inside its 60 s window.
 
-Closed on `main` in wave 6 and in no release: the replay of a signed envelope under another
-caller (`story:post-from-is-the-caller`). A post or an answer whose `from` is not the caller is
-refused `not-sender`.
+The gate: principals of one operator (that operator's own sessions and hosts) may use the
+service; a release, a listener outside loopback and a deployment each still need the operator's
+own order, and `inbox serve` still refuses an address outside loopback.
+
+Closed on `main` and in no release: the replay of a signed envelope under another caller
+(`story:post-from-is-the-caller`; a post or an answer whose `from` is not the caller is refused
+`not-sender`), the dedup key of another sender (`story:dedup-key-scope`; a key belongs to its
+sender), and a post that told whether a message id of another sender exists for an address no
+inbox has or a closed inbox (`story:post-does-not-tell-a-message-id-exists`; `duplicate` answers
+the sender's own message only, and `id-taken` is new).
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
 loses every message; no release holds the binary; `inbox repost` delivers a note again that
-its recipient already read; the run of the suite over HTTP witnesses 22 of the 97 scenarios;
+its recipient already read; the run of the suite over HTTP witnesses 25 of the 103 scenarios;
 gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
@@ -104,7 +109,7 @@ its evidence are in `.engineering/`.
 
 | Path | Contents |
 |---|---|
-| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 24 scenarios |
+| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 30 scenarios |
 | `generated/rust/inbox/` | The Rust crate ESS generates from `ess/`; never edited by hand |
 | `generated/{openapi,asyncapi,schema}/` | OpenAPI, AsyncAPI and JSON Schema projections of the specification |
 | `generated/docs/` | The specification pages ESS generates; the site shows them |
@@ -124,8 +129,9 @@ its evidence are in `.engineering/`.
 
 ## Build and first use
 
-The service is for a loopback address and test keys only while limits 1 and 2 above are
-open: make keys on the spot, as below, and never give it a key that matters.
+The service is for a loopback address, and for the principals of one operator: limit 1 above
+is open for principals of different operators. Make keys on the spot, as below, and never give
+it a key that matters.
 
 ### Build
 
@@ -172,7 +178,8 @@ nor a refusal, and 4 when a local file cannot be read or written. `inbox --help`
 commands: `close`, `wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `replies`,
 `repost` and `keyfile add-delegation`. `inbox post` keeps each envelope in an outbox file
 (`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused with a model
-error other than `UnknownInbox`, or expired. A failed connection or a refusal of the service's
+error other than `UnknownInbox`, or expired; `id-taken` is such an error, so `post` and `repost`
+exit 1 and drop the line. A failed connection or a refusal of the service's
 own (`400`, `401`, `408`, `413`, `503`) keeps it. `inbox repost` posts the kept ones again after
 the service was restarted: a note its recipient already read is delivered again.
 
@@ -187,7 +194,7 @@ them or anything under `generated/` has drifted from the specification, runs
 the conformance suite on ESS's interpreted target, against the core and against a running
 `inbox serve`, runs the 3 acceptance checks, then formats, lints,
 tests and builds the Rust workspace and the generated crate. It needs
-[go-task](https://taskfile.dev), `ess` 0.96.0 and Rust 1.99.1 (`rust-toolchain.toml`).
+[go-task](https://taskfile.dev), `ess` 0.97.1 and Rust 1.99.1 (`rust-toolchain.toml`).
 
 ## Releases
 

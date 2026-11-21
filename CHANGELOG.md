@@ -20,15 +20,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   specification other than `UnknownInbox`, or expired. Exit statuses: 0 done, 1 refused, 2
   wrong usage, 3 transport, 4 a local file.
 - Declared coverage: every refusal of the specification is claimed by an authored scenario.
-  `task coverage` exits 0 (95 refused generated scenarios, 95 covered) and is part of
+  `task coverage` exits 0 (93 refused generated scenarios, 93 covered) and is part of
   `task check`; the suite it writes reports `conformance_status: passed` on ESS's
-  interpreted target. 4 authored scenarios are new (27 authored, 97 in the suite).
+  interpreted target. 7 authored scenarios are new (30 authored, 103 in the suite).
 - `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
   `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
 - `task conform` also runs the conformance suite against a running `inbox serve` over
   HTTP (`crates/inbox-conformance`, `run --target serve`): a fresh service per scenario,
   every request and envelope signed with keys made for the run, each answer held to the
-  HTTP status of the generated contract. 22 of the 97 scenarios pass there; 75 cannot be
+  HTTP status of the generated contract. 25 of the 103 scenarios pass there; 78 cannot be
   witnessed over HTTP and are listed with their reasons in
   `crates/inbox-conformance/unsupported.tsv`.
 - `task acceptance`, in `task check`: 3 checks against the built binary
@@ -53,6 +53,17 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   says `conformance_status: passed`, where 0.1.0 reports `inconclusive`. The gate refuses
   `inconclusive`.
 
+- `post` has a new outcome, `id-taken` (409, error `MessageIdTaken`): a post into an open inbox
+  under a `message_id` that a stored message of another sender carries. `duplicate` now answers
+  the sender's own stored message only; in 0.1.0 it answered any stored id. The row refusals of
+  `PostMessage` come in the order `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`,
+  `id-taken`, then `posted`. A sender's repost of an arrived message still answers `duplicate`,
+  also after the recipient closed the inbox. For the client `id-taken` is final: `post` and
+  `repost` exit 1 and drop the outbox line. The generated OpenAPI document and the JSON Schema
+  list the new error.
+
+- ESS 0.97.1 is the pinned release (0.1.0 was written with 0.96.0).
+
 ### Security
 
 - A post or an answer whose envelope `from` is not the caller's principal is refused:
@@ -68,24 +79,32 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `Collect`; the listener answers it with the status and the body of `unknown-message`.
   The generated OpenAPI document lists `foreign-message` under 403 for the 5 commands;
   `inbox serve` never sends it.
+- A dedup key belongs to its sender: `post` is refused `duplicate-key` only for a key the same
+  sender used on a live message, to any inbox. In 0.1.0 a key of any sender refused the post, so
+  a third principal learned from a post whether a key was in use and could take another
+  sender's key first (`story:dedup-key-scope`).
+- A post to an address no inbox has, or into a closed inbox, answers the same for the id of
+  another sender's message and for a free id. In 0.1.0 `post` answered `duplicate` for any
+  stored id, before `unknown-inbox` (`story:post-does-not-tell-a-message-id-exists`).
 
 ### Known limits
 
-- `post` still tells a third principal whether a message id is in use: it answers
-  `duplicate` for a stored id, whoever sent the message
-  (`story:post-does-not-tell-a-message-id-exists`).
-- A dedup key is shared by every sender (`story:dedup-key-scope`). The story is held on
-  beyond10x/ess#805.
-- Until the 2 stories above land, the service must not listen outside loopback and must
-  not be used by a real session.
+- A principal that holds a message id learns from a post into an open inbox whether the id is
+  live (`id-taken` against `posted`, which stores a message), and it can take a free id first,
+  after which the sender's post is refused `id-taken`. This is accepted for principals of one
+  operator. `story:message-id-per-sender` (a draft: a message id unique per sender) removes it
+  and is required before principals of different operators share one service. A message id is a
+  ULID the sender's client makes; the client has no flag to choose one.
+- The gate is open for principals of one operator. A release, a listener outside loopback and
+  a deployment each still need the operator's own order.
 - The input `from` of `PostMessage` carries the example value `principal-262144` in the
   OpenAPI documents and the JSON Schema of `PostMessage`. It is a value ESS synthesis
   needs until beyond10x/ess#804 is fixed, and not an address anybody holds.
 - `inbox repost` delivers a note again that its recipient already read
   (`story:repost-does-not-redeliver-a-handled-note`).
-- Over HTTP 75 of the 97 scenarios are unsupported: a caller whose principal and
-  inbox differ (65), a step as the Sweeper (36), a step as no actor (9), a claim on the
-  stored `signature` (7), one delegation id for two pairs (2); a scenario can have
+- Over HTTP 78 of the 103 scenarios are unsupported: a caller whose principal and
+  inbox differ (68), a step as the Sweeper (36), a step as no actor (9), a claim on the
+  stored `signature` (7), one delegation id for two pairs (1); a scenario can have
   several. ESS reports that run as `failed`, and the gate holds it to the list.
 - The run over HTTP and the acceptance checks send valid signatures only and read a view
   as every key. The read rule, the request signature and its window, the lapse of a key
