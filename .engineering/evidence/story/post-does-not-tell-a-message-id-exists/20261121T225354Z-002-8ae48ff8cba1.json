@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T22:53:54Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-does-not-tell-a-message-id-exists",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "the gate on wave/s2-7 after the merges (3227e75) and the closing edits, on ESS 0.97.1: CARGO_INCREMENTAL=0 slot task check exit 0, task coverage 103 scenarios with 93 refused and 93 covered, the interpreted target and the core lane 103 of 103 passed with conformance_status passed, the serve lane 25 passed and 78 unsupported as listed, task acceptance 3 checks passed, cargo test --workspace 403 passed, 0 failed, 6 ignored; a second run with CI=true and GITHUB_ACTIONS=true gave the same result",
+    "reference": "docs/plan/stage-2.md#wave-7"
+  }
+}

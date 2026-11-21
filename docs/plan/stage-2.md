@@ -792,9 +792,69 @@ a slot.
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-7` | `inbox-s2-w7` | `w7/` | open |
-| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w7-key` | `w7/dedup-key-scope/` | dispatched |
-| story:post-does-not-tell-a-message-id-exists | `impl/post-id` | `inbox-s2-w7-id` | `w7/post-id/` | being scoped |
+| integration | `wave/s2-7` | `inbox-s2-w7` | `w7/` | closed |
+| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w7-key` | `w7/dedup-key-scope/` | merged |
+| story:post-does-not-tell-a-message-id-exists | `impl/post-id` | `inbox-s2-w7-id` | `w7/post-id/` | merged |
+
+Closed on 2026-11-21. As built:
+
+- The gate on `wave/s2-7` after the merges and the closing edits, on ESS 0.97.1
+  (`CARGO_INCREMENTAL=0 slot task check`, at 2026-11-21T22:53:54Z): exit 0. `task coverage`: 103
+  scenarios, 30 authored, 93 refused, 93 covered. `task conform-interpreted` and the core lane
+  of `task conform`: "103 scenarios: 103 passed, 0 failed, 0 error, 0 unsupported",
+  `conformance_status: passed`. The serve lane: "103 scenarios: 25 passed, 0 failed, 0 error,
+  78 unsupported", held to the 78 lines of `crates/inbox-conformance/unsupported.tsv`.
+  `task acceptance`: "3 checks passed". `cargo test --workspace`: 403 cases passed, 0 failed
+  and 6 ignored (366 and 8 after wave 6: 29 more in `crates/inbox-core`, 7 more in
+  `crates/inbox-server`, 1 more in `crates/inbox-cli`; 2 cases of `crates/inbox-server` lost
+  their ignore attribute). The run took 177 s in the pool. A second run with `CI=true`
+  and `GITHUB_ACTIONS=true` set gave the same result. The documentation site builds
+  (`npm --prefix website run build`, exit 0).
+- ESS 0.97.1: the digest of the archive the wave used equals the line of the release's
+  `SHA256SUMS` and `ESS_SHA256` of `.github/workflows/check.yml`.
+- story:dedup-key-scope: 3 unit commits (`da272a7` the move to ESS 0.97.1, `58258a8` the rule,
+  `f0c1af8` the correction), merged as `608200a`. `duplicate-key` compares the dedup key among
+  the stored messages of the post's sender. Verified by the unit before the merge: the case
+  `adv_a_third_principal_cannot_take_another_senders_dedup_key` fails on `da272a7` with only
+  its ignore attribute removed and passes on `58258a8`. Adversary pass 1: 2 warnings, both
+  introduced, both gaps of the gate (a rule that compares `to`, and one that compares
+  `on_behalf_of`, each passed); `f0c1af8` adds posts to the scenario `dedup-key-is-the-senders`
+  and the adversary's 15 cases. No second pass ran.
+- story:post-does-not-tell-a-message-id-exists: 2 unit commits (`93e05e3`, `83a433c`), merged as
+  `9717987` and `3227e75`. `duplicate` answers for the sender's own stored message only; the
+  new refusal `id-taken` (error `MessageIdTaken`, 409) answers a post into an open inbox under
+  an id a stored message of another sender carries. The row refusals come in the order
+  `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken`. Verified by the
+  unit before the merge: the case
+  `adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post`
+  fails on the commit before (409 `duplicate` against 409 `unknown-inbox`) and passes on
+  `93e05e3`. Adversary pass 1, on `93e05e3`: 2 findings, both introduced. A core whose
+  `duplicate` compares `on_behalf_of` passed every lane: `83a433c` adds the adversary's case that
+  fails it. One sentence of `docs/design/service.md` did not name the body `duplicate-key` for
+  a post into a closed inbox: corrected in `83a433c`, with the adversary's case over HTTP. No
+  second pass ran: the correction changed no source line of a crate, no rule and no scenario.
+- Differs from the plan:
+  - The second story was built as option B3 of 6 options its scoper measured, by the host
+    operator's decision of 2026-11-21 (the story's Decisions section). What stays open is on
+    the limits page: a principal that holds a message id learns from a post into an open inbox
+    whether the id is live, and can take a free id first. story:message-id-per-sender (a
+    draft) removes it.
+  - The gate of the Backlog below is open for one case, by the same decision: principals of one
+    operator. story:message-id-per-sender is required before principals of different operators
+    share one service. A release, a listener outside loopback and a deployment each still need
+    their own order.
+  - `unknown-inbox` answers before `duplicate`, where the story's first text had `duplicate`
+    first: the ESS 0.97.1 interpreted target answers a refusal with `exists: false` before
+    every row refusal with a `where`, whatever the declaration order.
+  - The 3 external refusals of `PostMessage` have generated scenarios on ESS 0.97.1; the claims
+    of authored scenarios on them are gone.
+  - A second coordinating session opened the wave and built both units; the operator decided
+    on 2026-11-21 that one session coordinates this repository, and the first one closed the
+    wave from the second one's hand-over.
+  - A scenario that holds in the model that `duplicate` reads `from` and not `on_behalf_of` is
+    not part of this wave; it is in the brief of story:post-refusal-order-scenarios (wave 8).
+- Open after wave 7: story:message-id-per-sender (a draft). The numbers of beyond10x/ess#804 on
+  the limits page were measured on ESS 0.96.0 and not again.
 
 ## Backlog
 

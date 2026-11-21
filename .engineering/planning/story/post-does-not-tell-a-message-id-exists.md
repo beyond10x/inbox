@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:post-does-not-tell-a-message-id-exists
 kind: story
-status: active
+status: implemented
 title: A post does not tell a third principal whether a message id exists
 summary: post answers duplicate for a stored message id, whoever sent it, so a third principal learns from a post whether an id is in use.
 tags:
@@ -46,10 +46,11 @@ scope:
   path: website/docs/limits.md
 - confidence: inferred
   path: website/docs/status.md
-revision: 11
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-21T22:55:39Z", actor: "agent:inbox", revision: 13, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Outcome
 
@@ -267,3 +268,29 @@ The options the scoper measured on ESS 0.97.1, each on top of the rule of story:
 
 No answer for an id another sender holds can equal the answer for a free id in an open inbox: a
 free id answers `posted` and stores a message.
+
+## As built
+
+Wave 7 of stage 2, 2026-11-21: commits `93e05e3` and `83a433c` (the correction), merged as
+`9717987` and `3227e75`. Built as option B3 of the Decisions above.
+
+- `duplicate` answers for the sender's own stored message only. The new refusal `id-taken`
+  (error `MessageIdTaken`, 409) answers a post into an open inbox under a `message_id` that a
+  stored message of another sender carries. The model has 14 errors.
+- The row refusals come in the order `unknown-inbox`, `duplicate`, `duplicate-key`,
+  `inbox-closed`, `id-taken`, measured on the ESS 0.97.1 interpreted target pair by pair and
+  followed by the core. `unknown-inbox` is first because the target answers a refusal with
+  `exists: false` before every row refusal with a `where`.
+- A post to an address no inbox has, or into a closed inbox, answers alike for a held and a
+  free id: `unknown-inbox`, `inbox-closed`, or `duplicate-key` when a live message of the
+  caller carries the post's dedup key.
+- For the client `id-taken` is final: `post` and `repost` exit 1 and drop the outbox line.
+- What stays open is on the limits page and in story:message-id-per-sender (a draft): a
+  principal that holds a message id learns from a post into an open inbox whether the id is
+  live, and can take a free id first.
+- Adversary: 1 pass on `93e05e3`, 2 findings, both introduced; `83a433c` adds the adversary's 2
+  cases and corrects one sentence of `docs/design/service.md`
+  (review-result:adversary-post-id-pass-1). A scenario that holds in the model that `duplicate`
+  reads `from` and not `on_behalf_of` is in the brief of story:post-refusal-order-scenarios.
+
+Numbers after the wave: as in story:dedup-key-scope.

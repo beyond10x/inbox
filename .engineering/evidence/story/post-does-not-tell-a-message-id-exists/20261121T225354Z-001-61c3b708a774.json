@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T22:53:54Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-does-not-tell-a-message-id-exists",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (a sentence of docs/design/service.md named 2 bodies for a post into a closed inbox; a caller whose own live message carries the dedup key is answered duplicate-key): 83a433c corrects the sentence and adds the adversary's case over HTTP, which holds the 3 bodies; the closing gate of wave 7 on 3227e75: task check exit 0, cargo test --workspace 403 passed, 0 failed, 6 ignored",
+    "review": "review-result:adversary-post-id-pass-1",
+    "outcome": "fixed"
+  }
+}

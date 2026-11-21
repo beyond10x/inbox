@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:32:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-does-not-tell-a-message-id-exists",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the unit before the merge: the case adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post fails on the commit before the unit with only its ignore attribute removed (409 duplicate against 409 unknown-inbox) and passes on 93e05e3"
+  }
+}

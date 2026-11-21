@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:dedup-key-scope
 kind: story
-status: active
+status: implemented
 title: A dedup key of one sender does not refuse another sender's post
 summary: duplicate-key compares the key alone over every message, so a third principal learns of a key or takes it first.
 tags:
@@ -41,10 +41,11 @@ scope:
   path: website/docs/limits.md
 - confidence: inferred
   path: website/docs/status.md
-revision: 19
+revision: 21
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 17}
 - {from: "proposed", to: "active", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 18}
+- {from: "active", to: "implemented", at: "2026-11-21T22:55:39Z", actor: "agent:inbox", revision: 21, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Outcome
 
@@ -200,3 +201,23 @@ Corrected by the coordinator on 2026-11-21, after the section above was returned
 - `README.md`, `CHANGELOG.md`, `website/` and the count lines of `AGENTS.md` are written by
   the coordinator at the close of the wave, from the gate's numbers; the unit reports the
   lines its change makes untrue.
+
+## As built
+
+Wave 7 of stage 2, 2026-11-21: commits `da272a7` (the move to ESS 0.97.1, no rule changed),
+`58258a8` (the rule) and `f0c1af8` (the correction), merged as `608200a`.
+
+- `duplicate-key` of `PostMessage` reads
+  `where: {all: [dedup_key == input.dedup_key, from == input.from]}`; `fn post_message` of
+  `crates/inbox-core/src/obligations.rs` follows it. A sender that uses one key for 2 inboxes
+  is still refused the second post.
+- On ESS 0.96.0 this rule made synthesis write a scenario the interpreted target failed
+  (issue 805 of beyond10x/ess); ESS 0.97.1 writes none, and
+  dependency-blocker:ess-805-second-run-witness is cleared.
+- Adversary: 1 pass, 2 warnings, both introduced and both gaps of the gate; `f0c1af8` adds
+  posts to the scenario `dedup-key-is-the-senders` and the adversary's 15 cases
+  (review-result:adversary-dedup-key-scope-pass-1).
+
+Numbers after the wave (the closing gate, `task check` exit 0, ESS 0.97.1): 103 scenarios, 30
+authored, 93 refused and covered; the core lane 103 of 103; the serve lane 25 passed and 78
+unsupported; `cargo test --workspace` 403 passed, 0 failed, 6 ignored.
