@@ -2,14 +2,34 @@
 format: aep.planning-md/3
 id: story:post-refusal-order-scenarios
 kind: story
-status: draft
+status: active
 title: Authored scenarios hold the order in which PostMessage refuses
 summary: Scenarios with two refusals holding at once, so the suite fails an implementation that reads a row before it has checked the signature.
 tags:
 - from-finding
 relations:
 - informed_by: story:core-and-memory-backend
-revision: 1
+- depends_on: story:dedup-key-scope
+- depends_on: story:post-does-not-tell-a-message-id-exists
+scope:
+- confidence: inferred
+  path: crates/inbox-conformance/tests/adversary3.rs
+- confidence: inferred
+  path: crates/inbox-conformance/unsupported.tsv
+- confidence: inferred
+  path: docs/design/inbox.md
+- confidence: inferred
+  path: ess/ess-inputs.yaml
+- confidence: inferred
+  path: ess/scenarios
+- confidence: inferred
+  path: generated
+- confidence: inferred
+  path: tools/scenarios.py
+revision: 11
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 10}
+- {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 11}
 ---
 ## Outcome
 
@@ -60,6 +80,20 @@ is checked: story:conformance-gate and story:service-acceptance run the suite.
 
 The scenarios add to the generated scenarios that synthesis refuses only if a new scenario's
 `covers:` claim is wrong; story:declared-coverage owns the count of uncovered refusals.
+
+## Decisions
+
+Accepted by the operator on 2026-11-21 (approval-record:wave-8-drafts-accepted) and run in
+wave 8 of stage 2.
+
+It runs in part 2 of the wave, after wave 7 is on `main`: wave 7 moves the repository to
+ESS 0.97.1, and this story changes `tools/scenarios.py` and the files it writes, which are
+regenerated in that move. That is the `depends_on` relation to story:dedup-key-scope.
+
+It also waits for story:post-does-not-tell-a-message-id-exists: both stories of wave 7 change
+the rules `duplicate` and `duplicate-key` of `PostMessage`, which this story pairs with other
+refusals. Since the draft was written, `not-sender` became the first outcome of `PostMessage`
+(wave 6); the scenarios of this story account for it.
 
 ## Scope
 

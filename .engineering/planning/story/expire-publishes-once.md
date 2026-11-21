@@ -2,14 +2,20 @@
 format: aep.planning-md/3
 id: story:expire-publishes-once
 kind: story
-status: draft
+status: active
 title: Expire is held to one occurrence of the event it publishes
 summary: A core that publishes the event of Expire twice passes task conform and the core's own tests; no scenario bounds the number of occurrences.
 tags:
 - from-finding
 relations:
 - informed_by: review-result:adversary-conformance-gate-pass-2
-revision: 1
+scope:
+- confidence: inferred
+  path: crates/inbox-core/tests/expire_once.rs
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T20:14:09Z", actor: "agent:inbox", revision: 4}
+- {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 5}
 ---
 ## Outcome
 
@@ -37,6 +43,19 @@ Whether an authored scenario can hold the count is open: the story first reads w
 the pinned `ess-conformance` version can claim about the number of occurrences. If none can, the
 check is a case of `crates/inbox-core`, and the limit of the suite is stated in
 `docs/design/inbox.md`.
+
+## Decisions
+
+Accepted by the operator on 2026-11-21 (approval-record:wave-8-drafts-accepted) and run in
+wave 8 of stage 2.
+
+Taken by the coordinator on 2026-11-21:
+
+- The check is a case of `crates/inbox-core`, in a test file of its own
+  (`crates/inbox-core/tests/expire_once.rs`). The unit reports whether a step of the suite can
+  bound the number of occurrences of an event; if it cannot, `docs/design/inbox.md` says so.
+- The unit runs in part 1 of the wave, at the same time as story:external-refusal-order-cases
+  and story:repost-does-not-redeliver-a-handled-note.
 
 ## Scope
 

@@ -727,6 +727,95 @@ Backlog below. That wave starts without asking when the release is out, with a r
 close. No release, no listener outside loopback and no deployment come before the gate
 stories are implemented.
 
+## Wave 8
+
+6 units: the 6 draft stories of the Backlog below, accepted by the operator on 2026-11-21
+(approval-record:wave-8-drafts-accepted): "Accept all the drafts you have in your stories.
+Implement them all now." The message ends in a sentence that is cut off ("Cut a new"); the
+coordinator reads it as a release and asks the operator at the close. No release, no tag and no
+deployment is part of this wave.
+
+The number is 8 because a second coordinating session opened wave 7 (the 2 gate stories on
+ESS 0.97.1) before this one was written. The 2 sessions agreed on 2026-11-21: wave 7 keeps
+`wave/s2-7` and the worktree ids `inbox-s2-w7*`, wave 8 uses `wave/s2-8` and `inbox-s2-w8*`;
+neither writes the other's stories; each tells the other before it moves `main`, and the second
+to close merges `main` into its integration branch and gates again.
+
+2 parts:
+
+- Part 1, now, from `main` at `a5b681f`, 3 units at the same time:
+  story:external-refusal-order-cases, story:expire-publishes-once and
+  story:repost-does-not-redeliver-a-handled-note. None changes the model, a scenario or a
+  generated file.
+- Part 2, when wave 7 is on `main`, 3 units one after another, each forked from the integration
+  branch after the unit before it was merged: story:read-decision-expires-on-silence-scenario,
+  story:silence-leaves-the-other-fields-scenario, story:post-refusal-order-scenarios. All 3
+  change `tools/scenarios.py` and what `task scenarios` writes; wave 7 moves the repository to
+  ESS 0.97.1 and changes the rules `duplicate` and `duplicate-key` of `PostMessage`.
+
+Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0) at the opening,
+the 33 collision lines left out:
+
+```
+wave 1
+  story:dedup-key-scope (inferred)
+  story:repost-does-not-redeliver-a-handled-note
+wave 2
+  story:expire-publishes-once (inferred)
+  story:external-refusal-order-cases
+  story:post-refusal-order-scenarios (inferred)
+wave 3
+  story:read-decision-expires-on-silence-scenario (inferred)
+wave 4
+  story:silence-leaves-the-other-fields-scenario (inferred)
+unassessed: story:post-does-not-tell-a-message-id-exists
+4 wave(s), 33 collision(s), 1 unassessed
+```
+
+The collisions between story:dedup-key-scope and the 2 test-only units of part 1 come from its
+inferred entry `crates/inbox-core/tests` (a directory); wave 7 writes new files there and the 2
+units write `core/precedence.rs` and a new file `expire_once.rs`. The order of part 2 is the
+coordinator's: the smallest scenario first.
+
+Decisions of the coordinator at the opening, each in its story's Decisions section:
+
+- story:repost-does-not-redeliver-a-handled-note takes the second of its 2 ways: a response
+  header `Inbox-Epoch` that changes with each start of the service, recorded per kept envelope
+  in the outbox file. No change of `ess/` or `generated/`.
+- story:expire-publishes-once is a case of `crates/inbox-core` in a test file of its own.
+- story:external-refusal-order-cases goes into `crates/inbox-core/tests/core/precedence.rs`.
+
+Files and who owns them: as in wave 6. `website/`, `README.md`, `CHANGELOG.md`, the count lines
+and the rules of `AGENTS.md` and this page are the coordinator's at the close, from the gate's
+numbers.
+
+Sub-agents (aep plugin 0.26.0): `aep:implementor` on Haiku
+(story:external-refusal-order-cases), on Sonnet (story:expire-publishes-once and the 2 scenario
+stories about `Expire`) and on Opus (story:repost-does-not-redeliver-a-handled-note,
+story:post-refusal-order-scenarios); `aep:adversary` on Sonnet for the test-only units and on
+Opus for the other 2, at most 2 passes each; `aep:story-scoper` on Sonnet and Haiku.
+
+Commits this wave makes: the opening commit (this section and the store), 1 per unit and per
+correction round, 1 merge per unit, a closing commit per part, the fast-forward of `main` after
+each close.
+
+Difference from wave 6: the opening commit is not published on its own; it reaches `main` with
+the close of part 1.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `a5b681f`; 3 other trees of
+this repository exist and belong to the second coordinating session (`inbox-s2-w7`,
+`inbox-s2-w7-key`, `inbox-pitch`).
+
+| Unit | Branch | Worktree id | Model | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-8` | `inbox-s2-w8` | | open |
+| story:external-refusal-order-cases | `impl/w8-external-order` | `inbox-s2-w8-order` | Haiku | dispatched |
+| story:expire-publishes-once | `impl/w8-expire-once` | `inbox-s2-w8-expire` | Sonnet | dispatched |
+| story:repost-does-not-redeliver-a-handled-note | `impl/w8-repost` | `inbox-s2-w8-repost` | Opus | dispatched |
+| story:read-decision-expires-on-silence-scenario | `impl/w8-read-silence` | `inbox-s2-w8-read` | Sonnet | waits for wave 7 |
+| story:silence-leaves-the-other-fields-scenario | `impl/w8-silence-fields` | `inbox-s2-w8-fields` | Sonnet | waits for wave 7 |
+| story:post-refusal-order-scenarios | `impl/w8-post-order` | `inbox-s2-w8-post` | Opus | waits for wave 7 |
+
 ## Backlog
 
 Drafts filed from findings wait here until every wave of this plan is delivered. Accepting one
