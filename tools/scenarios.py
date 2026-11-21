@@ -28,6 +28,51 @@ def st(state, command):
     return f"{D}Message/state/{state}/refuses/{D}{command}"
 
 
+# A type's invariants read off a view field: `inv` for a field of that type, `wrapped` for one
+# reached through an Optional, a struct or a list, which synthesis names by the digest of its path.
+# Each tuple ends with the key a `contains` row claims to read that value. `reply` is claimed
+# whole: inbox-conformance does not read a dotted row path such as `reply.body`.
+REPLY_BODY = ("Body", "reply", "6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680",
+              "reply")
+REPLY_ID = ("MessageId", "reply", "2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb",
+            "reply")
+REPLY_OPTION = ("OptionLetter", "reply",
+                "86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc", "reply")
+OPTIONAL_LETTER = "5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4"
+DECIDED = ("OptionLetter", "decided_option", OPTIONAL_LETTER, "decided_option")
+SILENCE = ("OptionLetter", "default_on_silence", OPTIONAL_LETTER, "default_on_silence")
+LETTERS = ("OptionLetter", "decision", "5fc40af03c03b2190846fd86e4dc7b3694f364228b490834f133211ec5ee2e25",
+           "decision")
+RECOMMENDED = ("OptionLetter", "decision",
+               "c9e38459e74269aef672d56a96584e08784681471855f791bed107fca2f65578", "decision")
+
+# A claimed invariant id -> the view and the key its claimant must read there (asserted below).
+READS = {}
+
+
+def inv(type_, view, field):
+    claim = f"{D}{type_}/invariant/at/{D}{view}/{field}"
+    READS[claim] = (view, field)
+    return claim
+
+
+def wrapped(view, at):
+    type_, field, digest, key = at
+    claim = f"{D}{type_}/invariant-wrapped/at/{D}{view}/{field}/{digest}"
+    READS[claim] = (view, key)
+    return claim
+
+
+def envelope(view):
+    return [inv("Body", view, "body"), inv("MessageId", view, "message_id"),
+            inv("ThreadId", view, "thread"), wrapped(view, LETTERS), wrapped(view, RECOMMENDED),
+            wrapped(view, SILENCE)]
+
+
+def answer_fields(view):
+    return [wrapped(view, at) for at in (REPLY_BODY, REPLY_ID, REPLY_OPTION, DECIDED)]
+
+
 # The generated scenarios synthesis refuses on ess 0.96.0 that an authored scenario checks instead.
 COVERS = {
     "post-read-answer": [
@@ -58,7 +103,11 @@ COVERS = {
         st("Sent", "Collect"), st("Refused", "Answer"), st("Refused", "Refuse"), st("Refused", "Expire"),
     ],
     "answered-decision-expires-uncollected": [st("Answered", "Expire")],
-    "decision-answered-by-the-operator": [st("Answered", "Answer"), st("Answered", "Refuse")],
+    "decision-answered-by-the-operator": [
+        st("Answered", "Answer"), st("Answered", "Refuse"), *envelope("Settled"), *envelope("Replies"),
+        *[i for view in ("Settled", "Replies", "Thread", "Outbox", "Messages", "Due")
+          for i in answer_fields(view)],
+    ],
     "closed-inbox-refuses-posts": [out("OpenInbox", "opened"), out("CloseInbox", "already-closed")],
     "envelope-must-fit-its-kind": [
         out("PostMessage", "request-without-shape"), out("PostMessage", "unknown-option"),
@@ -72,6 +121,7 @@ COVERS = {
         out("Answer", "already-expired"), out("Answer", "no-authority"),
         out("Answer", "signature-invalid"), out("Answer", "authority-invalid"),
     ],
+    "read-decision-waits-for-its-answer": envelope("Unanswered"),
 }
 
 PLANNER = "agent:ws/planner"
@@ -277,7 +327,11 @@ class Scenario:
                               allow_unicode=True)
         with open(f"{ESS}/scenarios/{self.name}.yaml", "w", encoding="utf-8") as out:
             out.write(text)
+        ASSERTS[self.name] = self.asserts
         return self.name
+
+
+ASSERTS = {}
 
 
 def inbox(address):
@@ -519,15 +573,23 @@ names.append(s.write())
 # 18
 m = mid("DC", 1)
 s = Scenario("decision-answered-by-the-operator",
-             "The operator answers a decision with option A before `expires`. The message records the option and that a principal answered, not silence.")
+             "The operator answers a decision with option A before `expires`. Every view that holds the message shows the reply, its option, and that a principal answered, not silence.")
 s.open(OPERATOR).post(m, OPERATOR, "decision", decision=ASK, default_on_silence="B", expires=60,
                       body="Ship release 4.2 today?")
 s.answer(m, mid("DC", 2), caller=OPERATOR, option="A", body="A. Ship it.", created=10, expires=120)
 s.answer(m, mid("DC", 3), caller=OPERATOR, option="B", body="B. Hold it.", created=11, expires=121,
          outcome="already-settled", error="AlreadySettled")
 s.refuse(m, "Too late.", caller=OPERATOR, outcome="already-settled", error="AlreadySettled")
-s.check("Settled", sender(), contains={"message_id": m, "state": "Answered", "answered_by": "principal",
-                                       "decided_option": "A", "expires": ts(120)})
+reply = {"reply_id": mid("DC", 2), "from": OPERATOR, "on_behalf_of": OPERATOR, "created": ts(10),
+         "option": "A", "body": "A. Ship it.", "signature": {"key_id": "key-2", "value": "c2lnbmF0dXJl"}}
+answered = {"message_id": m, "state": "Answered", "answered_by": "principal", "decided_option": "A",
+            "expires": ts(120), "reply": reply}
+asked = {"thread": m, "body": "Ship release 4.2 today?", "decision": ASK, "default_on_silence": "B"}
+s.check("Settled", sender(), contains={**answered, **asked})
+s.check("Replies", thread(m), contains={**answered, **asked})
+s.check("Thread", thread(m), contains=answered).check("Outbox", sender(), contains=answered)
+s.check("Messages", {}, contains=answered).check("Due", {"now": ts(120)}, contains=answered)
+s.empty("Due", {"now": ts(119)})
 names.append(s.write())
 
 # 19
@@ -596,10 +658,31 @@ s.check("Pending", inbox(WORKER), contains={"message_id": m, "state": "Sent", "e
 s.empty("Settled", sender())
 names.append(s.write())
 
+# 24
+m = mid("RW", 1)
+t = mid("RW", 9)
+s = Scenario("read-decision-waits-for-its-answer",
+             "The operator reads a decision and does not answer it yet. It waits in Unanswered with its body, its thread, its options, the recommended option and the option silence takes.")
+s.open(OPERATOR).post(m, OPERATOR, "decision", thread=t, decision=ASK, default_on_silence="B",
+                      expires=60, body="Ship release 4.2 today?")
+s.read(m, caller=OPERATOR)
+s.check("Unanswered", inbox(OPERATOR), contains={
+    "message_id": m, "thread": t, "state": "Read", "body": "Ship release 4.2 today?",
+    "decision": ASK, "default_on_silence": "B",
+})
+s.empty("Pending", inbox(OPERATOR))
+names.append(s.write())
+
 for name in COVERS:
     assert name in names, name
 claimed = [i for ids_ in COVERS.values() for i in ids_]
 assert len(claimed) == len(set(claimed)), "an id is claimed twice"
+for name, ids_ in COVERS.items():
+    for claim in ids_:
+        if claim in READS:
+            view, key = READS[claim]
+            assert any(a["view"] == D + view and key in a.get("contains", {}) for a in ASSERTS[name]), \
+                f"{name} claims {claim} and reads no `{key}` in a row of {view}"
 
 manifest = {
     "format": "ess-inputs/2",

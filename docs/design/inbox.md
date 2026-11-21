@@ -112,9 +112,18 @@ yet.
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
   rule), and only notes once an input guard depends on `kind`. 47 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
-- **50 more refusals are `ESS-SYNTH-013`**: type-invariant checks at views for which synthesis
-  arranges no row. Nothing covers them yet; `task coverage` lists them, and story
-  `declared-coverage` of stage 2 covers them.
+- **50 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
+  synthesis arranges no row. 42 are covered: `decision-answered-by-the-operator` reads an
+  answered decision, its reply and its option in `Settled`, `Replies`, `Thread`, `Outbox`,
+  `Messages` and `Due`, and `read-decision-waits-for-its-answer` reads a read decision in
+  `Unanswered`. The other 8 are `reply` and `decided_option` of `Pending` and `Unanswered`. No
+  sequence of commands leaves a row there: those views hold a message in `Sent`, `Delivered` or
+  `Read`, and only an answered message carries a reply or a decided option. They stay uncovered
+  until the two fields leave those two views, a change to the model.
+- **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 97;
+  89 are covered by authored scenarios and 8 are not, so it exits 1 and stays out of
+  `task check`. The suite it writes runs on the interpreted target as 93 passed and reports
+  `conformance_status: inconclusive`.
 
 ## Stage 1 result
 

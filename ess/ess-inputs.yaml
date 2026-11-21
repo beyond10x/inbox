@@ -18,6 +18,7 @@ scenarios:
 - scenarios/note-takes-no-answer.yaml
 - scenarios/only-the-owner-handles-its-inbox.yaml
 - scenarios/post-read-answer.yaml
+- scenarios/read-decision-waits-for-its-answer.yaml
 - scenarios/refusal-collected-is-gone.yaml
 - scenarios/refused-message-waits-for-the-sender.yaml
 - scenarios/refused-reply-leaves-the-request-unanswered.yaml
