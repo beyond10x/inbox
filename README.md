@@ -105,6 +105,57 @@ its evidence are in `.engineering/`.
 | `.engineering/` | The plan |
 | `AGENTS.md` | The working rules, written for the coding agents that build the inbox |
 
+## Build and first use
+
+The service is for a loopback address and test keys only while `story:post-from-is-the-caller`
+is open (limit 1 above): make keys on the spot, as below, and never give it a key that matters.
+
+### Build
+
+```sh
+cargo build --release -p inbox-cli
+export PATH="$PWD/target/release:$PATH"
+```
+
+builds the one binary, `target/release/inbox`. It needs Rust 1.99.1 (`rust-toolchain.toml`).
+
+### First use
+
+On one machine, in an empty directory. An operator key signs the key file the service reads;
+each client has its own key, and its secret key file names its key id and its principal, which
+is also the address of its inbox. `inbox key new` writes the secret with mode 0600 and prints
+only the public key.
+
+```sh
+OPERATOR_PUBLIC_KEY=$(inbox key new --out operator.key)
+ALICE_PUBLIC_KEY=$(inbox key new --out alice.key --key-id alice-1 --principal agent:demo/alice)
+BOB_PUBLIC_KEY=$(inbox key new --out bob.key --key-id bob-1 --principal agent:demo/bob)
+inbox keyfile add-key --file keys.json --operator-secret-key-file operator.key --key-id alice-1 --principal agent:demo/alice --public-key "$ALICE_PUBLIC_KEY"
+inbox keyfile add-key --file keys.json --operator-secret-key-file operator.key --key-id bob-1 --principal agent:demo/bob --public-key "$BOB_PUBLIC_KEY"
+inbox serve --listen 127.0.0.1:0 --key-file keys.json --operator-public-key "$OPERATOR_PUBLIC_KEY"
+```
+
+`inbox serve` prints the URL it serves on as its first line, then serves until Ctrl-C. In a
+second terminal, in the same directory, bob opens his inbox, alice posts a note to it, and bob
+reads it:
+
+```sh
+# the URL inbox serve printed
+export INBOX_URL=http://127.0.0.1:43117
+inbox open --secret-key-file bob.key
+MESSAGE_ID=$(inbox post --secret-key-file alice.key --to agent:demo/bob --body "Hello, bob")
+inbox pending --secret-key-file bob.key
+inbox read --secret-key-file bob.key "$MESSAGE_ID"
+```
+
+Every command takes `--json` and then prints one JSON document. It exits 1 when the service
+refuses (naming the error), 2 on wrong usage, 3 when the service cannot be reached, and 4 when
+a local file cannot be read or written. `inbox --help` lists the other commands: `close`,
+`wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `replies`, `repost` and
+`keyfile add-delegation`. `inbox post` keeps each envelope in an outbox file
+(`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused or expired;
+`inbox repost` posts the kept ones again after the service was restarted.
+
 ## Check
 
 ```console

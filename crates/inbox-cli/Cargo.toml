@@ -1,0 +1,25 @@
+[package]
+name = "inbox-cli"
+description = "The `inbox` binary: the HTTP service on a loopback address, and the client that signs, posts, reads, answers, refuses, collects, waits and reposts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "inbox"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["env"] }
+getrandom = "0.4"
+inbox = { path = "../../generated/rust/inbox", features = ["server"] }
+inbox-core = { path = "../inbox-core" }
+inbox-server = { path = "../inbox-server" }
+inbox-verify = { path = "../inbox-verify" }
+signal-hook = "0.4"
+zeroize = "1.8"
+
+[lints]
+workspace = true
