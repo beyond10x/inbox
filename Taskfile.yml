@@ -10,7 +10,7 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold ess/scenarios/ and ess/ess-inputs.yaml to tools/scenarios.py and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target and against inbox-core, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, hold ess/scenarios/ and ess/ess-inputs.yaml to tools/scenarios.py and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 3 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: scenarios-drift
@@ -19,6 +19,7 @@ tasks:
       - task: coverage
       - task: conform-interpreted
       - task: conform
+      - task: acceptance
       - cargo fmt --check
       - cargo clippy --workspace --all-targets --locked -- -D warnings
       - cargo test --workspace --locked
@@ -58,25 +59,42 @@ tasks:
         cmd: ess generate --path ess --kind {{.ITEM}} --out generated/{{.ITEM}} --check
 
   conform-interpreted:
-    desc: Synthesize the conformance suite into .out/conform and run it on the ESS interpreted target; fails on a failed or errored scenario.
+    desc: Run the suite task coverage writes on the ESS interpreted target; fails on a failed or errored scenario.
     cmds:
+      - task: coverage
       - mkdir -p {{.OUT}}/conform
-      - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
-      - ess verify conform run --path ess --target interpreted --suite {{.OUT}}/conform/suite.json --report-format 2 --report-out {{.OUT}}/conform/report.json
+      - ess verify conform run --path ess --target interpreted --suite {{.OUT}}/coverage/suite.json --report-format 2 --report-out {{.OUT}}/conform/report.json
 
   conform:
-    desc: Synthesize the conformance suite into .out/conform, run it against inbox-core in process, write the report with ess, and fail unless the report is that suite's (digest, each scenario id once) and inbox-core's, its counts add up, its conformance_status is a passing run's, no scenario failed, errored or was skipped, and the unsupported ones are exactly those crates/inbox-conformance/unsupported.tsv lists.
+    desc: Run the suite task coverage writes against inbox-core in process and against a running inbox serve over HTTP, write each report with ess, and fail unless each report is that suite's (digest, each scenario id once) and its implementation's, its counts add up, its conformance_status is a passing run's, no scenario failed, errored or was skipped, and the unsupported ones are exactly those its list names, each with the reason the run gave it in its results (crates/inbox-conformance/unsupported-core.tsv, crates/inbox-conformance/unsupported.tsv).
     vars:
-      IMPLEMENTATION: inbox-core
+      SUITE: '{{.OUT}}/coverage/suite.json'
+      CORE: inbox-core
+      SERVE: inbox-serve
+      RUNNER: inbox-conformance@0.1.0
     cmds:
+      - task: coverage
       - mkdir -p {{.OUT}}/conform
-      - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
-      - cargo run -q --locked -p inbox-conformance -- run --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json
-      - ess verify conform report --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json --implementation {{.IMPLEMENTATION}} --runner inbox-conformance@0.1.0 --report-out {{.OUT}}/conform/core-report.json
-      - cargo run -q --locked -p inbox-conformance -- gate --suite {{.OUT}}/conform/suite.json --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.IMPLEMENTATION}}
+      - cargo build -q --locked -p inbox-cli -p inbox-conformance
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance run --suite {{.SUITE}} --results {{.OUT}}/conform/core-results.json'
+      - ess verify conform report --suite {{.SUITE}} --results {{.OUT}}/conform/core-results.json --implementation {{.CORE}} --runner {{.RUNNER}} --report-out {{.OUT}}/conform/core-report.json
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/core-report.json --results {{.OUT}}/conform/core-results.json --unsupported crates/inbox-conformance/unsupported-core.tsv --implementation {{.CORE}}'
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance run --target serve --inbox {{.ROOT_DIR}}/target/debug/inbox --suite {{.SUITE}} --results {{.OUT}}/conform/serve-results.json'
+      - ess verify conform report --suite {{.SUITE}} --results {{.OUT}}/conform/serve-results.json --implementation {{.SERVE}} --runner {{.RUNNER}} --report-out {{.OUT}}/conform/serve-report.json
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/serve-report.json --results {{.OUT}}/conform/serve-results.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.SERVE}}'
+
+  acceptance:
+    desc: Build the inbox binary and run the 3 checks of tests/acceptance against it (cargo test --ignored with INBOX_BIN naming the binary); fails when a check fails or fewer than 3 passed. Log in .out/acceptance/test.log.
+    cmds:
+      - mkdir -p {{.OUT}}/acceptance
+      - cargo build -q --locked -p inbox-cli
+      - INBOX_BIN='{{.ROOT_DIR}}/target/debug/inbox' cargo test -q --locked -p inbox-acceptance --test checks -- --ignored 2>&1 | tee {{.OUT}}/acceptance/test.log
+      - >-
+        awk '/^test result:/ {n += $4} END {print "task acceptance:", n + 0, "checks passed"; if (n < 3) {print "task acceptance: fewer than 3 checks passed"; exit 1}}' {{.OUT}}/acceptance/test.log
 
   coverage:
-    desc: Synthesize with declared coverage into .out/coverage and fail on a generated scenario no authored scenario covers.
+    desc: Synthesize with declared coverage into .out/coverage and fail on a generated scenario no authored scenario covers. The one suite conform-interpreted and conform run; synthesized once per task invocation.
+    run: once
     cmds:
       - mkdir -p {{.OUT}}/coverage
       - ess verify conform synthesize --path ess --scenarios ess --suite-format 5 --out {{.OUT}}/coverage/suite.json

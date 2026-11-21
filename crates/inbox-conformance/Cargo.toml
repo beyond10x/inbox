@@ -1,6 +1,6 @@
 [package]
 name = "inbox-conformance"
-description = "Runs the synthesized ESS conformance suite against the core of the inbox, in process, and holds the gate on its report."
+description = "Runs the synthesized ESS conformance suite against the core of the inbox in process and against a running inbox serve over HTTP, and holds the gate on each report."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 inbox = { path = "../../generated/rust/inbox", features = ["server"] }
 inbox-core = { path = "../inbox-core" }
+inbox-server = { path = "../inbox-server" }
+inbox-verify = { path = "../inbox-verify" }
 sha2 = "0.10"
 
 [lints]

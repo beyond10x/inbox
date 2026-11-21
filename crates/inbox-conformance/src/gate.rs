@@ -51,6 +51,143 @@ pub struct Report {
     pub skipped: Vec<String>,
     /// `outcomes.unsupported`.
     pub unsupported: Vec<String>,
+    /// The reason the run gave each unsupported scenario, by id. A report/2 carries none: they
+    /// are read from the results document the report was written from ([`read_reasons`]).
+    pub reasons: BTreeMap<String, String>,
+}
+
+/// The `ess-conformance-results/1` document `inbox-conformance run` wrote, as far as the gate
+/// holds it to the report written from it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Results {
+    /// `completed_at`, as spelled.
+    pub completed_at: String,
+    /// Each result's `scenario_id` and `status`, in the document's order.
+    pub statuses: Vec<(String, String)>,
+    /// The `message` of each result whose `status` is `unsupported`, by id.
+    pub reasons: BTreeMap<String, String>,
+}
+
+/// Reads the results document of the suite whose bytes have `suite_digest`.
+///
+/// # Errors
+///
+/// A document that is not JSON, not a results/1, for another suite, without `completed_at`, with
+/// a result without its id or status, an id named twice, or an unsupported result without its
+/// message.
+pub fn read_results(text: &str, suite_digest: &str) -> Result<Results, String> {
+    let reasons = read_reasons(text, suite_digest)?;
+    let document = json::parse_written(text).map_err(|error| format!("the results: {error}"))?;
+    let completed_at = match document.member("completed_at") {
+        Some(Value::Number(spelling)) => spelling.clone(),
+        _ => return Err("the results have no `completed_at`".to_owned()),
+    };
+    let Some(Value::Array(items)) = document.member("results") else {
+        return Err("the results have no `results` list".to_owned());
+    };
+    let mut statuses: Vec<(String, String)> = Vec::new();
+    for item in items {
+        let (Some(Value::Text(id)), Some(Value::Text(status))) =
+            (item.member("scenario_id"), item.member("status"))
+        else {
+            return Err("the results hold a result without its id and its status".to_owned());
+        };
+        if statuses.iter().any(|(named, _)| named == id) {
+            return Err(format!("the results name `{id}` twice"));
+        }
+        statuses.push((id.clone(), status.clone()));
+    }
+    Ok(Results {
+        completed_at,
+        statuses,
+        reasons,
+    })
+}
+
+/// Holds `results` to the report they were turned into: each id the report lists with the
+/// status the results give it, the same ids in both, and the same `completed_at` (ESS 0.96.0
+/// copies it from the results into the report). One problem per id that differs.
+pub fn agrees(binding: &Binding, results: &Results) -> Vec<String> {
+    let mut problems = Vec::new();
+    if binding.completed_at.as_deref() != Some(results.completed_at.as_str()) {
+        problems.push(format!(
+            "the results were completed at {}, and the report at {}",
+            results.completed_at,
+            binding.completed_at.as_deref().unwrap_or("no instant")
+        ));
+    }
+    for (list, id) in &binding.listed {
+        match results.statuses.iter().find(|(named, _)| named == id) {
+            Some((_, status)) if status == list => {}
+            Some((_, status)) => problems.push(format!(
+                "the results give {id} the status `{status}`, and the report lists it as `{list}`"
+            )),
+            None => problems.push(format!(
+                "the results do not name {id}, which the report lists as `{list}`"
+            )),
+        }
+    }
+    problems.extend(
+        results
+            .statuses
+            .iter()
+            .filter(|(id, _)| !binding.listed.iter().any(|(_, listed)| listed == id))
+            .map(|(id, _)| format!("the results name {id}, which the report does not list")),
+    );
+    problems
+}
+
+/// The reason the run gave each unsupported scenario, by id, read from the
+/// `ess-conformance-results/1` document `inbox-conformance run` wrote (the `message` of each
+/// result whose `status` is `unsupported`), held to the suite whose bytes have `suite_digest`.
+///
+/// # Errors
+///
+/// A document that is not JSON, not a results/1, for another suite, or with an unsupported
+/// result without its id or its message.
+pub fn read_reasons(text: &str, suite_digest: &str) -> Result<BTreeMap<String, String>, String> {
+    let document = json::parse_written(text).map_err(|error| format!("the results: {error}"))?;
+    match document.member("format") {
+        Some(Value::Text(format)) if format == crate::results::RESULTS_FORMAT => {}
+        _ => {
+            return Err(format!(
+                "the results are not an `{}`",
+                crate::results::RESULTS_FORMAT
+            ));
+        }
+    }
+    match document.member("suite_digest") {
+        Some(Value::Text(digest)) if digest == suite_digest => {}
+        _ => {
+            return Err(format!(
+                "the results are not those of the suite {suite_digest}"
+            ));
+        }
+    }
+    let Some(Value::Array(results)) = document.member("results") else {
+        return Err("the results have no `results` list".to_owned());
+    };
+    let mut reasons = BTreeMap::new();
+    for result in results {
+        if !matches!(result.member("status"), Some(Value::Text(status)) if status == "unsupported")
+        {
+            continue;
+        }
+        match (result.member("scenario_id"), result.member("message")) {
+            (Some(Value::Text(id)), Some(Value::Text(message))) => {
+                if reasons.insert(id.clone(), message.clone()).is_some() {
+                    return Err(format!("the results name `{id}` twice"));
+                }
+            }
+            _ => {
+                return Err(
+                    "the results hold an unsupported scenario without its id and its message"
+                        .to_owned(),
+                );
+            }
+        }
+    }
+    Ok(reasons)
 }
 
 /// Reads an `ess-conformance-report/2`.
@@ -108,6 +245,7 @@ pub fn read_report(text: &str) -> Result<Report, String> {
         error: ids("error")?,
         skipped: ids("skipped")?,
         unsupported: ids("unsupported")?,
+        reasons: BTreeMap::new(),
     };
     if report.total != accounted(&report) {
         return Err(format!(
@@ -140,6 +278,11 @@ pub struct Binding {
     /// Every id of the outcome lists (passed, failed, error, skipped, unsupported), in that
     /// order, as often as the lists name it.
     pub ids: Vec<String>,
+    /// Each id of the outcome lists with the list that names it (`passed`, `failed`, `error`,
+    /// `skipped`, `unsupported`), in the order of [`Binding::ids`].
+    pub listed: Vec<(String, String)>,
+    /// `completed_at`, as spelled, where the report carries it.
+    pub completed_at: Option<String>,
 }
 
 /// The outcome lists of a report/2, in the order [`Binding::ids`] reads them.
@@ -168,6 +311,7 @@ pub fn read_binding(text: &str) -> Result<Binding, String> {
         Some(_) => return Err("the report's `implementation` is not text".to_owned()),
     };
     let mut ids = Vec::new();
+    let mut by_list = Vec::new();
     for name in OUTCOMES {
         let listed = document
             .member("outcomes")
@@ -180,6 +324,7 @@ pub fn read_binding(text: &str) -> Result<Binding, String> {
                         return Err(format!("`outcomes.{name}` holds a value that is no id"));
                     };
                     ids.push(id.clone());
+                    by_list.push((name.to_owned(), id.clone()));
                 }
             }
             Some(_) => return Err(format!("`outcomes.{name}` is not a list")),
@@ -190,6 +335,11 @@ pub fn read_binding(text: &str) -> Result<Binding, String> {
         suite_digest: suite_digest.clone(),
         implementation,
         ids,
+        listed: by_list,
+        completed_at: match document.member("completed_at") {
+            Some(Value::Number(spelling)) => Some(spelling.clone()),
+            _ => None,
+        },
     })
 }
 
@@ -231,12 +381,14 @@ pub fn implemented(binding: &Binding, expected: &str) -> Option<String> {
     }
 }
 
-/// The `conformance_status` ESS 0.96.0 gives a run this gate passes: `inconclusive` where every
-/// scenario passed (the suite declares no coverage), and `failed` where the only scenarios that
-/// did not pass are unsupported ones the list names (ESS fails any unsupported scenario).
+/// The `conformance_status` ESS 0.96.0 gives a run of the coverage suite this gate passes:
+/// `passed` where every scenario passed (the suite declares its coverage), and `failed` where the
+/// only scenarios that did not pass are unsupported ones the list names (ESS fails any
+/// unsupported scenario). `inconclusive`, the status of a suite without declared coverage, fails
+/// the gate.
 pub fn passing_status(report: &Report) -> &'static str {
     if report.unsupported.is_empty() {
-        "inconclusive"
+        "passed"
     } else {
         "failed"
     }
@@ -280,7 +432,9 @@ impl Verdict {
 }
 
 /// Holds `report` to `listed`: no scenario failed, errored or skipped, something ran and passed,
-/// and the unsupported scenarios are exactly the listed ones.
+/// the unsupported scenarios are exactly the listed ones, and each listed reason is the reason
+/// the run gave that scenario ([`Report::reasons`]); one problem per scenario whose reason
+/// differs or is unknown.
 pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
     let line = format!(
         "{} scenarios: {} passed, {} failed, {} error, {} unsupported",
@@ -317,5 +471,19 @@ pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
             .filter(|id| !report.unsupported.contains(id))
             .map(|id| format!("listed in unsupported.tsv and not unsupported in the run: {id}")),
     );
+    for id in &report.unsupported {
+        let Some(listed_reason) = listed.get(id) else {
+            continue;
+        };
+        match report.reasons.get(id) {
+            Some(reason) if reason == listed_reason => {}
+            Some(reason) => problems.push(format!(
+                "the reason unsupported.tsv lists for {id} is not the reason of the run: listed `{listed_reason}`, the run gave `{reason}`"
+            )),
+            None => problems.push(format!(
+                "the run gave no reason for {id}, which unsupported.tsv lists with `{listed_reason}` (`gate --results` names the run's results)"
+            )),
+        }
+    }
     Verdict { line, problems }
 }

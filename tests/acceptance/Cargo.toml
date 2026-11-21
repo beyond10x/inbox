@@ -1,0 +1,16 @@
+[package]
+name = "inbox-acceptance"
+description = "The acceptance checks of story:service-acceptance: the built inbox binary as a running service, driven by its own client commands."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+inbox = { path = "../../generated/rust/inbox", features = ["server"] }
+inbox-server = { path = "../../crates/inbox-server" }
+inbox-verify = { path = "../../crates/inbox-verify" }
+
+[lints]
+workspace = true
