@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "judgement (unzeroed copies of the seed): e411f79 moves the seed text into a zeroizing holder, and key new builds the file text in a buffer that does not reallocate; cargo test -p inbox-cli: 52 passed, 1 ignored",
+    "review": "review-result:adversary-cli-client-pass-1",
+    "outcome": "fixed"
+  }
+}

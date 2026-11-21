@@ -7,8 +7,9 @@ release workflow fails on a tag that differs.
 
 ## What a release holds
 
-No binary and no crate. Every crate of the workspace is `publish = false`, and there is no
-program to ship before the command-line client (`story:cli-client`). A release is the tag, its
+No binary and no crate. Every crate of the workspace is `publish = false`, and the release
+workflow builds and attaches nothing: the binary `inbox` (`crates/inbox-cli`) is built from
+source. A release is the tag, its
 `CHANGELOG.md` section, and a GitHub Release whose notes say what works and which limits are
 open.
 

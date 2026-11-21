@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 8 (any status below 400 is taken as success): e411f79 takes only 2xx as done, any other answer is exit 3; cargo test -p inbox-cli: 52 passed, 1 ignored",
+    "review": "review-result:adversary-cli-client-pass-1",
+    "outcome": "fixed"
+  }
+}

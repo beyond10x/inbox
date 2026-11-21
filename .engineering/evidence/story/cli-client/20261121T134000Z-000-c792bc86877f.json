@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T13:40:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "CARGO_INCREMENTAL=0 slot task check on wave/s2-4 at a6b1660: exit 0; 24 scenarios, 0 paths differ from the script; coverage 89 of 89; 93 scenarios: 93 passed on the interpreted target and against the core; 319 cargo test cases passed, 5 ignored",
+    "reference": "docs/plan/stage-2.md#wave-4"
+  }
+}

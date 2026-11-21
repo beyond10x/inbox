@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding A, blocker (a 400 or 413 dropped a deliverable envelope; from the coordinator's order in round 1): 40a9afb keeps the envelope on every refusal of the service itself; cargo test -p inbox-cli: 52 passed, 1 ignored",
+    "review": "review-result:adversary-cli-client-pass-2",
+    "outcome": "fixed"
+  }
+}

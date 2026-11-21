@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "mutant M02 keeping the envelope after sending: the guard case of the adversary for it stays in the suite, green; cargo test -p inbox-cli: 52 passed, 1 ignored",
+    "review": "review-result:adversary-cli-client-pass-1",
+    "outcome": "fixed"
+  }
+}

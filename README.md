@@ -7,21 +7,27 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. Stage 2 of 6 is in progress: waves 1 to 3 of its 5 are on `main`.
+Early. Stage 2 of 6 is in progress: waves 1 to 4 of its 5 are on `main`. Release 0.1.0
+holds waves 1 to 3.
 
 What works on `main`:
 
 - The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 23 authored scenarios.
+  their lifecycle, every refusal, and 24 authored scenarios.
 - The Rust crate ESS generates from it, the core that implements its 2 obligations, the
   in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
   library, loopback only).
-- The conformance suite: 92 scenarios pass on ESS's interpreted target and against the core.
-  Its status is `inconclusive`, because 50 refusals are claimed by no scenario yet.
+- The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
+  address over the in-memory backend, and the other commands are the client. It is built
+  from source; no release holds it.
+- The conformance suite: 93 scenarios pass on ESS's interpreted target and against the core,
+  and every refusal of the specification is claimed by an authored scenario
+  (`task coverage`: 89 of 89). The report of the run against the core still says
+  `inconclusive`: that run synthesizes the suite without declared coverage until wave 5.
 
-What does not exist yet: a program that starts the service (`inbox serve`), the command-line
-client, the suite run over HTTP against a running service, a persistent backend, a second host,
-wake-up of an idle session, TLS, and any deployment. The first release has no binary.
+What does not exist yet: the suite run over HTTP against a running service, a persistent
+backend, a second host, wake-up of an idle session, TLS, and any deployment. No release
+holds a binary.
 
 Numbers and the path that proves each: [what works](https://beyond10x.github.io/inbox/docs/status).
 
@@ -70,8 +76,9 @@ Open security findings, each a draft story in `.engineering/planning/story/`:
 4. **No record of requests**: a signed request is accepted again inside its 60 s window.
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
-loses every message; no binary and no client; the conformance status is `inconclusive`; gaps in
-the suite filed as draft stories; two ESS issues worked around; nothing deployed.
+loses every message; no release holds the binary; `inbox repost` delivers a note again that
+its recipient already read; the conformance report against the core says `inconclusive`;
+gaps in the suite filed as draft stories; two ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
 
@@ -89,7 +96,7 @@ its evidence are in `.engineering/`.
 
 | Path | Contents |
 |---|---|
-| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 23 scenarios |
+| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 24 scenarios |
 | `generated/rust/inbox/` | The Rust crate ESS generates from `ess/`; never edited by hand |
 | `generated/{openapi,asyncapi,schema}/` | OpenAPI, AsyncAPI and JSON Schema projections of the specification |
 | `generated/docs/` | The specification pages ESS generates; the site shows them |
@@ -97,6 +104,7 @@ its evidence are in `.engineering/`.
 | `crates/inbox-verify/` | The signature verifier |
 | `crates/inbox-backend-testkit/` | The checks every backend passes |
 | `crates/inbox-server/` | The HTTP listener |
+| `crates/inbox-cli/` | The binary `inbox`: `inbox serve` and the command-line client |
 | `crates/inbox-conformance/` | The conformance gate: the suite run against the core |
 | `crates/inbox-xtask/` | Repository tasks: the drift check of the generated crate |
 | `docs/design/` | The design notes: the inbox, signing, the HTTP service |
@@ -165,7 +173,8 @@ the service was restarted: a note its recipient already read is delivered again.
 task check
 ```
 
-validates the specification, fails when anything under `generated/` has drifted from it, runs
+validates the specification, fails when the scenario files differ from the script that writes
+them or anything under `generated/` has drifted from the specification, runs
 the conformance suite on ESS's interpreted target and against the core, then formats, lints,
 tests and builds the Rust workspace and the generated crate. It needs
 [go-task](https://taskfile.dev), `ess` 0.96.0 and Rust 1.99.1 (`rust-toolchain.toml`).

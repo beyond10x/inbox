@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the coordinator's run after correction round 2 (40a9afb): cargo test -p inbox-cli exit 0, 52 passed, 1 ignored"
+  }
+}

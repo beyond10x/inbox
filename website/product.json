@@ -21,10 +21,10 @@
       "title": "The rules, checked from the specification down.",
       "lede": "Each statement below is true of main today. What is missing is on the limits page.",
       "items": [
-        {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/, with 23 authored scenarios.", "href": "/specification/"},
+        {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/, with 24 authored scenarios.", "href": "/specification/"},
         {"title": "Signed envelopes", "description": "Every post and every answer carries an Ed25519 signature that is checked, with its delegation, before anything is stored.", "href": "/docs/design"},
         {"title": "One service, a backend behind a contract", "description": "The service talks to its backend through one storage contract and a test kit every backend passes. The only backend so far keeps messages in memory.", "href": "/docs/status"},
-        {"title": "Held to a conformance suite", "description": "The 92 scenarios ESS synthesizes from the specification pass against the core. The status is inconclusive: 50 refusals are not yet claimed by a scenario.", "href": "/docs/status"}
+        {"title": "Held to a conformance suite", "description": "The 93 scenarios ESS synthesizes from the specification pass against the core, and every refusal of the specification is claimed by a scenario. The report against the core still says inconclusive until the runner reads the coverage suite.", "href": "/docs/status"}
       ]
     },
     {

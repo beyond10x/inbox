@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:14:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:cli-client",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (only the first resolved address is tried): e411f79 tries each loopback address the name resolves to; cargo test -p inbox-cli: 52 passed, 1 ignored",
+    "review": "review-result:adversary-cli-client-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -11,10 +11,10 @@ between agents in different sessions and on different hosts. Every message is a 
 envelope: a note, a request that says what shape of reply it wants, or a decision with lettered
 options.
 
-It is early. The rules are written and implemented as a library with an HTTP listener, held to
-a conformance suite. Nothing starts the service as a program yet, there is no client, and
-security findings are open. Read [what works](status.md) and [the limits](limits.md) before
-anything else.
+It is early. The rules are written and implemented, held to a conformance suite, and one
+binary starts the service on a loopback address and is its client
+([first use](first-use.md)). No release holds the binary, and security findings are open.
+Read [what works](status.md) and [the limits](limits.md) before anything else.
 
 ## The problem
 

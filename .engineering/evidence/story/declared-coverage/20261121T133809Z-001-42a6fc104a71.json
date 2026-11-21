@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:38:09Z",
+  "actor": "agent:inbox",
+  "artifact": "story:declared-coverage",
+  "kind": "story",
+  "revision": 15,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (the guard of tools/scenarios.py ran after the files were written, and no gate step held ess/scenarios to the script): 29575e0 runs every check before a write and adds task scenarios-drift to task check; in a copy it names an edited, a missing and an added file, exit 1; slot task coverage exit 0, 89 of 89; the coverage suite reports passed on the interpreted target",
+    "review": "review-result:adversary-declared-coverage-pass-2",
+    "outcome": "fixed"
+  }
+}

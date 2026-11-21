@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:declared-coverage
 kind: story
-status: active
+status: implemented
 title: 'Declared coverage of the suite: no generated scenario left uncovered'
 summary: '`task coverage` exits 0: every scenario synthesis refuses is covered by an authored one.'
 relations:
@@ -24,10 +24,11 @@ scope:
   path: generated
 - confidence: inferred
   path: tools/scenarios.py
-revision: 15
+revision: 17
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-11-21T13:41:08Z", actor: "agent:inbox", revision: 17, decided_on: {"recorded":{"test_result":1,"review_outcome":7,"verification":1}}}
 ---
 ## Outcome
 
@@ -35,7 +36,8 @@ transitions:
 scenarios synthesis refuses is claimed by an authored scenario's `covers:` list. The story adds
 scenarios, makes `task check` run `task coverage`, and makes one change to the model: the views
 `Pending` and `Unanswered` no longer carry the fields `reply`, `decided_option`, `answered_by`
-and `refusal` (the host operator's 2 decisions of 2026-11-21, under Context).
+and `refusal` (the host operator's 2 decisions of 2026-11-21, under Context), and the view
+`Replies` no longer carries `refusal` (the host operator's standing rule, under Context).
 
 ## Acceptance
 
@@ -103,12 +105,37 @@ The host operator's standing rule from the same answer: a member of a view that 
 commands can set, found before the next release, is removed in the same window without asking
 first, and the wave report says so.
 
+The standing rule applied on 2026-11-21 (review-result:adversary-declared-coverage-pass-2,
+finding 1): `refusal` leaves the view `Replies` in the same unreleased change. `Replies` admits
+only `state == Answered`; `refusal` is set only by `Refuse/refused`, which moves the message to
+`Refused`; `PostMessage/posted` creates the message with it empty; no transition leaves
+`Answered` or `Refused`. So no row of `Replies` can carry it. The regeneration changed content
+only in the row of `Replies`. The adversary's script over the model reports no other such
+member in the 9 views.
+
+As built in wave 4 of stage 2: 24 authored scenarios claim 42 of the 50 refusals; 1 is new
+(`read-decision-waits-for-its-answer`), and `decision-answered-by-the-operator` is extended and
+posts under a thread of its own. The 8 other refusals left with the model change above. On ESS
+0.96.0 synthesis writes 93 scenarios and refuses 89, authored scenarios cover all 89,
+`task coverage` exits 0 and `task check` runs it. The suite `task coverage` writes reports
+`conformance_status: passed` on the interpreted target. `task conform` still reports
+`inconclusive`: it synthesizes without declared coverage, and the runner refuses the coverage
+suite (the key `coverage`, and row paths with a dot); story:service-acceptance changes the
+runner and the task. `tools/scenarios.py` derives the view and the row path from each claimed
+id, fails on a claim for which no `contains` row of that view carries a value, and runs every
+check before it writes a file. `task scenarios-drift`, which `task check` runs and this story
+did not name, fails when `ess/scenarios/` or `ess/ess-inputs.yaml` differs from what the script
+writes (finding 2 of the second adversary pass). The model lost 9 lines: `reply`,
+`decided_option`, `answered_by` and `refusal` in `Pending` and `Unanswered`, and `refusal` in
+`Replies`. `generated/` changed in the rows of those 3 views only (34 files in each of the 3
+regenerations, the rest digests and `.ess-output` records).
+
 ## Scope
 
 - `ess/scenarios/`, `ess/ess-inputs.yaml`
 - `ess/domains/messaging.yaml`: the fields `reply`, `decided_option`, `answered_by` and `refusal`
-  leave the views `Pending` and `Unanswered`
+  leave the views `Pending` and `Unanswered`, and `refusal` leaves the view `Replies`
 - `generated/`: as `task generate` and `task projections` rewrite it
 - `tools/scenarios.py`
-- `Taskfile.yml`: `check` gains `coverage`
+- `Taskfile.yml`: `check` gains `coverage` and `scenarios-drift`
 - `docs/design/inbox.md`: the coverage numbers

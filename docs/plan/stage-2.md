@@ -12,7 +12,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
-| 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | running |
+| 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | delivered 2026-11-21 |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
@@ -362,16 +362,90 @@ found before the next release, is removed in the same window and reported in the
 Commits this wave makes: the opening commit (this section, the store, the ruleset state in
 `AGENTS.md` and `docs/releasing.md`), 1 commit per unit (more if a correction round runs), 2
 merges, the closing commit with the Layout row, the numbers and the store, the fast-forward of
-`main`.
+`main`. A third merge was added: the correction of story:declared-coverage after its second
+adversary pass.
 
 Pre-flight (2026-11-21): the primary checkout is clean on `main` at `16cd7cf`; the trees of wave
 3 and of the publication are removed; 85 GB free on the root file system.
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-4` | `inbox-s2-w4` | `w4/` | open |
-| story:cli-client | `impl/cli-client` | `inbox-s2-w4-cli` | `w4/cli-client/` | dispatched |
-| story:declared-coverage | `impl/declared-coverage` | `inbox-s2-w4-cov` | `w4/declared-coverage/` | dispatched |
+| integration | `wave/s2-4` | `inbox-s2-w4` | `w4/` | closed |
+| story:cli-client | `impl/cli-client` | `inbox-s2-w4-cli` | `w4/cli-client/` | merged, `implemented` |
+| story:declared-coverage | `impl/declared-coverage` | `inbox-s2-w4-cov` | `w4/declared-coverage/` | merged, `implemented` |
+
+Result:
+
+- Gate on `wave/s2-4` after the 3 merges (`a6b1660`),
+  `CARGO_INCREMENTAL=0 slot task check`:
+  exit 0, `task scenarios-drift` "24 scenarios, 0 path(s) differ from tools/scenarios.py",
+  `task coverage` "93 selected scenario(s), 24 authored source(s), 89 refusal occurrence(s), 89
+  covered by authored", "93 scenarios: 93 passed, 0 failed, 0 error, 0 unsupported" on the
+  interpreted target and against the core (`task conform`, `conformance_status: inconclusive`),
+  319 cargo test cases passed and 5 ignored: the 267 and 4 of wave 3, whose crates did not
+  change, and 52 of `inbox-cli` (1 ignored, naming its backlog story). The run took 66 s in the
+  pool. A second run with `CI=true` and `GITHUB_ACTIONS=true` set gave the same result. The
+  documentation site builds with the new page (`npm --prefix website run build`, exit 0).
+- story:cli-client: 3 unit commits (`0c2426d`, `e411f79`, `40a9afb`). Adversary pass 1: 21
+  findings, all introduced by the unit: 8 red cases, 9 mutants the unit's suite passed, 4
+  judgement findings. 20 are fixed. 1 is declined (below). Pass 2, on the first correction: 3
+  findings, 1 blocker and 2 notes, all fixed; 2 mutants survive, and the adversary reads both as
+  equivalent. No third pass ran: the coordinator ran the crate's cases after the second
+  correction (52 passed, 1 ignored).
+- story:declared-coverage: 4 unit commits (`f6d8147`, `029f462`, `d35d455`, `29575e0`).
+  Adversary pass 1, on `029f462`: all 42 claims true, 3 findings, no red case, all 3 fixed in
+  `d35d455`. Pass 2, on `d35d455`: 2 findings, no red case, 0 of 6 mutants pass the suite. 1
+  was in the model before the unit and falls under the standing rule (below). 1 was introduced:
+  `tools/scenarios.py` ran its guard after it had written the files, and no step of the gate
+  held `ess/scenarios/` to the script. Both are fixed in `29575e0`. No third pass ran: the
+  coordinator checked the third correction (the model diff, every content change under
+  `generated/`, `task scenarios-drift` on a copy with an edited, an added and a removed file,
+  `task coverage`, the status of the coverage suite).
+- Differs from the plan:
+  - story:cli-client: the blocker of adversary pass 2 came from the coordinator's own order in
+    the first correction round ("a post answered `400` or `413` is final and leaves the outbox
+    file"). A `400` or `413` of the service reflects its settings or the transport, so the
+    order deleted an envelope that could still be delivered. The order is withdrawn; every
+    refusal of the service itself keeps the envelope.
+  - story:cli-client: finding 1 of adversary pass 1 is declined. `inbox repost` posts a note
+    again after its recipient read it. The coordinator measured the reason before declining:
+    the service answers a read note and a note a restart dropped alike, and holds no record of
+    a handled message, so the client cannot tell them apart. The case is ignored and names the
+    backlog draft; `inbox repost --help`, the README and the site say it.
+  - story:cli-client: the client refuses an `INBOX_URL` outside loopback (exit 2). The story
+    did not ask for it; it answers a judgement finding of pass 1 while
+    story:post-from-is-the-caller is open.
+  - story:declared-coverage: 42 of the 50 uncovered refusals are covered by scenarios, not 50.
+    The other 8 were invariants of `reply` and `decided_option` at `Pending` and `Unanswered`,
+    which no row can carry. The host operator decided on 2026-11-21 to remove the 2 fields from
+    the 2 views, and on finding 3 of pass 1 to remove `answered_by` and `refusal` with them: 8
+    lines of `ess/domains/messaging.yaml`. With the member of `Replies` below it is one change
+    of the wire rows against 0.1.0, 3 views and 5 members, named in `CHANGELOG.md`. Each of the
+    3 regenerations rewrote 34 files under `generated/`, with content changes only in the rows
+    of those views. The conditions were shown before each merge: the reachability argument is
+    in the story, `task coverage` exits 0 with 89 of 89, the suite it writes reports `passed`
+    on the interpreted target, and the gate on the merged branch built and tested
+    `crates/inbox-cli` against the regenerated crate.
+  - story:declared-coverage: `task check` has one step the story did not name,
+    `task scenarios-drift`. It answers finding 2 of pass 2.
+  - story:declared-coverage: `task conform` still reports `inconclusive`. It synthesizes
+    without declared coverage, and the runner refuses the suite `task coverage` writes (the
+    key `coverage`, and row paths with a dot). The story's Context said so before dispatch.
+- Decisions of the host operator in this wave (2026-11-21): the 2 model changes above, and the
+  standing rule that a view member no sequence of commands can set, found before the next
+  release, is removed in the same window and reported. The rule was applied once: `refusal`
+  left the view `Replies`, which holds answered messages only and which only `Refuse/refused`
+  could fill (finding 1 of pass 2; 1 line of the model). The adversary's script over the model
+  reports no other such member in the 9 views.
+- For wave 5. story:service-acceptance: the runner reads the coverage suite
+  (`ess-conformance/65` from `--suite-format 5`: the key `coverage` and dotted row paths),
+  `task conform` runs that suite, and `gate::passing_status` accepts `passed`; until then the
+  status against the core is `inconclusive` and stage 2 is not done. The fixtures of
+  `crates/inbox-cli/tests/support/mod.rs` start `inbox serve` and make keys at run time. The
+  client exits 1 with the service's own text for `400`, `401`, `408`, `413` and `503`.
+- Sub-agents, all on Opus, in tool uses as each run reported them: the client's implementor 224
+  in 3 runs, the coverage implementor 203 in 3 runs; the adversaries 88 and 80 (client, pass 1
+  and 2), 90 and 75 (coverage).
 
 ## Backlog
 
@@ -414,4 +488,12 @@ Drafts from the conformance unit, each a gap of the suite and no defect of the c
 - story:expire-publishes-once (wave 3): a core that publishes the event of `Expire` twice passes
   `task conform` and the core's own tests.
 
-Defects filed on beyond10x/ess from this wave: #798 and #799 (see the result of wave 3).
+Draft from the client unit:
+
+- story:repost-does-not-redeliver-a-handled-note (wave 4): `inbox repost` delivers a kept
+  envelope again only when the service no longer holds the message and the recipient has not
+  handled it. Today a note its recipient already read is posted again and answered `posted`.
+  Its case `repost_does_not_deliver_again_a_note_its_recipient_already_read` is in
+  `crates/inbox-cli/tests/adversary.rs` with an ignore attribute naming the story.
+
+Defects filed on beyond10x/ess in wave 3: #798 and #799 (see the result of wave 3).

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:18:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:declared-coverage",
+  "kind": "story",
+  "revision": 15,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (the guard in tools/scenarios.py accepts 2 false claims): d35d455 derives view and row path from the claimed id and requires a value that is not null; both false claims fail the script; slot task coverage exit 0, 89 of 89",
+    "review": "review-result:adversary-declared-coverage-pass-1",
+    "outcome": "fixed"
+  }
+}

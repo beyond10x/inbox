@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T13:18:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:declared-coverage",
+  "kind": "story",
+  "revision": 15,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (answered_by and refusal are as absent in Pending and Unanswered): d35d455 removes them from the 2 views, the host operator's decision of 2026-11-21; slot task coverage exit 0, 89 of 89",
+    "review": "review-result:adversary-declared-coverage-pass-1",
+    "outcome": "fixed"
+  }
+}

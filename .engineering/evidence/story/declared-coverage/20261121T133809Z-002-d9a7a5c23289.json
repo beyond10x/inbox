@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T13:38:09Z",
+  "actor": "agent:inbox",
+  "artifact": "story:declared-coverage",
+  "kind": "story",
+  "revision": 16,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the coordinator's check of 29575e0: model diff of 1 line, 34 regenerated files with content changes only in the row of Replies, task scenarios-drift exit 0 on the tree and exit 1 on a copy with 3 changed paths, slot task coverage exit 0 with 89 of 89, the coverage suite on the interpreted target 93 passed and conformance_status passed"
+  }
+}

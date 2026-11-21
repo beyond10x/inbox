@@ -8,6 +8,45 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- The binary `inbox` (`crates/inbox-cli`), built from source with
+  `cargo build --release -p inbox-cli`. `inbox serve` starts the HTTP service over the
+  in-memory backend on a loopback address. The other commands are the client: `open`,
+  `close`, `post`, `pending`, `wait`, `read`, `answer`, `refuse`, `outbox`, `collect`,
+  `thread`, `replies`, `repost`, `key new`, `keyfile add-key` and `keyfile add-delegation`.
+  Each request is signed with the caller's key from a secret key file. Each posted envelope
+  is kept in an outbox file until it is collected, refused with an error of the
+  specification other than `UnknownInbox`, or expired. Exit statuses: 0 done, 1 refused, 2
+  wrong usage, 3 transport, 4 a local file.
+- Declared coverage: every refusal of the specification is claimed by an authored scenario.
+  `task coverage` exits 0 (89 refused generated scenarios, 89 covered) and is part of
+  `task check`; the suite it writes reports `conformance_status: passed` on ESS's
+  interpreted target. 1 scenario is new (24 authored, 93 in the suite).
+- `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
+  `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
+
+### Changed
+
+- The rows of the views `Pending` and `Unanswered` no longer carry `reply`,
+  `decided_option`, `answered_by` and `refusal`, and the rows of the view `Replies` no
+  longer carry `refusal`. Against 0.1.0 these members were always absent there: `Pending`
+  and `Unanswered` hold messages in `Sent`, `Delivered` or `Read`, and only an answered or a
+  refused message carries the 4 fields; `Replies` holds answered messages only, and only a
+  refused message carries `refusal`. They are gone from `GET /messaging/views/pending`,
+  `GET /messaging/views/unanswered` and `GET /messaging/views/replies` and from the row
+  schemas `inbox.messaging.Pending.Row`, `inbox.messaging.Unanswered.Row` and
+  `inbox.messaging.Replies.Row`. `Settled`, `Thread`, `Outbox`, `Due` and `Messages` still
+  carry all 4; `Replies` still carries `reply`, `decided_option` and `answered_by`.
+
+### Known limits
+
+- `inbox repost` delivers a note again that its recipient already read
+  (`story:repost-does-not-redeliver-a-handled-note`).
+- `task conform` still reports `inconclusive` against the core: it synthesizes the suite
+  without declared coverage until `story:service-acceptance`.
+- No release holds the binary.
+
 ## [0.1.0] - 2026-11-21
 
 The first release. It ships no binary and publishes no crate: there is no program to run until

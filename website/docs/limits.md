@@ -69,25 +69,32 @@ Source: [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/
 
 ## What does not exist yet
 
-- **No program starts the service.** The service is a library (`crates/inbox-server`). The
-  binary `inbox serve` and the command-line client are `story:cli-client`, wave 4 of stage 2.
+- **No release holds the binary.** `inbox serve` and the client are on `main` since wave 4
+  and are built from source ([first use](first-use.md)); release 0.1.0 has no binary.
+- **`inbox repost` delivers a read note again**
+  (`story:repost-does-not-redeliver-a-handled-note`). A note stays in its sender's outbox
+  file until it expires, 24 hours by default. Once its recipient has read it the service
+  holds no message with that id, so `repost` posts it again and the service answers
+  `posted`. The service gives one answer for a note that was read and for one a restart
+  dropped.
 - **Loopback only, no TLS.** A listener on a second host and TLS belong to a later stage
   (`epic:two-hosts-and-wake`).
 - **One backend, in memory.** A restart of the service loses every message. The design has the
   sender repost after a reconnect; dedup by `message_id` and `dedup_key` makes the repost arrive
   once. A persistent backend is a later stage (`epic:jetstream-backend`).
 - **No second host and no wake-up** of an idle session (`epic:two-hosts-and-wake`).
-- **Nothing is deployed**, and the first release has no binary (see [releases](releases.md)).
+- **Nothing is deployed** (see [releases](releases.md)).
 - One request per connection: no keep-alive and no pipelining. The key file is not reloaded
   while the service runs.
 
 ## What the checks do not cover
 
-- **The conformance status is `inconclusive`.** All 92 scenarios pass, against ESS's
-  interpreted target and against the core, but `inconclusive` is ESS's word for a suite that
-  does not claim every refusal: 50 refusals of the specification are claimed by no scenario
-  (`task coverage` lists them, all `ESS-SYNTH-013`). `story:declared-coverage`, wave 4, owns
-  them.
+- **The conformance status against the core is `inconclusive`.** All 93 scenarios pass, on
+  ESS's interpreted target and against the core, and every refusal of the specification is
+  claimed by an authored scenario (`task coverage`: 89 of 89; its suite reports `passed` on
+  the interpreted target). `task conform` runs a suite synthesized without declared
+  coverage, for which ESS reports `inconclusive`; the runner does not read the coverage
+  suite yet (`story:service-acceptance`, wave 5).
 - Rules the specification cannot state on ESS 0.96.0 (who may read which rows, the blocking
   read, and others listed in
   [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md))
@@ -95,7 +102,7 @@ Source: [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/
 - Gaps in the suite found by the adversary passes, each a draft story:
   - `story:post-refusal-order-scenarios`: no scenario holds the order in which `PostMessage`
     refuses when two refusals apply; an implementation that reads a row before it checks the
-    signature passes all 92.
+    signature passes all 93.
   - `story:external-refusal-order-cases`: no case holds the order of the three external
     refusals of `PostMessage` (`unknown-option`, `signature-invalid`, `authority-invalid`); a
     core that asks them in reverse order passes.
