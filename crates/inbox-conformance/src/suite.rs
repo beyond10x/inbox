@@ -18,9 +18,9 @@ use std::collections::BTreeMap;
 use inbox::server::json::{self, Value};
 
 /// The suite format this runner is written against: the one `ess verify conform synthesize
-/// --suite-format 5` of ESS 0.96.0 writes for `ess/`, the ordinary scenarios with a declared
-/// `coverage` block. The ordinary `ess-conformance/52` (no coverage) is refused like any other
-/// format: no task synthesizes it any more.
+/// --suite-format 5` of ESS 0.97.1 writes for `ess/` (as 0.96.0 did), the ordinary scenarios
+/// with a declared `coverage` block. The ordinary `ess-conformance/52` (no coverage) is refused
+/// like any other format: no task synthesizes it any more.
 pub const SUITE_VERSION: &str = "ess-conformance/65";
 
 /// A suite this runner read.

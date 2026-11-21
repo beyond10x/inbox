@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
+// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! inbox-service — the `inbox-service` component of `inbox` v1.
@@ -235,6 +235,7 @@ where
             crate::messaging::PostMessageOutcome::DuplicateKey { .. } => {}
             crate::messaging::PostMessageOutcome::UnknownInbox { .. } => {}
             crate::messaging::PostMessageOutcome::InboxClosed { .. } => {}
+            crate::messaging::PostMessageOutcome::IdTaken { .. } => {}
             crate::messaging::PostMessageOutcome::Posted { message_posted, .. } => {
                 self.outbox.push(PublishedEvent::MessagePosted(message_posted.clone()));
             }

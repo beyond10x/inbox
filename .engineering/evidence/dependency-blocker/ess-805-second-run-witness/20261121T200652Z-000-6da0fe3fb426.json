@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:06:52Z",
+  "actor": "agent:inbox",
+  "artifact": "dependency-blocker:ess-805-second-run-witness",
+  "kind": "dependency-blocker",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "the coordinator's probe on a copy of ess/ of a5b681f with the ESS 0.97.1 binary of the ESS release run, the manifest pinned to 0.97.1 and duplicate-key written as where: {all: [dedup_key == input.dedup_key, from == input.from]}: ess verify conform synthesize wrote 97 scenarios (27 authored, 95 refusals, 95 covered) and ess verify conform run --target interpreted answered 97 scenarios: 97 passed, 0 failed, 0 error, 0 unsupported, conformance_status passed; on ESS 0.96.0 the same rule gave 96 scenarios, 95 passed, 1 failed"
+  }
+}

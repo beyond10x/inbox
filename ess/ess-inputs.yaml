@@ -1,10 +1,12 @@
 format: ess-inputs/2
-requires: ess 0.96.0
+requires: ess 0.97.1
 specification:
 - system.yaml
 - components.yaml
 - domains/messaging.yaml
 scenarios:
+- scenarios/a-message-id-another-sender-holds-is-taken.yaml
+- scenarios/a-third-principal-cannot-tell-a-message-id-by-post.yaml
 - scenarios/a-third-principal-finds-no-message.yaml
 - scenarios/answer-from-another-principal-refused.yaml
 - scenarios/answered-decision-expires-uncollected.yaml
@@ -12,6 +14,7 @@ scenarios:
 - scenarios/closed-inbox-refuses-posts.yaml
 - scenarios/decision-answered-by-the-operator.yaml
 - scenarios/decision-taken-on-silence.yaml
+- scenarios/dedup-key-is-the-senders.yaml
 - scenarios/envelope-must-fit-its-kind.yaml
 - scenarios/handled-message-is-gone.yaml
 - scenarios/marks-repeat-without-effect.yaml

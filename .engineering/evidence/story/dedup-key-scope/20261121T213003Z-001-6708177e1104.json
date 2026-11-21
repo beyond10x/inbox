@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T21:30:03Z",
+  "actor": "agent:inbox",
+  "artifact": "story:dedup-key-scope",
+  "kind": "story",
+  "revision": 19,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (a rule that compares on_behalf_of in place of from passed the unit's cases and every scenario): f0c1af8 adds 3 delegated posts to the scenario dedup-key-is-the-senders and commits the adversary's 15 cases; on a copy of ess/ with that model the interpreted target gives 97 passed, 1 failed, where it gave 98 of 98 before; with the core comparing on_behalf_of 5 of the adversary's cases fail; the unit's gate on f0c1af8: task check exit 0, cargo test --workspace 390 passed, 0 failed, 7 ignored",
+    "review": "review-result:adversary-dedup-key-scope-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,6 +1,6 @@
 <!--
 generated from inbox v1
-contract digest slice-sha256/2:f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
+contract digest slice-sha256/2:b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
 do not edit: regenerate with `ess generate`
 -->
 
@@ -752,7 +752,7 @@ It takes:
 - `body` — `inbox.messaging.Body`
 - `signature` — `inbox.messaging.Signature`
 
-It has 13 outcomes.
+It has 14 outcomes.
 
 **`not-sender`** — Taken when `from != caller.principal` holds of the input. No entity in this specification changes. It reports `inbox.messaging.NotSender`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
@@ -770,13 +770,15 @@ It has 13 outcomes.
 
 **`authority-invalid`** — Decided outside the input: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.NoAuthority`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
-**`duplicate`** — Taken when a record already carries the identity the command's creating branch would create, and no input-guarded refusal applies. No entity in this specification changes. It reports `inbox.messaging.Duplicate`. It emits nothing. A test reaches it by sending the command twice with one identity: the first call creates the record, the second is answered by this branch.
+**`duplicate`** — A live message of this sender carries this id. Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `(message_id == input.message_id and from == input.from)` before the outcome, at least one row is selected. No entity in this specification changes. It reports `inbox.messaging.Duplicate`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
 
-**`duplicate-key`** — Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `dedup_key == input.dedup_key` before the outcome, at least one row is selected. No entity in this specification changes. It reports `inbox.messaging.Duplicate`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
+**`duplicate-key`** — Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `(dedup_key == input.dedup_key and from == input.from)` before the outcome, at least one row is selected. No entity in this specification changes. It reports `inbox.messaging.Duplicate`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
 
 **`unknown-inbox`** — Taken when no `inbox.messaging.Inbox` carries the identity `input.to` names. No entity in this specification changes. It reports `inbox.messaging.UnknownInbox`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
 
 **`inbox-closed`** — Taken when the `inbox.messaging.Inbox` that `input.to` names exists and its stored fields satisfy `state == Closed`. No entity in this specification changes. It reports `inbox.messaging.UnknownInbox`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
+
+**`id-taken`** — A live message of another sender carries this id. Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `message_id == input.message_id` before the outcome, at least one row is selected. No entity in this specification changes. It reports `inbox.messaging.MessageIdTaken`. It emits nothing. A test reaches it by arranging the row of the other entity the input names, or its absence, and sending the command for it.
 
 **`posted`** — The default branch, taken when no other outcome's condition matched. It creates a `inbox.messaging.Message`, which starts in `Sent`. The new instance's identity is published as `message_id` on `inbox.messaging.MessagePosted`. It emits `inbox.messaging.MessagePosted`. It sets `from` from `input.from`, `on_behalf_of` from `input.on_behalf_of`, `authority` from `input.authority`, `to` from `input.to`, `kind` from `input.kind`, `thread` from `input.thread`, `reply_shape` from `input.reply_shape`, `decision` from `input.decision`, `default_on_silence` from `input.default_on_silence`, `created` from `input.created`, `expires` from `input.expires`, `dedup_key` from `input.dedup_key`, `body` from `input.body`, `signature` from `input.signature`, `answered_by` cleared, `decided_option` cleared, `reply` cleared and `refusal` cleared. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
@@ -962,11 +964,19 @@ Reported by `inbox.messaging.Refuse` on its `already-settled` outcome.
 
 ### `Duplicate`
 
-A live message already carries this id or this dedup key; nothing was stored.
+A live message of this sender already carries this id or this dedup key; nothing was stored.
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
 Reported by `inbox.messaging.PostMessage` on its `duplicate` and `duplicate-key` outcomes.
+
+### `MessageIdTaken`
+
+A live message of another sender carries this id; nothing was stored.
+
+It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
+
+Reported by `inbox.messaging.PostMessage` on its `id-taken` outcome.
 
 ### `NoAuthority`
 
@@ -1110,4 +1120,4 @@ It may read [`Due`](#due) and [`Messages`](#messages), which an actor whose gran
 
 ---
 
-Generated from inbox v1 · contract digest `slice-sha256/2:f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from inbox v1 · contract digest `slice-sha256/2:b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5`. Do not edit this file; change the specification and regenerate it with `ess generate`.

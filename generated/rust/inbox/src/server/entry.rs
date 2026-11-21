@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
+// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The transport-free entry point's refusals.

@@ -1,6 +1,5 @@
 type: ess-scenario/7
 covers:
-- inbox.messaging.PostMessage/outcome/authority-invalid
 - inbox.messaging.PostMessage/outcome/no-authority
 domain: inbox.messaging
 scenario: relayed-decision-without-delegation-refused

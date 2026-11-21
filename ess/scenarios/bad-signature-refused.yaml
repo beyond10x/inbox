@@ -1,6 +1,4 @@
 type: ess-scenario/7
-covers:
-- inbox.messaging.PostMessage/outcome/signature-invalid
 domain: inbox.messaging
 scenario: bad-signature-refused
 summary: The SignatureVerifier port refuses the signature of a post. The post is refused, which tells

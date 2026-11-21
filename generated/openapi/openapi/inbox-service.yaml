@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
+# contract digest slice-sha256/2:8e2e22d2b822308ba6b7c105f39e0f55dc0c242f0e109e712ce096d5593136a5
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
+    contract_digest: slice-sha256/2:8e2e22d2b822308ba6b7c105f39e0f55dc0c242f0e109e712ce096d5593136a5
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -598,7 +598,7 @@ paths:
                   - actor
                   type: object
         '409':
-          description: 'Outcomes `duplicate`, `duplicate-key`, `unknown-inbox` and `inbox-closed`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
+          description: 'Outcomes `duplicate`, `duplicate-key`, `unknown-inbox`, `inbox-closed` and `id-taken`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
             application/json:
               schema:
@@ -606,6 +606,7 @@ paths:
                   mapping:
                     duplicate: '#/components/schemas/inbox.messaging.PostMessage.duplicate.Response'
                     duplicate-key: '#/components/schemas/inbox.messaging.PostMessage.duplicate-key.Response'
+                    id-taken: '#/components/schemas/inbox.messaging.PostMessage.id-taken.Response'
                     inbox-closed: '#/components/schemas/inbox.messaging.PostMessage.inbox-closed.Response'
                     unknown-inbox: '#/components/schemas/inbox.messaging.PostMessage.unknown-inbox.Response'
                   propertyName: outcome
@@ -614,6 +615,7 @@ paths:
                 - $ref: '#/components/schemas/inbox.messaging.PostMessage.duplicate-key.Response'
                 - $ref: '#/components/schemas/inbox.messaging.PostMessage.unknown-inbox.Response'
                 - $ref: '#/components/schemas/inbox.messaging.PostMessage.inbox-closed.Response'
+                - $ref: '#/components/schemas/inbox.messaging.PostMessage.id-taken.Response'
         '422':
           description: 'Outcomes `no-authority`, `already-expired`, `request-without-shape` and `decision-without-options`: the request was understood and refused on domain grounds. The body names the declared error and carries whatever that error declares.'
           content:
@@ -2958,11 +2960,11 @@ components:
       type: object
     inbox.messaging.PostMessage.duplicate-key.Response:
       additionalProperties: false
-      description: Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `dedup_key == input.dedup_key` before the outcome, at least one row is selected.
+      description: Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `(dedup_key == input.dedup_key and from == input.from)` before the outcome, at least one row is selected.
       properties:
         error:
           const: inbox.messaging.Duplicate
-          description: A live message already carries this id or this dedup key; nothing was stored.
+          description: A live message of this sender already carries this id or this dedup key; nothing was stored.
           type: string
         outcome:
           const: duplicate-key
@@ -2978,14 +2980,34 @@ components:
       type: object
     inbox.messaging.PostMessage.duplicate.Response:
       additionalProperties: false
-      description: Taken when a record already carries the identity the request would create, and no input-guarded refusal applies.
+      description: A live message of this sender carries this id. Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `(message_id == input.message_id and from == input.from)` before the outcome, at least one row is selected.
       properties:
         error:
           const: inbox.messaging.Duplicate
-          description: A live message already carries this id or this dedup key; nothing was stored.
+          description: A live message of this sender already carries this id or this dedup key; nothing was stored.
           type: string
         outcome:
           const: duplicate
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.PostMessage.id-taken.Response:
+      additionalProperties: false
+      description: A live message of another sender carries this id. Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `message_id == input.message_id` before the outcome, at least one row is selected.
+      properties:
+        error:
+          const: inbox.messaging.MessageIdTaken
+          description: A live message of another sender carries this id; nothing was stored.
+          type: string
+        outcome:
+          const: id-taken
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
