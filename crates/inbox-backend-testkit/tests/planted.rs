@@ -24,6 +24,7 @@ enum Fault {
     ListDropsOne,
     ListOrderShifts,
     ClonesCopyStore,
+    ClonesWriteAside,
     NoSection,
     ClonesOwnSection,
     LockedAfterPanic,
@@ -34,6 +35,7 @@ enum Fault {
 struct Planted {
     fault: Fault,
     rows: MemoryBackend,
+    aside: Option<MemoryBackend>,
     buried: Arc<Mutex<BTreeSet<String>>>,
     lists: Arc<AtomicUsize>,
     section: Arc<Mutex<()>>,
@@ -45,6 +47,7 @@ impl Planted {
         Self {
             fault,
             rows: MemoryBackend::new(),
+            aside: None,
             buried: Arc::default(),
             lists: Arc::default(),
             section: Arc::default(),
@@ -98,9 +101,15 @@ impl Clone for Planted {
         } else {
             Arc::clone(&self.section)
         };
+        let aside = if self.fault == Fault::ClonesWriteAside {
+            Some(MemoryBackend::new())
+        } else {
+            self.aside.clone()
+        };
         Self {
             fault: self.fault,
             rows,
+            aside,
             buried: Arc::clone(&self.buried),
             lists: Arc::clone(&self.lists),
             section,
@@ -150,6 +159,10 @@ impl InboxStorage for Planted {
     }
 
     fn put(&mut self, snapshot: InboxSnapshot) {
+        if let Some(aside) = self.aside.as_mut() {
+            InboxStorage::put(aside, snapshot);
+            return;
+        }
         let key = format!("inbox {}", snapshot.data.address.0);
         if self.fault == Fault::PutKeepsFirst
             && InboxStorage::get(&self.rows, &snapshot.data.address).is_some()
@@ -161,6 +174,10 @@ impl InboxStorage for Planted {
     }
 
     fn delete(&mut self, identity: &Address) {
+        if let Some(aside) = self.aside.as_mut() {
+            InboxStorage::delete(aside, identity);
+            return;
+        }
         match self.fault {
             Fault::DeleteIsLost => {}
             Fault::DeleteLeavesList => {
@@ -188,6 +205,10 @@ impl MessageStorage for Planted {
     }
 
     fn put(&mut self, snapshot: MessageSnapshot) {
+        if let Some(aside) = self.aside.as_mut() {
+            MessageStorage::put(aside, snapshot);
+            return;
+        }
         let key = format!("message {}", snapshot.data.message_id.0);
         if self.fault == Fault::PutKeepsFirst
             && MessageStorage::get(&self.rows, &snapshot.data.message_id).is_some()
@@ -199,6 +220,10 @@ impl MessageStorage for Planted {
     }
 
     fn delete(&mut self, identity: &MessageId) {
+        if let Some(aside) = self.aside.as_mut() {
+            MessageStorage::delete(aside, identity);
+            return;
+        }
         match self.fault {
             Fault::DeleteIsLost => {}
             Fault::DeleteLeavesList => {
@@ -330,6 +355,21 @@ fn clones_that_do_not_share_a_store_fail() {
         Fault::ClonesCopyStore,
         "two clones of one backend read one store",
     );
+}
+
+#[test]
+fn clones_whose_writes_do_not_reach_the_original_fail() {
+    both_ports_fail(
+        Fault::ClonesWriteAside,
+        "two clones of one backend read one store",
+    );
+    for check in [inboxes as fn(Fault), messages as fn(Fault)] {
+        let line = failure(Fault::ClonesWriteAside, check);
+        assert!(
+            line.contains("the original's get answered None") && line.contains("after a clone put"),
+            "the clone-to-original read did not catch it: {line:?}"
+        );
+    }
 }
 
 #[test]

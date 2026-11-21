@@ -14,8 +14,13 @@
 //! ```
 //!
 //! Each function takes a factory that answers a backend over a new, empty store on every call,
-//! and makes its clones itself. A check that fails panics with one line,
-//! `backend contract broken: <part>: <rule> (<what was seen>)`.
+//! and makes its clones itself. The two storage checks refuse, with a panic naming the factory,
+//! any backend the factory answers that holds a snapshot already. A check that fails panics with
+//! one line, `backend contract broken: <part>: <rule> (<what was seen>)`.
+//!
+//! A check that waits fails after a bound of 2 s instead of hanging. The section check holds a
+//! command for 500 ms while others try to get in, so a section that lets a second command in
+//! only after a longer hold is not seen by the kit; a passing `check_exclusive` takes about 1 s.
 //!
 //! The kit checks the ports and the section only. Dedup, expiry and every rule of a command are
 //! the core's and the conformance suite's; the snapshots it stores are built through the generated
@@ -28,7 +33,7 @@ use std::fmt::{Debug, Display};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use inbox::behaviour::{InboxStorage, MessageStorage};
 use inbox::messaging::{
@@ -41,21 +46,24 @@ use inbox_core::Exclusive;
 /// How long a check waits for a command that the contract lets run before it fails.
 const BOUND: Duration = Duration::from_secs(2);
 
-/// How long a second command has to get into a section another command holds, before the
-/// check takes it as waiting.
-const OVERLAP: Duration = Duration::from_millis(200);
+/// How long the kit holds a command inside the section while other commands try to get in. A
+/// section that admits a second command only after a longer hold is not seen by the kit.
+const HOLD: Duration = Duration::from_millis(500);
 
 /// Checks [`InboxStorage`] on backends `fresh` answers.
 ///
 /// A snapshot stored with `put` is answered equal by `get`; a second `put` under one identity
 /// replaces the first; `delete` removes the snapshot from `get` and from `list`; `list` answers
 /// every stored snapshot once, in the same order on two calls with no write between them; two
-/// clones of one backend read one store.
+/// clones of one backend read one store. Each handle reads before the other handle writes and
+/// again after its `put`, its replacing `put` and its `delete`, with `get` and with `list`, in
+/// both directions (original to clone, clone to original), so a handle that answers what it read
+/// earlier fails.
 ///
 /// # Panics
 ///
-/// With a line naming the rule the backend broke, or when `fresh` answers a store that is not
-/// empty.
+/// With a line naming the rule the backend broke, or when a backend `fresh` answers, on any call,
+/// holds a snapshot already.
 pub fn check_inbox_storage<B, F>(fresh: F)
 where
     B: InboxStorage + Clone,
@@ -69,8 +77,8 @@ where
 ///
 /// # Panics
 ///
-/// With a line naming the rule the backend broke, or when `fresh` answers a store that is not
-/// empty.
+/// With a line naming the rule the backend broke, or when a backend `fresh` answers, on any call,
+/// holds a snapshot already.
 pub fn check_message_storage<B, F>(fresh: F)
 where
     B: MessageStorage + Clone,
@@ -82,9 +90,16 @@ where
 /// Checks [`Exclusive`] on backends `fresh` answers.
 ///
 /// A second command over one backend waits while one runs; clones of one backend share the
-/// section; the section is free again after a command that panics. A check that waits fails after
-/// a bound of 2 s instead of hanging, so a passing call takes well under a second. A thread left
-/// waiting on a broken section is not joined.
+/// section; the section is free again after a command that panics, and a second command still
+/// waits while one runs after it. The kit holds a command inside the section for 500 ms while a
+/// command over the same backend and one over a clone try to get in; a section that admits a
+/// second command only after a hold longer than 500 ms is not seen by the kit. Every other wait,
+/// the command that panics included, fails after a bound of 2 s instead of hanging; a passing
+/// call takes about 1 s. A thread left waiting on a broken section is not joined.
+///
+/// The factory's backends have no storage port here, so the kit cannot see whether one holds
+/// rows; what it needs of each is that its section is free, and a section that does not let the
+/// first command in within 2 s fails `a second command waits while one runs`.
 ///
 /// # Panics
 ///
@@ -99,26 +114,41 @@ where
     const FREED: &str = "the section is free again after a command that panics";
 
     let one = Arc::new(fresh());
-    second_waits(Arc::clone(&one), Arc::clone(&one), WAITS);
-
-    let first = Arc::new(fresh());
-    let clone = Arc::new(first.as_ref().clone());
-    second_waits(first, clone, SHARED);
+    let clone = Arc::new(one.as_ref().clone());
+    excludes(
+        Arc::clone(&one),
+        vec![(one, "the same backend", WAITS), (clone, "a clone", SHARED)],
+        "",
+    );
 
     let panicking = Arc::new(fresh());
-    let unwound: std::thread::Result<()> = catch_unwind(AssertUnwindSafe(|| {
-        panicking.exclusive(|| {
-            resume_unwind(Box::new(
-                "inbox-backend-testkit: a command panics inside the section, on purpose",
-            ))
-        })
-    }));
-    if unwound.is_ok() {
-        broken(
+    let (left, unwound) = mpsc::channel();
+    let inside = Arc::clone(&panicking);
+    std::thread::spawn(move || {
+        let answer: std::thread::Result<()> = catch_unwind(AssertUnwindSafe(|| {
+            inside.exclusive(|| {
+                resume_unwind(Box::new(
+                    "inbox-backend-testkit: a command panics inside the section, on purpose",
+                ))
+            })
+        }));
+        let _ = left.send(answer.is_err());
+    });
+    match unwound.recv_timeout(BOUND) {
+        Ok(true) => {}
+        Ok(false) => broken(
             "Exclusive",
             FREED,
             "the command panicked and exclusive answered as if it had not",
-        );
+        ),
+        Err(_) => broken(
+            "Exclusive",
+            FREED,
+            format_args!(
+                "exclusive did not return within {BOUND:?} from a command that panicked inside \
+                 the section"
+            ),
+        ),
     }
     let same = Arc::clone(&panicking);
     let clone = Arc::new(panicking.as_ref().clone());
@@ -140,59 +170,107 @@ where
             );
         }
     }
+    let clone = Arc::new(panicking.as_ref().clone());
+    excludes(
+        Arc::clone(&panicking),
+        vec![
+            (panicking, "the same backend", WAITS),
+            (clone, "a clone", WAITS),
+        ],
+        " after a command panicked inside the section",
+    );
 }
 
-/// Holds the section through `first` on one thread, and checks that a command through `second`,
-/// on another thread, waits until the first leaves and then runs.
-fn second_waits<B>(first: Arc<B>, second: Arc<B>, rule: &str)
+/// Holds the section through `holder` on one thread for [`HOLD`], while each of `waiters` tries
+/// to get in on a thread of its own, then releases it; each waiter must stay out while it is held
+/// and run within [`BOUND`] after.
+///
+/// A waiter that got in, or did not run after, fails with its own rule; when several did, the
+/// first in `waiters` names the rule. A holder that does not get in fails with the first waiter's
+/// rule. `when` ends every line it prints.
+fn excludes<B>(holder: Arc<B>, waiters: Vec<(Arc<B>, &'static str, &'static str)>, when: &str)
 where
     B: Exclusive + Send + Sync + 'static,
 {
-    let (entered, first_in) = mpsc::channel();
+    let first_rule = waiters.first().map_or("", |waiter| waiter.2);
+    let (entered, holder_in) = mpsc::channel();
     let (release, released) = mpsc::channel::<()>();
     std::thread::spawn(move || {
-        first.exclusive(|| {
+        holder.exclusive(|| {
             let _ = entered.send(());
             let _ = released.recv();
         });
     });
-    if first_in.recv_timeout(BOUND).is_err() {
+    if holder_in.recv_timeout(BOUND).is_err() {
         broken(
             "Exclusive",
-            rule,
-            format_args!("the first command over a new store did not run within {BOUND:?}"),
+            first_rule,
+            format_args!("a first command did not run within {BOUND:?}{when}"),
         );
     }
 
-    let (calling, second_calling) = mpsc::channel();
-    let (ran, second_in) = mpsc::channel();
-    std::thread::spawn(move || {
-        let _ = calling.send(());
-        second.exclusive(|| {
-            let _ = ran.send(());
+    let (calling, all_calling) = mpsc::channel();
+    let (ran, waiter_in) = mpsc::channel();
+    for (index, (backend, _, _)) in waiters.iter().enumerate() {
+        let backend = Arc::clone(backend);
+        let calling = calling.clone();
+        let ran = ran.clone();
+        std::thread::spawn(move || {
+            let _ = calling.send(());
+            backend.exclusive(|| {
+                let _ = ran.send(index);
+            });
         });
-    });
-    if second_calling.recv_timeout(BOUND).is_err() {
-        broken(
-            "Exclusive",
-            rule,
-            format_args!("the thread of the second command did not start within {BOUND:?}"),
-        );
     }
-    if second_in.recv_timeout(OVERLAP).is_ok() {
-        broken(
-            "Exclusive",
-            rule,
-            "a second command ran while the first held the section",
-        );
+    for _ in &waiters {
+        if all_calling.recv_timeout(BOUND).is_err() {
+            broken(
+                "Exclusive",
+                first_rule,
+                format_args!("the thread of a second command did not start within {BOUND:?}"),
+            );
+        }
     }
-    drop(release);
-    if second_in.recv_timeout(BOUND).is_err() {
+
+    let deadline = Instant::now() + HOLD;
+    let mut inside = vec![false; waiters.len()];
+    while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+        match waiter_in.recv_timeout(left) {
+            Ok(index) => inside[index] = true,
+            Err(_) => break,
+        }
+    }
+    if let Some(index) = inside.iter().position(|got_in| *got_in) {
+        let (_, which, rule) = waiters[index];
         broken(
             "Exclusive",
             rule,
             format_args!(
-                "the second command did not run within {BOUND:?} after the first left the section"
+                "a second command over {which} ran while a first held the section for \
+                 {HOLD:?}{when}"
+            ),
+        );
+    }
+
+    drop(release);
+    let deadline = Instant::now() + BOUND;
+    while inside.contains(&false) {
+        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+            break;
+        };
+        match waiter_in.recv_timeout(left) {
+            Ok(index) => inside[index] = true,
+            Err(_) => break,
+        }
+    }
+    if let Some(index) = inside.iter().position(|got_in| !*got_in) {
+        let (_, which, rule) = waiters[index];
+        broken(
+            "Exclusive",
+            rule,
+            format_args!(
+                "a second command over {which} did not run within {BOUND:?} after the first left \
+                 the section{when}"
             ),
         );
     }
@@ -237,16 +315,22 @@ where
     const DELETE_GET: &str = "delete removes the snapshot from get";
     const DELETE_LIST: &str = "delete removes the snapshot from list";
     const ORDER: &str = "list answers in the same order on two calls with no write between them";
-    const CLONES: &str = "two clones of one backend read one store";
+
+    let mut calls = 0;
+    let mut fresh = || {
+        calls += 1;
+        let backend = fresh();
+        let found = P::list(&backend).len();
+        assert!(
+            found == 0,
+            "inbox-backend-testkit: the factory must answer a backend over a new, empty store; \
+             on call {calls} its {} list answered {found} snapshots",
+            P::PART
+        );
+        backend
+    };
 
     let mut backend = fresh();
-    let found = P::list(&backend).len();
-    assert!(
-        found == 0,
-        "inbox-backend-testkit: the factory must answer a backend over a new, empty store; \
-         its {} list answered {found} snapshots",
-        P::PART
-    );
 
     let first = P::row(3);
     P::put(&mut backend, first.clone());
@@ -288,40 +372,60 @@ where
     every_once::<P, B>(&backend, &stored);
     same_order::<P, B>(&backend, ORDER);
 
-    let mut writer = fresh();
-    let mut reader = writer.clone();
-    let written = P::row(4);
-    P::put(&mut writer, written.clone());
-    match P::get(&reader, &P::id(&written)) {
-        Some(row) if row == written => {}
-        other => broken(
-            P::PART,
-            CLONES,
-            format_args!("a clone's get answered {other:?} for a row the other clone put"),
-        ),
-    }
-    if !P::list(&reader).contains(&written) {
+    let mut original = fresh();
+    let mut clone = original.clone();
+    one_store::<P, B>(&mut original, &mut clone, 4, "the original", "its clone");
+    one_store::<P, B>(&mut clone, &mut original, 5, "a clone", "the original");
+}
+
+/// Writes row `n` through `writer` and reads it through `reader` before the first write and
+/// after each: its `put`, a replacing `put`, its `delete`, with `get` and with `list`. `w` and `r`
+/// name the two handles in the line a failure prints.
+fn one_store<P: Port<B>, B>(writer: &mut B, reader: &mut B, n: u8, w: &str, r: &str) {
+    let row = P::row(n);
+    let id = P::id(&row);
+    let _ = P::get(reader, &id);
+    let _ = P::list(reader);
+
+    P::put(writer, row.clone());
+    reads::<P, B>(reader, &id, Some(&row), r, &format!("after {w} put it"));
+
+    let replacement = P::replacement(n);
+    P::put(writer, replacement.clone());
+    reads::<P, B>(
+        reader,
+        &id,
+        Some(&replacement),
+        r,
+        &format!("after {w} replaced it"),
+    );
+
+    P::delete(writer, &id);
+    reads::<P, B>(reader, &id, None, r, &format!("after {w} deleted it"));
+}
+
+/// `reader` answers `expected` under `id` through `get`, and through `list` exactly that row, or
+/// none under `id` when `expected` is none.
+fn reads<P: Port<B>, B>(reader: &B, id: &P::Id, expected: Option<&P::Row>, r: &str, step: &str) {
+    const CLONES: &str = "two clones of one backend read one store";
+    let got = P::get(reader, id);
+    if got.as_ref() != expected {
         broken(
             P::PART,
             CLONES,
-            "a clone's list does not answer a row the other clone put",
+            format_args!("{r}'s get answered {got:?} for {id} {step}"),
         );
     }
-    let back = P::row(5);
-    P::put(&mut reader, back.clone());
-    if P::get(&writer, &P::id(&back)).as_ref() != Some(&back) {
+    let key = id.to_string();
+    let listed: Vec<P::Row> = P::list(reader)
+        .into_iter()
+        .filter(|row| P::id(row).to_string() == key)
+        .collect();
+    if listed.iter().collect::<Vec<_>>() != expected.into_iter().collect::<Vec<_>>() {
         broken(
             P::PART,
             CLONES,
-            "the original's get does not answer a row its clone put",
-        );
-    }
-    P::delete(&mut reader, &P::id(&written));
-    if P::get(&writer, &P::id(&written)).is_some() {
-        broken(
-            P::PART,
-            CLONES,
-            "the original's get still answers a row its clone deleted",
+            format_args!("{r}'s list answered {listed:?} under {id} {step}"),
         );
     }
 }

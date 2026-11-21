@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:03:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a section that admits a second command after a hold): the kit holds the first command 500 ms (HOLD) and the docs state that a longer lease is not seen; the 300 ms case in tests/adversary.rs passes",
+    "review": "review-result:adversary-backend-test-kit-pass-1",
+    "outcome": "fixed"
+  }
+}

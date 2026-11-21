@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:03:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (a section that stops excluding after a panic): the waiting check runs again after the panic, on the same handle and on a clone; tests/adversary.rs 9 passed",
+    "review": "review-result:adversary-backend-test-kit-pass-1",
+    "outcome": "fixed"
+  }
+}
