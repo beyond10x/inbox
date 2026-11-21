@@ -6,7 +6,7 @@ backends, specified in ESS before any code. The design is `docs/design/inbox.md`
 changing anything.
 
 Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.md`, of which
-waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/planning/epic/`.
+waves 1 to 3 are delivered. Release 0.1.0 is the state of `main` after wave 3. Stages 2 to 6 are the epics in `.engineering/planning/epic/`.
 
 ## Layout
 
@@ -59,12 +59,17 @@ waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/plannin
 - The repository is public at `https://github.com/beyond10x/inbox`. What must never enter it is
   in "Rules" below; the gates scan every push and refuse without printing the match.
 - `main` moves only by the organization bot's fast-forward push through `b10x-gates`, after
-  `task check` is green on the commit. The required checks on `main` are
-  `common / Security and privacy`, `inbox / task check` and `Build documentation`.
-- A commit on which those checks have not run is refused on `main`. Push it to a branch as the
-  bot, open a pull request, wait for the 3 checks on its head, then fast-forward `main` to that
-  commit. Never merge a pull request with GitHub's merge button: `main` holds only commits the
-  bot wrote and committed.
+  `task check` is green on the commit. Three checks run on every push and are read before a
+  release: `common / Security and privacy`, `inbox / task check` and `Build documentation`.
+- The repository has no ruleset (read on 2026-11-21: 0). Writing a ruleset or branch protection
+  is the owner's act: `b10x-gates api` refuses it, and that refusal is not worked around. Until
+  the owner adds a ruleset that requires the 3 checks, nothing on the forge refuses a push to
+  `main`; the gate before the push is `task check` and `b10x-gates`.
+- Once that ruleset exists, a commit on which the 3 checks have not run is refused on `main`:
+  push it to a branch as the bot, open a pull request, wait for the checks on its head, then
+  fast-forward `main` to that commit. This route has not been run in this repository. Never
+  merge a pull request with GitHub's merge button: `main` holds only commits the bot wrote and
+  committed.
 - The site is the repository's own, at `https://beyond10x.github.io/inbox/` (route `/inbox/`).
   `.github/workflows/pages.yml` builds it on every push and pull request and, on `main`, uploads
   the build with `.well-known/b10x-site.json`; `.github/workflows/b10x-docs-site.yml` publishes

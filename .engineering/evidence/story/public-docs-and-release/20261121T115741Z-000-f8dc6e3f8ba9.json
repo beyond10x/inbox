@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T11:57:41Z",
+  "actor": "agent:inbox",
+  "artifact": "story:public-docs-and-release",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "release.yml on the tag 0.1.0: job Version (tag equals the workspace version, annotated, changelog section)",
+    "reference": "https://github.com/beyond10x/inbox/actions/runs/44901533637"
+  }
+}

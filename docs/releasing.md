@@ -1,7 +1,7 @@
 # Releasing the inbox
 
 A release is a bare version tag (`0.1.0`), annotated and written by the organization bot, on a
-`main` commit whose `task check` and required checks are green, and a GitHub Release made from
+`main` commit whose `task check` and 3 pushed checks are green, and a GitHub Release made from
 that tag. The tag is the workspace version, `[workspace.package] version` in `Cargo.toml`; the
 release workflow fails on a tag that differs.
 
@@ -29,9 +29,9 @@ The commands use the gates as the bot, from a checkout of this repository:
    `cargo metadata --format-version 1 > /dev/null` so `Cargo.lock` carries it. The first
    release is the version already there, `0.1.0`.
 2. **Changelog.** In `CHANGELOG.md`, rename `## [Unreleased]` to `## [<version>] - <date>` and
-   put an empty `## [Unreleased]` above it. Commit both and bring the commit to `main` through a
-   pull request (`AGENTS.md`, "Publishing"); `slot task check` is green on that commit, and so
-   are the required checks of `main` (`common / Security and privacy`, `inbox / task check`,
+   put an empty `## [Unreleased]` above it. Commit both and bring the commit to `main`
+   (`AGENTS.md`, "Publishing"); `slot task check` is green on that commit, and so are the 3
+   checks that run on it (`common / Security and privacy`, `inbox / task check`,
    `Build documentation`).
 3. **Try it.** Run the workflow by hand on `main` and wait for it:
 

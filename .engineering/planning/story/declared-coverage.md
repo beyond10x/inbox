@@ -20,7 +20,7 @@ scope:
   path: ess/scenarios
 - confidence: inferred
   path: tools/scenarios.py
-revision: 11
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
@@ -52,6 +52,16 @@ stories of this epic implement.
 
 The story runs after story:conformance-gate: every scenario it adds is run by `task conform`
 against the core as well as on the interpreted target, and both stay at 0 failed.
+
+As settled in wave 3 of stage 2: `task conform` runs the suite against the core in process and
+its gate holds the report to the suite (`crates/inbox-conformance`). A scenario this story adds
+that fails or errors against the core is reported with its id and is not fixed here: the core,
+the runner and `crates/inbox-conformance/unsupported.tsv` are not in this story's scope. The
+report of `task conform` stays `inconclusive` after this story, because that task synthesizes
+the suite without declared coverage; whether `task conform` runs the suite `task coverage`
+writes is decided at the opening of story:service-acceptance, which owns the runner and the
+`conform` task. This story reports what that suite's run on the interpreted target answers as
+`conformance_status`.
 
 ## Scope
 

@@ -12,7 +12,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
-| 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | planned |
+| 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | running |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
@@ -288,6 +288,74 @@ Result:
 - Sub-agents, all on Opus, in tool uses as each run reported them: the kit's implementor 121 in
   3 runs, the listener's 179 in 2 runs, the conformance runner's 375 in 4 runs; the adversaries
   47 and 55 (kit, pass 1 and 2), 51 and 60 (listener), 91 and 93 (conformance).
+
+## Publication and release 0.1.0
+
+Outside the 5 waves, on the operator's instruction of 2026-11-21 (it replaces "private, no
+release, no tag" of the stage 2 approval; "no deployment" stays): story:public-docs-and-release,
+`implemented`.
+
+- The history that became public was scanned 3 times (29, 34 and 35 commits; the last on
+  `main` at `16cd7cf`: 480 text blobs, 0 findings). No fix was needed and no history rewritten.
+- The repository is public since 2026-11-21T11:54:54Z. The site is
+  <https://beyond10x.github.io/inbox/>, published from `main` by
+  `.github/workflows/b10x-docs-site.yml`; Pages builds from the workflow, and the environment
+  `github-pages` deploys from `main` only.
+- Release 0.1.0: the annotated tag `0.1.0` on `16cd7cf`, written by the organization bot, and
+  the GitHub Release <https://github.com/beyond10x/inbox/releases/tag/0.1.0>, published
+  2026-11-21T11:57:53Z. `release.yml` passed on `main` by hand and on the tag.
+- Not done: rulesets. `b10x-gates api` refuses a write to a ruleset as the owner's act. The
+  repository has 0 rulesets; the 5 payloads (the 3 required checks on `main`, and the bot's
+  authority and identity on branches and tags) are with the operator.
+
+## Wave 4
+
+Two units at once. Re-derived on `main` at `16cd7cf` with
+`aep plan artifact waves --kind story --status active`: story:cli-client and
+story:declared-coverage are the first wave that is left, and no collision is reported between
+them (`3 wave(s), 7 collision(s), 0 unassessed`; the second of the 3 waves was
+story:public-docs-and-release, which is `implemented` now). Their scope entries are `inferred`:
+`crates/inbox-cli`, `README.md` and `AGENTS.md` for story:cli-client; `ess/scenarios`,
+`ess/ess-inputs.yaml`, `tools/scenarios.py`, `Taskfile.yml` and `docs/design/inbox.md` for
+story:declared-coverage. No story of the planned wave left it.
+
+Files more than one unit would touch, and who owns them in this wave:
+
+- `Cargo.lock`: story:cli-client only (its crate and dependencies).
+- `AGENTS.md` and `README.md`: story:cli-client (the Commands rows of the binary; install and
+  first use). story:declared-coverage edits neither: it reports the rows and numbers that
+  change, and the coordinator writes them after the merges.
+- `Taskfile.yml`: story:declared-coverage only.
+- `generated/`: story:declared-coverage, through `task generate` and `task projections` only,
+  where a scenario changes what they write.
+- `website/`, `CHANGELOG.md` and the Layout table of `AGENTS.md`: the coordinator, at the close,
+  from the gate's numbers.
+
+Story text changed before dispatch, scope and wave order unchanged:
+
+- story:cli-client has one Context paragraph on what wave 3 settled: the library the binary
+  starts, the 2 flags more than its list (`--request-timeout`, `--max-wait`), the 3 signature
+  headers, the answers of the service itself that the client names, and loopback only.
+- story:declared-coverage has one Context paragraph: each scenario it adds also runs against
+  the core in `task conform`; a scenario that fails there is reported and not fixed in this
+  unit; the report of `task conform` stays `inconclusive` after this story, because that task
+  synthesizes the suite without declared coverage, and the switch of `task conform` to the suite
+  `task coverage` writes is read at the opening of wave 5 (story:service-acceptance owns
+  `crates/inbox-conformance/` and the `conform` task).
+
+Commits this wave makes: the opening commit (this section, the store, the ruleset state in
+`AGENTS.md` and `docs/releasing.md`), 1 commit per unit (more if a correction round runs), 2
+merges, the closing commit with the Layout row, the numbers and the store, the fast-forward of
+`main`.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `16cd7cf`; the trees of wave
+3 and of the publication are removed; 85 GB free on the root file system.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-4` | `inbox-s2-w4` | `w4/` | open |
+| story:cli-client | `impl/cli-client` | `inbox-s2-w4-cli` | `w4/cli-client/` | dispatched |
+| story:declared-coverage | `impl/declared-coverage` | `inbox-s2-w4-cov` | `w4/declared-coverage/` | dispatched |
 
 ## Backlog
 

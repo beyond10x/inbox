@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T11:51:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:public-docs-and-release",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "check.yml on main at 16cd7cf: task check, with the drift check of generated/docs",
+    "reference": "https://github.com/beyond10x/inbox/actions/runs/44900951466"
+  }
+}

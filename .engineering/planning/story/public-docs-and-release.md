@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:public-docs-and-release
 kind: story
-status: active
+status: implemented
 title: A public repository with a documentation site, a changelog and a release process
 summary: README for people, a project site with the specification pages, a changelog, a written release process and the first release.
 scope:
@@ -26,10 +26,11 @@ scope:
   path: generated/docs
 - confidence: cited
   path: website
-revision: 13
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T11:22:09Z", actor: "agent:inbox", revision: 12}
 - {from: "proposed", to: "active", at: "2026-11-21T11:22:10Z", actor: "agent:inbox", revision: 13}
+- {from: "active", to: "implemented", at: "2026-11-21T11:59:25Z", actor: "agent:inbox", revision: 14, decided_on: {"recorded":{"test_result":3,"verification":1}}}
 ---
 ## Outcome
 

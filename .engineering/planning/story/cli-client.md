@@ -15,7 +15,7 @@ scope:
   path: README.md
 - confidence: inferred
   path: crates/inbox-cli
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":3}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":3}}}
@@ -53,6 +53,17 @@ HTTP request.
 Stage 2 has the outbox file and the manual `inbox repost`. Reposting by itself after a reconnect,
 the harness plugin and the wake adapters are epic:two-hosts-and-wake. The check that a repost
 after a restart arrives once is story:service-acceptance.
+
+As settled in wave 3 of stage 2: the service is the library `crates/inbox-server` (`Config`,
+`Server::bind`, `Server::run`, `Stopper`; `docs/design/service.md`), and `inbox serve` starts it
+over `inbox_core::MemoryBackend`. `Config` has 2 settings the flag list above does not name, so
+`inbox serve` has 2 flags more: `--request-timeout` and `--max-wait`. The service binds a
+loopback address only and `inbox serve` reports the refusal of any other. A client request
+carries the 3 headers `inbox_server::request_headers` writes (`Inbox-Key-Id`,
+`Inbox-Timestamp`, `Inbox-Signature`). The client names the answers of the service itself as
+refusals too: `401` unauthenticated, `400` for a member name twice, `408`, `413`, and `503` for
+the message limit or a stopping service. While story:post-from-is-the-caller is open, the
+README's first use says that the service is for a loopback address and test keys only.
 
 ## Scope
 

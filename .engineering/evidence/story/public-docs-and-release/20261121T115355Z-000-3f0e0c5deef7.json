@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T11:53:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:public-docs-and-release",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "pages.yml on main at 16cd7cf: job Build documentation, the site build with broken links as errors",
+    "reference": "https://github.com/beyond10x/inbox/actions/runs/44900951447"
+  }
+}
