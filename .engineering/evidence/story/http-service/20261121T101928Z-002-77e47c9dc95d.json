@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:19:28Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F3 (an unbounded max_wait drops the wait): every duration added to an instant uses checked_add, and format_instant is held to the years 0000 to 9999; tests/cases.rs 19 passed",
+    "review": "review-result:adversary-http-service-pass-1",
+    "outcome": "fixed"
+  }
+}

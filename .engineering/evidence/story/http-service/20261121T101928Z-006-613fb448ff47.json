@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:19:28Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F7 (a foreign message id answers differently from an unknown one): pre-existing in the model; draft story:foreign-message-id-answers-as-unknown, the case is ignored naming that story",
+    "review": "review-result:adversary-http-service-pass-1",
+    "outcome": "no-op"
+  }
+}

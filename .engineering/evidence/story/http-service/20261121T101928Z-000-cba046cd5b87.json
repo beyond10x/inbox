@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:19:28Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1 (a slow unauthenticated connection holds a slot): Config::request_timeout (default 10 s) bounds the whole arrival of a request; 408 and the slot is given back; tests/adversary.rs 6 passed 3 ignored",
+    "review": "review-result:adversary-http-service-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:19:28Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F5 (no case for 413 before 401): the adversary's case adv_an_unauthenticated_body_over_max_body_is_413_before_401 stays in the suite, green",
+    "review": "review-result:adversary-http-service-pass-1",
+    "outcome": "fixed"
+  }
+}

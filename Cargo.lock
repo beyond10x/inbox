@@ -320,6 +320,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inbox-server"
+version = "0.1.0"
+dependencies = [
+ "inbox",
+ "inbox-core",
+ "inbox-verify",
+]
+
+[[package]]
 name = "inbox-verify"
 version = "0.1.0"
 dependencies = [
