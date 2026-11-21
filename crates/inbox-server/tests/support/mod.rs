@@ -100,7 +100,8 @@ impl World {
     }
 
     /// The configuration of a service on an ephemeral loopback port over this world's ring and
-    /// clock, with short waits and no sweep in the background unless a test asks for one.
+    /// clock, with short waits, a 2 s bound on a request's arrival, and no sweep in the background
+    /// unless a test asks for one.
     pub fn config(&self) -> Config {
         let mut config = Config::new(
             "127.0.0.1:0".parse().expect("a loopback address"),
@@ -109,6 +110,7 @@ impl World {
         config.clock = self.clock.clone();
         config.max_wait = Duration::from_secs(5);
         config.sweep_interval = Duration::from_secs(3600);
+        config.request_timeout = Duration::from_secs(2);
         config
     }
 

@@ -18,6 +18,8 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | Step | Refusal | Status | Body |
 |---|---|---|---|
 | 1. Read, with the generated reader's limits | a malformed request, a chunked body, too many headers, a head over `MAX_HEAD`, a body over `MAX_BODY` | `400`, `411`, `431`, `413` | the generated reader's own |
+| 1a. The request arrives in full within `request_timeout` of the accept | it has not | `408` | `{"refused": "request timeout"}` |
+| 1b. The service is not stopping before the request has arrived in full | it is | `503` | `{"refused": "stopping"}` |
 | 2. The body limit of the embedding | a body longer than `max_body` | `413` | `{"refused": "body too large", "limit": <max_body>}` |
 | 3. Authenticate the request signature at the clock reading | no valid request signature | `401` | `{"refused": "unauthenticated"}` |
 | 4. A body that is JSON: `inbox_verify::duplicate_member` | an object, at any depth, carries a member name twice | `400` | `{"refused": "duplicate member", "member": "<dotted path>"}` |
@@ -32,6 +34,17 @@ body that carries a member twice is refused before decoding, because the generat
 the first of two members and one signature would cover two texts (`signing.md`, the envelope).
 
 `/openapi.json` and `/docs` are behind step 3 as well: every request is authenticated.
+
+Steps 1a and 1b bound the generated reader from outside it; the reader itself is neither copied
+nor changed. Until a request has been read in full, its connection is watched: at
+`request_timeout`, or when the service stops, a task of the service shuts the socket for reading.
+A read blocked on it returns at once with the end of the stream, the reader refuses the request it
+has not finished, and that refusal is answered `408` or `503` instead. The write side stays open
+for the answer. This was chosen over a read timeout per read (it bounds each read, not the
+request, and a blocked read does not see a change of it) and over a wrapper around the stream (the
+reader takes the socket itself). A request read in full is in flight and no longer watched; a
+request the reader refused stays watched while the service reads and drops what the caller still
+sends, so the bound and the stop end that too.
 
 ## The request signature
 
@@ -107,7 +120,8 @@ and `keep_until` to the reading plus `answer_retention`. Each view and each `Exp
 `inbox_core::handle`, which runs it inside the backend's section; the core decides what `Expire`
 does (removed, decided on silence, or not due any more). The clock is a parameter of the library
 (`Clock`), so a test moves time without sleeping; an instant is written as RFC 3339 in UTC,
-truncated to the second.
+truncated to the second, and held to the years 0000 to 9999 that RFC 3339 writes: a reading plus
+an `answer_retention` past 9999 is written as `9999-12-31T23:59:59Z`.
 
 ## The limits
 
@@ -116,6 +130,7 @@ Each is set by the embedding (`Config`); the defaults are this crate's.
 | Limit | Default | What happens beyond it |
 |---|---|---|
 | `max_connections` | 64 | the listener accepts no further connection until one ends; the kernel's backlog holds them |
+| `request_timeout` | 10 s | a request not arrived in full by then, counted from the accept, is answered `408` and its connection closed, which frees its slot, step 1a |
 | `max_body` | 1 MiB, the generated `MAX_BODY`, which is also the most it can be | `413`, step 2 |
 | `max_messages` | 10 000 | a post is answered `503` before the command runs, step 5 |
 | `max_wait` | 60 s | a longer `wait` is cut to it |
@@ -126,12 +141,18 @@ The generated reader's own limits hold too: a head of at most `MAX_HEAD` bytes a
 1 s without a byte while a request is read (`READ_TIMEOUT`), 10 s for a stalled write
 (`WRITE_TIMEOUT`).
 
+Any duration may be set, up to `Duration::MAX`: a deadline too far away to add to the clock is no
+deadline (a `wait` then ends with a row or the stop, the expiry task sleeps until the stop, a
+request is bound by the reader's gap bound only), and nothing panics on the arithmetic.
+
 ## Binding and stopping
 
 The service binds a **loopback address only** in this stage and refuses any other before binding.
 Port 0 binds an ephemeral port, and the bound address is handed back. It serves until told to stop:
-it then accepts nothing more, ends every wait, lets every request in flight finish, and stops the
-expiry task.
+it then accepts nothing more, ends every wait, cuts off every connection that has not sent its
+request in full (answered `503 {"refused": "stopping"}`, step 1b, without waiting for
+`request_timeout`), lets every request in flight (read in full) finish, and stops the expiry task
+and the request timeout task. `Running::stop` and `Server::run` return then.
 
 ## Left out of stage 2
 
@@ -139,4 +160,3 @@ expiry task.
 - A replay record for requests (above).
 - Keep-alive and pipelining: one request per connection, as the generated reader reads it.
 - Reloading the key file while serving: the embedding builds a new service.
-- A bound on the whole time a request may take to arrive: only the gap between two bytes is bound.

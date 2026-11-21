@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:19:28Z",
+  "actor": "agent:inbox",
+  "artifact": "story:http-service",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F6 (a principal posts an envelope whose from is another principal): pre-existing in the model; draft story:post-from-is-the-caller, the case is ignored naming that story (host operator's decision D-B, 2026-11-21)",
+    "review": "review-result:adversary-http-service-pass-1",
+    "outcome": "no-op"
+  }
+}

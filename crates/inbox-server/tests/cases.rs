@@ -494,3 +494,67 @@ fn only_a_loopback_address_is_bound_and_port_zero_names_the_port_taken() {
     assert_ne!(server.local_addr().port(), 0);
     assert!(server.local_addr().ip().is_loopback());
 }
+
+// ---- a request that does not arrive -------------------------------------------------------------
+
+/// Connects and sends the start of a request head, then nothing more.
+fn half_a_request(address: SocketAddr) -> std::net::TcpStream {
+    let mut stream = std::net::TcpStream::connect(address).expect("the service accepts");
+    std::io::Write::write_all(
+        &mut stream,
+        b"GET /messaging/views/inboxes HTTP/1.1\r\nHost: ",
+    )
+    .expect("the start of the head is sent");
+    stream
+}
+
+#[test]
+fn a_request_not_arrived_within_the_request_timeout_is_408() {
+    let world = World::new();
+    // Shorter than the reader's own 1 s gap bound, so the answer is this service's and not the
+    // reader's `400`.
+    let server = world.start(|config| config.request_timeout = Duration::from_millis(300));
+    let started = Monotonic::now();
+    let reply = support::read_reply(half_a_request(server.local_addr()));
+    assert_eq!(reply.status, 408, "{}", reply.body);
+    assert_eq!(reply.body, r#"{"refused":"request timeout"}"#);
+    assert!(Monotonic::now() - started < Duration::from_millis(900));
+}
+
+#[test]
+fn stop_answers_a_connection_still_sending_its_request_with_503() {
+    let world = World::new();
+    let server = world.start(|config| config.request_timeout = Duration::from_secs(3600));
+    let stream = half_a_request(server.local_addr());
+    thread::sleep(Duration::from_millis(100));
+    let started = Monotonic::now();
+    server.stop().expect("the service stops");
+    assert!(Monotonic::now() - started < Duration::from_secs(2));
+    let reply = support::read_reply(stream);
+    assert_eq!(reply.status, 503, "{}", reply.body);
+    assert_eq!(reply.body, r#"{"refused":"stopping"}"#);
+}
+
+#[test]
+fn every_duration_of_the_configuration_may_be_the_largest_there_is() {
+    let world = World::new();
+    let server = world.start(|config| {
+        config.max_wait = Duration::MAX;
+        config.sweep_interval = Duration::MAX;
+        config.request_timeout = Duration::MAX;
+        config.answer_retention = Duration::MAX;
+    });
+    let address = server.local_addr();
+    world.open(address, OTHER);
+    assert_eq!(post(&world, address, AGENT, OTHER, 1).status, 202);
+    world.clock.set(instant(LATER));
+    // `keep_until` is held to the last second RFC 3339 writes, and the note is expired.
+    assert_eq!(server.sweep_now(), 1);
+    assert!(
+        get(&world, address, OTHER, &pending(OTHER))
+            .rows()
+            .is_empty()
+    );
+    // Neither task died on its arithmetic: `stop` reports a task that panicked.
+    server.stop().expect("the service and both its tasks stop");
+}

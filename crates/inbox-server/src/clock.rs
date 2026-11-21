@@ -59,11 +59,12 @@ impl Clock for ManualClock {
 /// `at` as RFC 3339 text in UTC, truncated to the second: `2026-11-21T12:00:00Z`.
 ///
 /// The text the service writes into `Due`'s `now` and `Expire`'s `now` and `keep_until`, and the
-/// text a client may send as its request timestamp. A year outside 0 to 9999 is written with more
-/// or fewer digits and is no RFC 3339 instant; no clock this service reads is there.
+/// text a client may send as its request timestamp. RFC 3339 writes the years 0000 to 9999 only:
+/// an instant after the last second of 9999 is written as that second, one before 0000 as the
+/// first, so a `keep_until` far away is still an instant `Expire` reads.
 #[must_use]
 pub fn format_instant(at: Instant) -> String {
-    let seconds = at.unix_seconds();
+    let seconds = at.unix_seconds().clamp(FIRST_SECOND, LAST_SECOND);
     let (days, of_day) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
     let (year, month, day) = civil_from_days(days);
     format!(
@@ -73,6 +74,11 @@ pub fn format_instant(at: Instant) -> String {
         of_day % 60
     )
 }
+
+/// 0000-01-01T00:00:00Z, in seconds since 1970-01-01T00:00:00Z.
+const FIRST_SECOND: i64 = -62_167_219_200;
+/// 9999-12-31T23:59:59Z, in seconds since 1970-01-01T00:00:00Z.
+const LAST_SECOND: i64 = 253_402_300_799;
 
 /// The proleptic Gregorian date this many days after 1970-01-01, counted in 400-year eras: the
 /// inverse of the day count `inbox_verify::Instant::parse` reads with.
@@ -120,6 +126,24 @@ mod tests {
             format_instant(Instant::parse("2026-11-21T14:30:00.75+02:30").unwrap()),
             "2026-11-21T12:00:00Z"
         );
+    }
+
+    #[test]
+    fn an_instant_outside_the_years_rfc_3339_writes_is_held_to_them() {
+        for (at, text) in [
+            (Instant::from_unix(i64::MAX, 0), "9999-12-31T23:59:59Z"),
+            (Instant::from_unix(i64::MIN, 0), "0000-01-01T00:00:00Z"),
+            (
+                Instant::parse("9999-12-31T23:59:59Z").unwrap(),
+                "9999-12-31T23:59:59Z",
+            ),
+            (
+                Instant::parse("0000-01-01T00:00:00Z").unwrap(),
+                "0000-01-01T00:00:00Z",
+            ),
+        ] {
+            assert_eq!(format_instant(at), text);
+        }
     }
 
     #[test]

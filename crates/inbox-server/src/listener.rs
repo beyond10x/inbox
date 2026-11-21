@@ -10,8 +10,8 @@ use inbox::server::http;
 
 use crate::config::Config;
 use crate::expiry::sweep;
-use crate::service::{Backend, Shared, answer};
-use crate::signals::Signals;
+use crate::service::{Backend, Shared, answer, refusal as refusal_of};
+use crate::signals::{Cut, Signals};
 
 /// The shortest pause between two sweeps, whatever `sweep_interval` says.
 const MIN_SWEEP_INTERVAL: Duration = Duration::from_millis(1);
@@ -32,8 +32,9 @@ pub struct Stopper {
 }
 
 impl Stopper {
-    /// Tells the service to stop: it accepts nothing more, every wait ends, and the requests in
-    /// flight finish. Answers at once; [`Server::run`] returns when they have.
+    /// Tells the service to stop: it accepts nothing more, every wait ends, every connection still
+    /// sending its request is cut off and answered `503 {"refused":"stopping"}`, and the requests
+    /// in flight (read in full) finish. Answers at once; [`Server::run`] returns when they have.
     pub fn stop(&self) {
         self.signals.stop();
         // Wakes an `accept` that is waiting for a connection, so it sees the stop.
@@ -94,13 +95,21 @@ impl<B: Backend> Server<B> {
     }
 
     /// Serves until told to stop ([`Stopper::stop`]): accepts connections, each on its own thread,
-    /// at most `max_connections` at once, and runs the expiry task every `sweep_interval`. Returns
-    /// when every request in flight has been answered and the expiry task has ended.
+    /// at most `max_connections` at once, cuts off each whose request has not arrived within
+    /// `request_timeout`, and runs the expiry task every `sweep_interval`. Returns when every
+    /// request in flight (read in full) has been answered, every connection still sending its
+    /// request has been cut off, and both tasks have ended.
     ///
     /// # Errors
     ///
-    /// When the expiry task's thread cannot be started.
+    /// When the thread of a task cannot be started.
     pub fn run(self) -> io::Result<()> {
+        let reaper = {
+            let signals = Arc::clone(&self.shared.signals);
+            thread::Builder::new()
+                .name("inbox-request-timeout".to_owned())
+                .spawn(move || signals.reap())?
+        };
         let expiry = {
             let shared = Arc::clone(&self.shared);
             thread::Builder::new()
@@ -110,7 +119,15 @@ impl<B: Backend> Server<B> {
                     while shared.signals.sleep(interval) {
                         sweep_now(&shared);
                     }
-                })?
+                })
+        };
+        let expiry = match expiry {
+            Ok(expiry) => expiry,
+            Err(error) => {
+                self.shared.signals.stop();
+                let _ = reaper.join();
+                return Err(error);
+            }
         };
         let signals = &self.shared.signals;
         while let Some(slot) = signals.take_slot(self.shared.config.max_connections) {
@@ -135,9 +152,13 @@ impl<B: Backend> Server<B> {
                 });
         }
         signals.wait_idle();
+        let reaped = reaper
+            .join()
+            .map_err(|_| io::Error::other("the request timeout task panicked"));
         expiry
             .join()
-            .map_err(|_| io::Error::other("the expiry task panicked"))
+            .map_err(|_| io::Error::other("the expiry task panicked"))?;
+        reaped
     }
 
     /// [`Server::run`] on a thread of its own, for an embedding or a test that goes on meanwhile.
@@ -218,27 +239,49 @@ impl<B> Drop for Running<B> {
 }
 
 /// One connection: read one request with the generated reader's limits, answer it, close.
+///
+/// The generated reader bounds the gap between two bytes only. The whole time the request takes
+/// to arrive is bounded from outside the reader: the connection is watched until the request is
+/// read in full, and the watch shuts the socket for reading at `request_timeout` or when the
+/// service stops. The reader then sees the end of the stream and refuses the unfinished request,
+/// and that refusal is answered `408` (timed out) or `503` (stopping) instead. Shutting the read
+/// side leaves the write side open for that answer.
 fn connection<B: Backend>(shared: &Shared<B>, stream: TcpStream) {
     let _ = stream.set_read_timeout(Some(http::READ_TIMEOUT));
     let _ = stream.set_write_timeout(Some(http::WRITE_TIMEOUT));
+    let watch = shared.signals.watch(&stream, shared.config.request_timeout);
     let mut reader = BufReader::new(stream);
-    let (answered, refused) = match http::read(&mut reader) {
-        Ok(request) => (answer(shared, &request), false),
-        Err(refusal) => (refusal, true),
-    };
-    let mut stream = reader.into_inner();
-    // A request refused while it was read may still be arriving: read and drop the rest after the
-    // answer, so closing does not reset the connection before the caller reads it.
-    if write(&mut stream, &answered).is_ok() && refused {
-        http::linger(&mut stream);
+    match http::read(&mut reader) {
+        Ok(request) => {
+            // Read in full: in flight now, and no longer cut off by the timeout or the stop.
+            drop(watch);
+            let answered = answer(shared, &request);
+            let _ = write(reader.get_mut(), &answered);
+        }
+        Err(refusal) => {
+            let answered = match watch.cut() {
+                Some(Cut::TimedOut) => refusal_of(408, "request timeout", None),
+                Some(Cut::Stopping) => refusal_of(503, "stopping", None),
+                None => refusal,
+            };
+            let mut stream = reader.into_inner();
+            // A request refused while it was read may still be arriving: read and drop the rest
+            // after the answer, so closing does not reset the connection before the caller reads
+            // it. The watch stays until then, so the timeout and the stop end this too.
+            if write(&mut stream, &answered).is_ok() {
+                http::linger(&mut stream);
+            }
+            drop(watch);
+        }
     }
 }
 
-/// Writes one answer as the generated `http::write` does, with the reason phrase of the two
-/// statuses only this service answers (`401`, `503`).
+/// Writes one answer as the generated `http::write` does, with the reason phrase of the statuses
+/// only this service answers (`401`, `408`, `503`).
 fn write(stream: &mut TcpStream, answer: &http::Response) -> io::Result<()> {
     let reason = match answer.status {
         401 => "Unauthorized",
+        408 => "Request Timeout",
         503 => "Service Unavailable",
         status => http::reason(status),
     };

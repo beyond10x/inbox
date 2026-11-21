@@ -47,7 +47,7 @@ pub(crate) struct Shared<B> {
 }
 
 /// A refusal of this service: `refused` and, where there is one, the limit it met.
-fn refusal(status: u16, refused: &str, limit: Option<usize>) -> http::Response {
+pub(crate) fn refusal(status: u16, refused: &str, limit: Option<usize>) -> http::Response {
     let mut body = String::from("{");
     json::member(&mut body, "refused");
     json::push_text(&mut body, refused);
@@ -153,8 +153,11 @@ fn waited<B: Backend>(
     at: Instant,
     wait: Duration,
 ) -> http::Response {
-    let deadline = std::time::Instant::now() + wait;
+    // A wait too long to add to the clock has no deadline: it ends with a row or the stop.
+    let deadline = std::time::Instant::now().checked_add(wait);
     loop {
+        // Read before the view, never after: a command answered between the view and this read
+        // would move the count unseen, and the wait would sleep past the row it brought.
         let seen = shared.signals.generation();
         let answered = once(shared, request, caller, at);
         if answered.status != 200
