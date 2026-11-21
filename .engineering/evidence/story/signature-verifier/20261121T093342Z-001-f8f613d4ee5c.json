@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T09:33:42Z",
+  "actor": "agent:inbox",
+  "artifact": "story:signature-verifier",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F2 (the claim that nobody without the operator key removes an id): docs/design/signing.md and the doc of admit state that an id is never reused and who can remove one; tests/adversary2.rs 3 passed",
+    "review": "review-result:adversary-signature-verifier-pass-2",
+    "outcome": "fixed"
+  }
+}

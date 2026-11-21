@@ -1,0 +1,18 @@
+[package]
+name = "inbox-verify"
+description = "The version 1 signature verifier of the inbox: Ed25519 envelopes, requests and delegations against an operator-signed key file."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+inbox = { path = "../../generated/rust/inbox", features = ["server"] }
+ed25519-dalek = "2.2"
+sha2 = "0.10"
+getrandom = "0.4"
+zeroize = "1.8"
+
+[lints]
+workspace = true
