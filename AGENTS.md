@@ -71,3 +71,7 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
 - Nothing from a customer or employer outside beyond10x enters this repository. No person's name
   and no host path either: write "the operator".
 - No release, tag or deployment without the operator's word.
+- A revision of an accepted story that changes scope, wave order or a settled decision, or adds a
+  wave, goes to the host operator first and waits for the answer: silence is not acceptance. Any
+  other revision is reported in the wave report.
+- A reason given for declining a review finding is measured before it is written down.

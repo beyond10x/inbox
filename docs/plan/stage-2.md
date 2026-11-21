@@ -10,7 +10,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | Wave | Stories | Serves | State |
 |---|---|---|---|
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
-| 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | planned |
+| 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | running |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | planned |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | planned |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
@@ -83,6 +83,45 @@ Result:
   The integration tree's `target/` was 169 MB at close.
 - Sub-agents, all on Opus: the implementor in 4 runs (171 tool uses, 33 min); the adversary in 2
   runs (43 tool uses, 10 min).
+
+## Wave 2
+
+Two units at once. Re-derived on `main` at `0ad1a7f` with
+`aep plan artifact waves --kind story --status active`: both stories are in the first wave that
+is left, and no collision is reported between them. Their scope entries are `inferred`:
+`crates/inbox-core` for story:core-and-memory-backend, `crates/inbox-verify` and
+`docs/design/signing.md` for story:signature-verifier. No story of the planned wave left it.
+
+Two files both units would touch, and who owns them in this wave:
+
+- `Cargo.lock`: each unit's build adds its crate and dependencies. Each unit keeps its own lock
+  current; at the second merge the coordinator takes one side and regenerates it with
+  `cargo metadata`.
+- `AGENTS.md`: neither unit edits it. Each reports its Layout row and the coordinator adds both on
+  the integration branch after the merges.
+
+Neither unit edits the root `Cargo.toml`: a crate declares its dependencies in its own manifest.
+
+The host operator accepted that this wave runs on the story text as revised after the round 3
+read (2026-11-21); the revision changed neither scope nor wave order.
+
+Commits this wave makes: the opening store commit, 1 commit per unit (more if a correction round
+runs), 2 merges, 1 commit for `AGENTS.md` and the lock if it needs one, the closing store commit,
+the fast-forward of `main`.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `0ad1a7f`; the 2 trees of wave
+1 are removed; 176 GB free on the root file system; a cold build of the workspace with the
+generated crate's `server` feature is 109 MB of `target/` (wave 1), so 2 unit trees and the
+integration tree stay below 1 GB before the new dependencies.
+
+What a story's move to `implemented` needs: no evidence requirement in the lifecycle. The wave
+records the gate run as `test_result` and each claim check as `verification`.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-2` | `inbox-s2-w2` | `w2/` | open |
+| story:core-and-memory-backend | `impl/core-and-memory-backend` | `inbox-s2-w2-core` | `w2/core-and-memory-backend/` | dispatched |
+| story:signature-verifier | `impl/signature-verifier` | `inbox-s2-w2-verify` | `w2/signature-verifier/` | dispatched |
 
 ## Backlog
 
