@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SignatureInvalid payload",
+  "description": "The SignatureVerifier port refused the signature: the key is unknown or lapsed, or the signature does not verify.",
+  "x-ess-name": "inbox.messaging.SignatureInvalid",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:d244ed8fec5ba3efb611ec73d2fca86f67c57f91629e962231d2cc62daabeffd",
+    "regenerate": "ess generate"
+  }
+}

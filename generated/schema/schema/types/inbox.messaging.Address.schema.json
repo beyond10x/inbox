@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Address",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:a68910a0efd8247db01fc3769fcb8a3362313efa921e5c7318e9078f379f9d3a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

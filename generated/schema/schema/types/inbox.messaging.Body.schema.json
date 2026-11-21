@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Body",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:c9d30ef9ee8dc16168be9a16c21d07f7f905bec8e0c34b86bad717e612f73150",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Body": {
+      "title": "Body",
+      "description": "The text of a message or a reply, at most 65536 bytes of UTF-8.",
+      "x-ess-name": "inbox.messaging.Body",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes <= 65536"
+      ]
+    }
+  }
+}

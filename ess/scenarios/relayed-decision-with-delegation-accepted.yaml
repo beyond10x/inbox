@@ -1,0 +1,59 @@
+type: ess-scenario/7
+domain: inbox.messaging
+scenario: relayed-decision-with-delegation-accepted
+summary: A session relays a decision of the operator and names a delegation the SignatureVerifier port
+  accepts. The message is stored with `from`, `on_behalf_of` and `authority` for the recipient to read.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/host-operator
+    inbox: agent:ws/host-operator
+  input:
+    message_id: 01JGT0RD000000000000000001
+    from: agent:ws/host-operator
+    on_behalf_of: human:operator
+    authority: delegation-7
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0RD000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0RD000000000000000001
+    body: 'Decision D4: option A. Proceed with the release.'
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0RD000000000000000001
+      to: agent:box/worker
+      from: agent:ws/host-operator
+      thread: 01JGT0RD000000000000000001
+      kind: note
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  contains:
+    message_id: 01JGT0RD000000000000000001
+    from: agent:ws/host-operator
+    on_behalf_of: human:operator
+    authority: delegation-7

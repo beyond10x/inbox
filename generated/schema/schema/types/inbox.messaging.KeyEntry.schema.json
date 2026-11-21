@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.KeyEntry",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:9c901cc06c890e0a7bc7b32d03c92112f5b1bff5f3da8b5fffbbcfdf6e4a3a46",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.KeyEntry": {
+      "title": "KeyEntry",
+      "description": "One key of the key file the version 1 SignatureVerifier reads: this key signs for this principal until `valid_until`. The operator key signs the entry.",
+      "x-ess-name": "inbox.messaging.KeyEntry",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "description": "The id an envelope's `signature.key_id` names.",
+          "type": "string"
+        },
+        "principal": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "public_key": {
+          "description": "The Ed25519 public key: 32 bytes in base64.",
+          "type": "string"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operator_signature": {
+          "description": "The operator key's Ed25519 signature over the canonical JSON of the other fields of the entry, in base64.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "principal",
+        "public_key",
+        "valid_until",
+        "operator_signature"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

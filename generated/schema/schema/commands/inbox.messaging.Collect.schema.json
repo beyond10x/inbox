@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Collect input",
+  "description": "The sender takes the answer or the refusal of its message. The message is handled by that and is removed.",
+  "x-ess-name": "inbox.messaging.Collect",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    }
+  },
+  "required": [
+    "message_id"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:f0e177d0e1111d8a3be33c495baead3a92a19468fd51760c1c243666ed8672a0",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

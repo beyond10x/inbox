@@ -1,0 +1,59 @@
+# AGENTS.md
+
+The inbox: one durable, addressable inbox per agent or person, for messages between agents in
+different sessions and on different hosts. One service, `inbox serve`, with interchangeable
+backends, specified in ESS before any code. The design is `docs/design/inbox.md`; read it before
+changing anything.
+
+Status: stage 1 of 6 is done. The repository holds the specification, its conformance suite and
+the plan. It holds no service code. Stages 2 to 6 are the epics in `.engineering/planning/epic/`.
+
+## Layout
+
+| Path | What it is | Who writes it |
+|---|---|---|
+| `ess/` | ESS source (`ess/37`), listed in `ess/ess-inputs.yaml`, pinned to `ess 0.96.0` | authored |
+| `ess/domains/messaging.yaml` | The domain `inbox.messaging`: 2 entities, 9 commands, 9 views, 13 errors, 10 events | authored |
+| `ess/scenarios/`, `ess/ess-inputs.yaml` | The 23 authored scenarios and the manifest that lists them | `task scenarios` |
+| `tools/scenarios.py` | Source of the authored scenarios and of their `covers:` claims | authored |
+| `generated/{openapi,asyncapi,schema}/` | ESS projections of `ess/`; `generated/openapi` is the wire API of the service | `task projections` |
+| `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.96.0 cannot express | authored |
+| `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
+
+## Commands
+
+| Command | Does |
+|---|---|
+| `task check` | The gate: `task spec`, `task projections-drift`, `task conform-interpreted` |
+| `task spec` | `ess specify validate --path ess --strict-requires` |
+| `task projections` | Rewrite `generated/` after a change to `ess/` |
+| `task conform-interpreted` | Synthesize the suite into `.out/conform/` and run it on the ESS interpreted target. On ESS 0.96.0: 92 scenarios (23 authored), 92 passed |
+| `task coverage` | Synthesize with declared coverage. Exits 1 on ESS 0.96.0: 50 of 97 refused generated scenarios are covered by nothing (all `ESS-SYNTH-013`). Not in `task check` |
+| `task scenarios` | Rewrite `ess/scenarios/` and `ess/ess-inputs.yaml` from `tools/scenarios.py`. Needs `python3` with PyYAML |
+| `task plan` | `aep plan artifact validate` |
+
+## Rules
+
+- Change `ess/` first. Never edit `generated/` by hand; `task check` fails on drift.
+- A scenario changes in `tools/scenarios.py`, then `task scenarios`; commit both. The script
+  removes no file: delete the file of a scenario taken out of it.
+- An `UNMAPPED:` marker in `ess/` is a rule ESS cannot express yet. It stays until ESS can, and
+  `docs/design/inbox.md` lists it. Never resolve one by guessing.
+- A generated scenario that synthesis refuses is claimed by an authored scenario's `covers:`
+  list (the `COVERS` map in `tools/scenarios.py`), one claimant per id.
+- Every client talks to the service only. No client talks to a backend, and backend credentials
+  exist on the service host only.
+- No statement of the specification depends on a JetStream fact. A JetStream fact is read in the
+  NATS documentation and cited before anything relies on it.
+- The plan changes only through `aep plan artifact`; never edit a file under
+  `.engineering/planning/` by hand. Every write runs with `AEP_ACTOR=agent:<session name>`:
+  without it `aep` records the login name as the actor of an evidence record.
+- Tokens, keys and secrets are never written to a file, a commit or a message.
+- Every commit and push is `b10x-bot[bot]` through `b10x-gates bot`. The repository is enrolled in
+  the common Gates policy (`.github/workflows/shared-gates.yml`).
+- The repository is private. A change reaches `main` as a fast-forward bot push: `b10x-gates`
+  refuses a later push once `main` holds a merge commit GitHub created ("remote repository is not
+  public"), until the policy baseline is moved past it.
+- Nothing from a customer or employer outside beyond10x enters this repository. No person's name
+  and no host path either: write "the operator".
+- No release, tag or deployment without the operator's word.

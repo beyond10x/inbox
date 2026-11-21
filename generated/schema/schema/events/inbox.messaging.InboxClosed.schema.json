@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InboxClosed payload",
+  "x-ess-name": "inbox.messaging.InboxClosed",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "address": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    }
+  },
+  "required": [
+    "address"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:ce4e50cf05e63703f96102cc89260e9881f4ca081bc0f8844827e0b7fe0b3531",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

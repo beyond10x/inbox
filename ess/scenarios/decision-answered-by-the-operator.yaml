@@ -1,0 +1,133 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.Message/state/Answered/refuses/inbox.messaging.Answer
+- inbox.messaging.Message/state/Answered/refuses/inbox.messaging.Refuse
+domain: inbox.messaging
+scenario: decision-answered-by-the-operator
+summary: The operator answers a decision with option A before `expires`. The message records the option
+  and that a principal answered, not silence.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    address: human:operator
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: human:operator
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0DC000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: human:operator
+    kind: decision
+    thread: 01JGT0DC000000000000000001
+    decision:
+      options:
+      - letter: A
+        text: Ship the release today.
+      - letter: B
+        text: Hold the release until Monday.
+      recommended_option: B
+    default_on_silence: B
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-05T10:00:00Z'
+    dedup_key: 01JGT0DC000000000000000001
+    body: Ship release 4.2 today?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0DC000000000000000001
+      to: human:operator
+      from: agent:ws/planner
+      thread: 01JGT0DC000000000000000001
+      kind: decision
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    in_reply_to: 01JGT0DC000000000000000001
+    reply_id: 01JGT0DC000000000000000002
+    from: human:operator
+    on_behalf_of: human:operator
+    created: '2026-01-05T09:10:00Z'
+    expires: '2026-01-05T11:00:00Z'
+    option: A
+    body: A. Ship it.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0DC000000000000000001
+      reply_id: 01JGT0DC000000000000000002
+      to: agent:ws/planner
+      thread: 01JGT0DC000000000000000001
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    in_reply_to: 01JGT0DC000000000000000001
+    reply_id: 01JGT0DC000000000000000003
+    from: human:operator
+    on_behalf_of: human:operator
+    created: '2026-01-05T09:11:00Z'
+    expires: '2026-01-05T11:01:00Z'
+    option: B
+    body: B. Hold it.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: already-settled
+  error:
+    name: inbox.messaging.AlreadySettled
+  no_events:
+  - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Refuse
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    message_id: 01JGT0DC000000000000000001
+    reason: Too late.
+  outcome: already-settled
+  error:
+    name: inbox.messaging.AlreadySettled
+  no_events:
+  - inbox.messaging.MessageRefused
+assert:
+- view: inbox.messaging.Settled
+  params:
+    sender: agent:ws/planner
+  contains:
+    message_id: 01JGT0DC000000000000000001
+    state: Answered
+    answered_by: principal
+    decided_option: A
+    expires: '2026-01-05T11:00:00Z'

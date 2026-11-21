@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.ReplyShape",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:5320304abf44a019dbdea691366f9f5db84334f03a7a1e03e688bef4ff52ebda",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.FreeShape": {
+      "title": "FreeShape",
+      "x-ess-name": "inbox.messaging.FreeShape",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "inbox.messaging.ReplyShape": {
+      "title": "ReplyShape",
+      "description": "What a reply to a request must look like. free: any text. lines: at most this many lines. schema: a reference to a JSON Schema the reply body must satisfy.",
+      "x-ess-name": "inbox.messaging.ReplyShape",
+      "x-ess-kind": "union",
+      "oneOf": [
+        {
+          "title": "free",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "free"
+            },
+            "value": {
+              "$ref": "#/$defs/inbox.messaging.FreeShape"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "lines",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "lines"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "schema",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "schema"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "x-ess-union-tag": "shape"
+    }
+  }
+}

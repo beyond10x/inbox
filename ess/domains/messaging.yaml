@@ -1,0 +1,990 @@
+domain: inbox.messaging
+
+summary: >-
+  One addressable inbox per agent or person, and the messages that wait in them. A message is one
+  signed envelope for one inbox. The service keeps it until it is handled or its `expires` passes,
+  then removes it; nothing is kept as history.
+
+naming:
+  wire: messaging
+  display: Messaging
+
+types:
+  - name: inbox.messaging.Address
+    kind: newtype
+    of: String
+    naming:
+      summary: "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`."
+
+  - name: inbox.messaging.Principal
+    kind: newtype
+    of: String
+    naming:
+      summary: "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal."
+
+  - name: inbox.messaging.MessageId
+    kind: newtype
+    of: String
+    alphabet: "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    invariants:
+      - value.count == 26
+    naming:
+      summary: A ULID the sender sets. A sender that posts a message again sends the same id.
+
+  - name: inbox.messaging.ThreadId
+    kind: newtype
+    of: String
+    alphabet: "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    invariants:
+      - value.count == 26
+    naming:
+      summary: "The ULID that ties the envelopes of one fan-out together: a request sent to 11 inboxes is 11 messages with one thread. A message sent to one inbox carries its own id."
+
+  - name: inbox.messaging.DedupKey
+    kind: newtype
+    of: String
+    naming:
+      summary: The sender's key for one logical message. A sender with no key of its own writes the message id.
+
+  - name: inbox.messaging.DelegationId
+    kind: newtype
+    of: String
+    naming:
+      summary: The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.
+
+  - name: inbox.messaging.Body
+    kind: newtype
+    of: String
+    invariants:
+      - value.utf8_bytes <= 65536
+    naming:
+      summary: The text of a message or a reply, at most 65536 bytes of UTF-8.
+
+  - name: inbox.messaging.Kind
+    kind: enum
+    variants: [note, request, decision]
+    naming:
+      summary: "note: handled when read. request: handled when answered or refused. decision: a request with lettered options, which silence may answer."
+
+  - name: inbox.messaging.Adapter
+    kind: enum
+    variants: [claude_code, metaharness, slack, terminal]
+    naming:
+      summary: The wake surface the owner of an inbox reads it through.
+
+  - name: inbox.messaging.OptionLetter
+    kind: newtype
+    of: String
+    alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    invariants:
+      - value.count == 1
+
+  - name: inbox.messaging.DecisionOption
+    kind: struct
+    fields:
+      - {name: letter, type: inbox.messaging.OptionLetter}
+      - {name: text, type: String}
+
+  - name: inbox.messaging.DecisionAsk
+    kind: struct
+    naming:
+      summary: "What a decision asks. The deadline is the envelope's `expires`; the option silence takes is the envelope's `default_on_silence`."
+    fields:
+      - {name: options, type: "List<inbox.messaging.DecisionOption>"}
+      - {name: recommended_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: request_ref, type: Optional<String>, summary: "The id of the decision request this envelope carries, where another system records it (for example an `sdc.decision.DecisionRequest`). The inbox never records the decision."}
+
+  - name: inbox.messaging.ReplyShape
+    kind: union
+    tag: shape
+    naming:
+      summary: "What a reply to a request must look like. free: any text. lines: at most this many lines. schema: a reference to a JSON Schema the reply body must satisfy."
+    variants:
+      free: inbox.messaging.FreeShape
+      lines: Integer
+      schema: String
+
+  - name: inbox.messaging.FreeShape
+    kind: struct
+    fields: []
+
+  - name: inbox.messaging.Signature
+    kind: struct
+    naming:
+      summary: The key id and the Ed25519 signature over the canonical JSON of every other envelope field.
+    fields:
+      - {name: key_id, type: String}
+      - {name: value, type: String}
+
+  - name: inbox.messaging.KeyEntry
+    kind: struct
+    naming:
+      summary: "One key of the key file the version 1 SignatureVerifier reads: this key signs for this principal until `valid_until`. The operator key signs the entry."
+    fields:
+      - {name: key_id, type: String, summary: "The id an envelope's `signature.key_id` names."}
+      - {name: principal, type: inbox.messaging.Principal}
+      - {name: public_key, type: String, summary: "The Ed25519 public key: 32 bytes in base64."}
+      - {name: valid_until, type: Timestamp}
+      - {name: operator_signature, type: String, summary: "The operator key's Ed25519 signature over the canonical JSON of the other fields of the entry, in base64."}
+
+  - name: inbox.messaging.DelegationEntry
+    kind: struct
+    naming:
+      summary: "One delegation of the key file: `agent` may speak for `on_behalf_of` until `valid_until`. It covers every message the agent sends for that principal; version 1 has no narrower scope and no chain. The operator key signs the entry."
+    fields:
+      - {name: delegation_id, type: inbox.messaging.DelegationId, summary: "The id an envelope's `authority` names."}
+      - {name: agent, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: valid_until, type: Timestamp}
+      - {name: operator_signature, type: String, summary: "The operator key's Ed25519 signature over the canonical JSON of the other fields of the entry, in base64."}
+
+  - name: inbox.messaging.KeyFile
+    kind: struct
+    naming:
+      summary: "The file the version 1 SignatureVerifier reads. The service stores none of it: an entry counts because the operator key signed it, and the operator public key is pinned in the service's configuration."
+    fields:
+      - {name: keys, type: "List<inbox.messaging.KeyEntry>"}
+      - {name: delegations, type: "List<inbox.messaging.DelegationEntry>"}
+
+  - name: inbox.messaging.AnsweredBy
+    kind: enum
+    variants: [principal, silence]
+    naming:
+      summary: "principal: the reply's `on_behalf_of` answered. silence: nobody answered before `expires`, and the service took the decision's `default_on_silence` (the convention of `sdc.decision.PrincipalKind`)."
+
+  - name: inbox.messaging.Reply
+    kind: struct
+    naming:
+      summary: "The signed reply envelope: the answer to a request or a decision. Its kind is reply, its `in_reply_to` is the message that holds it and its `to` is that message's sender. It stays on the message it answers until the sender collects it."
+    fields:
+      - {name: reply_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: created, type: Timestamp}
+      - {name: option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+
+entities:
+  - name: inbox.messaging.Inbox
+    naming:
+      summary: A named address that messages are posted to. It belongs to the principal the address names; only a caller authenticated for the address opens it, closes it or handles its messages.
+    identity:
+      name: address
+      type: inbox.messaging.Address
+    fields:
+      - {name: owner, type: inbox.messaging.Principal, summary: The principal that opened the inbox.}
+      - {name: adapter, type: inbox.messaging.Adapter}
+    lifecycle:
+      initial: Open
+      states: [Open, Closed]
+      terminal: []
+      transitions:
+        - {name: close, from: [Open], to: Closed}
+        - {name: reopen, from: [Closed], to: Open}
+
+  - name: inbox.messaging.Message
+    naming:
+      summary: "One envelope for one inbox, and where its handling stands. The envelope fields never change. `expires` is the instant the service removes the record; an answer replaces it with the reply's own."
+    identity:
+      name: message_id
+      type: inbox.messaging.MessageId
+    fields:
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>, summary: "The option a decision was answered with: the reply's, or `default_on_silence` when silence answered."}
+      - {name: reply, type: Optional<inbox.messaging.Reply>, summary: Absent when silence answered.}
+      - {name: refusal, type: Optional<String>}
+    relations:
+      - name: inbox
+        kind: references
+        target: inbox.messaging.Inbox
+        cardinality: one
+        via: to
+    lifecycle:
+      initial: Sent
+      states:
+        - {name: Sent, summary: The service stored the message.}
+        - {name: Delivered, summary: An adapter handed it to a live wake surface.}
+        - {name: Read, summary: The owner of the inbox read it and has not answered yet.}
+        - {name: Answered, summary: It carries its reply and waits for the sender to collect it.}
+        - {name: Refused, summary: The owner of the inbox refused it; it waits for the sender to collect the reason.}
+      terminal: [Answered, Refused]
+      transitions:
+        - {name: deliver, from: [Sent], to: Delivered}
+        - {name: read, from: [Sent, Delivered], to: Read}
+        - {name: answer, from: [Sent, Delivered, Read], to: Answered}
+        - {name: decide_on_silence, from: [Sent, Delivered, Read], to: Answered}
+        - {name: refuse, from: [Sent, Delivered, Read], to: Refused}
+
+actors:
+  - name: inbox.messaging.Client
+    naming:
+      summary: "A session, a bridge or a person's tool that talks to the service. `principal` is who the service authenticated the request as, and `inbox` is the address of the inbox that principal owns. In version 1 the two are the same text."
+    attributes:
+      - {name: principal, type: inbox.messaging.Principal}
+      - {name: inbox, type: inbox.messaging.Address}
+    may:
+      - inbox.messaging.OpenInbox
+      - inbox.messaging.CloseInbox
+      - inbox.messaging.PostMessage
+      - inbox.messaging.MarkDelivered
+      - inbox.messaging.MarkRead
+      - inbox.messaging.Answer
+      - inbox.messaging.Refuse
+      - inbox.messaging.Collect
+      - inbox.messaging.Inboxes
+      - inbox.messaging.Pending
+      - inbox.messaging.Unanswered
+      - inbox.messaging.Outbox
+      - inbox.messaging.Settled
+      - inbox.messaging.Thread
+      - inbox.messaging.Replies
+
+  - name: inbox.messaging.Sweeper
+    naming:
+      summary: The service's own expiry task. It reads the Clock port and sends the reading with each command; no client holds this grant.
+    may:
+      - inbox.messaging.Expire
+      - inbox.messaging.Due
+      - inbox.messaging.Messages
+
+errors:
+  - name: inbox.messaging.Duplicate
+    summary: A live message already carries this id or this dedup key; nothing was stored.
+    fields: []
+  - name: inbox.messaging.UnknownInbox
+    summary: No open inbox has this address.
+    fields: []
+  - name: inbox.messaging.UnknownMessage
+    summary: "No live message has this id: it was never posted, it was handled, or it expired."
+    fields: []
+  - name: inbox.messaging.NotRecipient
+    summary: The caller does not own the inbox the message was sent to.
+    fields: []
+  - name: inbox.messaging.NotSender
+    summary: The caller did not send the message.
+    fields: []
+  - name: inbox.messaging.SignatureInvalid
+    summary: "The SignatureVerifier port refused the signature: the key is unknown or lapsed, or the signature does not verify."
+    fields: []
+  - name: inbox.messaging.NoAuthority
+    summary: "`on_behalf_of` differs from `from` and no valid delegation covers it."
+    fields: []
+  - name: inbox.messaging.ShapeMismatch
+    summary: The envelope does not fit its kind, or the reply does not fit what the message asked for.
+    fields: []
+  - name: inbox.messaging.AlreadyExpired
+    summary: "`expires` is not after `created`."
+    fields: []
+  - name: inbox.messaging.NotAnswerable
+    summary: A note takes no answer.
+    fields: []
+  - name: inbox.messaging.AlreadySettled
+    summary: The message is already answered or refused.
+    fields:
+      - {name: state, type: inbox.messaging.Message.State}
+  - name: inbox.messaging.NotSettled
+    summary: The message has no answer and no refusal to collect yet.
+    fields: []
+  - name: inbox.messaging.NotDue
+    summary: "`expires` is after the clock reading sent."
+    fields: []
+
+commands:
+  - name: inbox.messaging.OpenInbox
+    naming:
+      wire: open-inbox
+      summary: Open the inbox at an address, or open it again. The caller becomes its owner. A client sends this after every reconnect, because a restarted service holds no inbox.
+    input:
+      - {name: address, type: inbox.messaging.Address}
+      - {name: adapter, type: inbox.messaging.Adapter}
+    outcomes:
+      - name: not-owner
+        when: address != caller.inbox
+        error: inbox.messaging.NotRecipient
+      - name: opened
+        unknown_instance: true
+        creates: inbox.messaging.Inbox
+        instance: address
+        sets: {owner: {caller: principal}, adapter: input.adapter}
+        emits: [inbox.messaging.InboxOpened]
+        payload:
+          inbox.messaging.InboxOpened: {address: input.address}
+      - name: reopened
+        when_subject_state: Closed
+        moves: inbox.messaging.Inbox.reopen
+        instance: address
+        sets: {adapter: input.adapter}
+        emits: [inbox.messaging.InboxOpened]
+        payload:
+          inbox.messaging.InboxOpened: {address: input.address}
+      - name: already-open
+        preserves: inbox.messaging.Inbox
+        instance: address
+
+  - name: inbox.messaging.CloseInbox
+    naming:
+      wire: close-inbox
+      summary: Close an inbox. Posts to it are refused; the messages it holds stay until they expire.
+    input:
+      - {name: address, type: inbox.messaging.Address}
+    outcomes:
+      - {name: unknown-inbox, unknown_instance: true, error: inbox.messaging.UnknownInbox}
+      - name: not-owner
+        when_subject:
+          predicate: owner != caller.principal
+        error: inbox.messaging.NotRecipient
+      - name: closed
+        when_subject_state: Open
+        moves: inbox.messaging.Inbox.close
+        instance: address
+        emits: [inbox.messaging.InboxClosed]
+        payload:
+          inbox.messaging.InboxClosed: {address: input.address}
+      - name: already-closed
+        preserves: inbox.messaging.Inbox
+        instance: address
+
+  - name: inbox.messaging.PostMessage
+    naming:
+      wire: post
+      summary: "Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer."
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal, summary: "The principal whose word this is; `from` itself when the sender speaks for nobody else."}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp, summary: "Mandatory. A client that is given none writes `created` plus 24 hours."}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+    outcomes:
+      - name: no-authority
+        when:
+          all:
+            - on_behalf_of != from
+            - not defined(authority)
+        error: inbox.messaging.NoAuthority
+        summary: The sender speaks for another principal and names no delegation.
+      - name: already-expired
+        when: expires <= created
+        error: inbox.messaging.AlreadyExpired
+      - name: request-without-shape
+        when:
+          all:
+            - kind == request
+            - not defined(reply_shape)
+        error: inbox.messaging.ShapeMismatch
+      - name: decision-without-options
+        when:
+          all:
+            - kind == decision
+            - not defined(decision)
+        error: inbox.messaging.ShapeMismatch
+      # UNMAPPED: "the letters name options of the decision" has no ESS 0.96.0 spelling: a guard
+      # cannot test that a value is the `letter` of an element of an input list. It is an external
+      # refusal, decided before any row is read.
+      - name: unknown-option
+        external: "`recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter"
+        before_row: true
+        error: inbox.messaging.ShapeMismatch
+      - name: signature-invalid
+        external: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify
+        before_row: true
+        error: inbox.messaging.SignatureInvalid
+      - name: authority-invalid
+        external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
+        before_row: true
+        error: inbox.messaging.NoAuthority
+      - {name: duplicate, existing_instance: true, error: inbox.messaging.Duplicate}
+      - name: duplicate-key
+        when_related:
+          entity: inbox.messaging.Message
+          where: dedup_key == input.dedup_key
+          exists: true
+        error: inbox.messaging.Duplicate
+      - name: unknown-inbox
+        when_related: {via: input.to, exists: false}
+        error: inbox.messaging.UnknownInbox
+      - name: inbox-closed
+        when_related: {via: input.to, predicate: state == Closed}
+        error: inbox.messaging.UnknownInbox
+      - name: posted
+        creates: inbox.messaging.Message
+        instance: message_id
+        sets:
+          from: input.from
+          on_behalf_of: input.on_behalf_of
+          authority: input.authority
+          to: input.to
+          kind: input.kind
+          thread: input.thread
+          reply_shape: input.reply_shape
+          decision: input.decision
+          default_on_silence: input.default_on_silence
+          created: input.created
+          expires: input.expires
+          dedup_key: input.dedup_key
+          body: input.body
+          signature: input.signature
+          answered_by: {cleared: true}
+          decided_option: {cleared: true}
+          reply: {cleared: true}
+          refusal: {cleared: true}
+        emits: [inbox.messaging.MessagePosted]
+        payload:
+          inbox.messaging.MessagePosted:
+            message_id: input.message_id
+            to: input.to
+            from: input.from
+            thread: input.thread
+            kind: input.kind
+
+  - name: inbox.messaging.MarkDelivered
+    naming:
+      wire: mark-delivered
+      summary: An adapter reports that a live wake surface took the message. It is sent only after the surface took it.
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+    outcomes:
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-recipient
+        when_subject:
+          predicate: to != caller.inbox
+        error: inbox.messaging.NotRecipient
+      - name: delivered
+        when_subject_state: Sent
+        moves: inbox.messaging.Message.deliver
+        instance: message_id
+        emits: [inbox.messaging.MessageDelivered]
+        payload:
+          inbox.messaging.MessageDelivered: {message_id: input.message_id}
+      - name: already-delivered
+        preserves: inbox.messaging.Message
+        instance: message_id
+
+  - name: inbox.messaging.MarkRead
+    naming:
+      wire: read
+      summary: The owner of the inbox read the message. A note is handled by that and is removed; a request or a decision waits for its answer.
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+    outcomes:
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-recipient
+        when_subject:
+          predicate: to != caller.inbox
+        error: inbox.messaging.NotRecipient
+      - name: handled
+        when_subject:
+          predicate:
+            all:
+              - kind == note
+              - state: [Sent, Delivered]
+        deletes: inbox.messaging.Message
+        instance: message_id
+        emits: [inbox.messaging.MessageHandled]
+        payload:
+          inbox.messaging.MessageHandled: {message_id: input.message_id}
+        summary: The note is read, so it is handled and gone.
+      - name: read
+        when_subject_state: [Sent, Delivered]
+        moves: inbox.messaging.Message.read
+        instance: message_id
+        emits: [inbox.messaging.MessageRead]
+        payload:
+          inbox.messaging.MessageRead: {message_id: input.message_id}
+      - name: already-read
+        preserves: inbox.messaging.Message
+        instance: message_id
+
+  - name: inbox.messaging.Answer
+    naming:
+      wire: answer
+      summary: "Answer a request or a decision. The input is the reply envelope: its kind is reply and its `to` is the sender of the message it answers. The service checks it as it checks a post."
+    input:
+      - {name: in_reply_to, type: inbox.messaging.MessageId}
+      - {name: reply_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp, summary: How long the answer waits for the sender to collect it.}
+      - {name: option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+    outcomes:
+      - name: no-authority
+        when:
+          all:
+            - on_behalf_of != from
+            - not defined(authority)
+        error: inbox.messaging.NoAuthority
+      - name: already-expired
+        when: expires <= created
+        error: inbox.messaging.AlreadyExpired
+      - name: signature-invalid
+        external: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify
+        before_row: true
+        error: inbox.messaging.SignatureInvalid
+      - name: authority-invalid
+        external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
+        before_row: true
+        error: inbox.messaging.NoAuthority
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-recipient
+        when_subject:
+          predicate: to != caller.inbox
+        error: inbox.messaging.NotRecipient
+      - name: already-settled
+        wrong_state: true
+        error: inbox.messaging.AlreadySettled
+        payload:
+          inbox.messaging.AlreadySettled: {state: {subject: state}}
+      - name: note
+        when_subject:
+          predicate: kind == note
+        error: inbox.messaging.NotAnswerable
+      - name: shape-mismatch
+        external: the reply does not fit the message's `reply_shape`, or names no option of the decision
+        error: inbox.messaging.ShapeMismatch
+      - name: answered
+        moves: inbox.messaging.Message.answer
+        instance: in_reply_to
+        sets:
+          expires: input.expires
+          answered_by: principal
+          decided_option: input.option
+          reply:
+            reply_id: input.reply_id
+            from: input.from
+            on_behalf_of: input.on_behalf_of
+            authority: input.authority
+            created: input.created
+            option: input.option
+            body: input.body
+            signature: input.signature
+        emits: [inbox.messaging.MessageAnswered]
+        payload:
+          inbox.messaging.MessageAnswered:
+            message_id: input.in_reply_to
+            reply_id: input.reply_id
+            to: {subject: from}
+            thread: {subject: thread}
+
+  - name: inbox.messaging.Refuse
+    naming:
+      wire: refuse
+      summary: The owner of the inbox refuses the message and says why. The sender collects the reason.
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: reason, type: String}
+    outcomes:
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-recipient
+        when_subject:
+          predicate: to != caller.inbox
+        error: inbox.messaging.NotRecipient
+      - name: refused
+        moves: inbox.messaging.Message.refuse
+        instance: message_id
+        sets: {refusal: input.reason}
+        emits: [inbox.messaging.MessageRefused]
+        payload:
+          inbox.messaging.MessageRefused:
+            message_id: input.message_id
+            to: {subject: from}
+            thread: {subject: thread}
+      - name: already-settled
+        wrong_state: true
+        error: inbox.messaging.AlreadySettled
+        payload:
+          inbox.messaging.AlreadySettled: {state: {subject: state}}
+
+  - name: inbox.messaging.Collect
+    naming:
+      wire: collect
+      summary: The sender takes the answer or the refusal of its message. The message is handled by that and is removed.
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+    outcomes:
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-sender
+        when_subject:
+          predicate: from != caller.principal
+        error: inbox.messaging.NotSender
+      - name: collected
+        when_subject_state: [Answered, Refused]
+        deletes: inbox.messaging.Message
+        instance: message_id
+        emits: [inbox.messaging.MessageHandled]
+        payload:
+          inbox.messaging.MessageHandled: {message_id: input.message_id}
+      - name: not-settled
+        error: inbox.messaging.NotSettled
+
+  - name: inbox.messaging.Expire
+    naming:
+      wire: expire
+      summary: "The service's expiry task removes one message whose `expires` has passed. `now` is the Clock port's reading. A decision that names a `default_on_silence` is answered by silence instead and kept until `keep_until`."
+    input:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: now, type: Timestamp}
+      - {name: keep_until, type: Timestamp, summary: "Until when an answer taken on silence waits for the sender; the service sends `now` plus its answer retention."}
+    outcomes:
+      - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
+      - name: not-due
+        when_subject:
+          predicate: expires > input.now
+        error: inbox.messaging.NotDue
+      - name: decided-on-silence
+        when_subject:
+          predicate:
+            all:
+              - kind == decision
+              - state: [Sent, Delivered, Read]
+              - defined(default_on_silence)
+        moves: inbox.messaging.Message.decide_on_silence
+        instance: message_id
+        sets:
+          expires: input.keep_until
+          answered_by: silence
+          decided_option: {subject: default_on_silence}
+        emits: [inbox.messaging.DecisionTakenOnSilence]
+        payload:
+          inbox.messaging.DecisionTakenOnSilence:
+            message_id: input.message_id
+            to: {subject: from}
+            thread: {subject: thread}
+      - name: expired
+        deletes: inbox.messaging.Message
+        instance: message_id
+        emits: [inbox.messaging.MessageExpired]
+        payload:
+          # UNMAPPED: the service knows the sender and the thread of the message it removes, and a
+          # sender waits for that news. ESS 0.96.0 admits `{subject: …}` beside `moves:` and
+          # `updates:` only, so the event of a `deletes:` outcome carries the id alone.
+          inbox.messaging.MessageExpired: {message_id: input.message_id}
+
+events:
+  - name: inbox.messaging.InboxOpened
+    fields:
+      - {name: address, type: inbox.messaging.Address}
+  - name: inbox.messaging.InboxClosed
+    fields:
+      - {name: address, type: inbox.messaging.Address}
+  - name: inbox.messaging.MessagePosted
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: kind, type: inbox.messaging.Kind}
+  - name: inbox.messaging.MessageDelivered
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+  - name: inbox.messaging.MessageRead
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+  - name: inbox.messaging.MessageHandled
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+  - name: inbox.messaging.MessageAnswered
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: reply_id, type: inbox.messaging.MessageId}
+      - {name: to, type: inbox.messaging.Principal}
+      - {name: thread, type: inbox.messaging.ThreadId}
+  - name: inbox.messaging.MessageRefused
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: to, type: inbox.messaging.Principal}
+      - {name: thread, type: inbox.messaging.ThreadId}
+  - name: inbox.messaging.DecisionTakenOnSilence
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: to, type: inbox.messaging.Principal}
+      - {name: thread, type: inbox.messaging.ThreadId}
+  - name: inbox.messaging.MessageExpired
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+
+views:
+  - name: inbox.messaging.Inboxes
+    source: inbox.messaging.Inbox
+    consistency: read_your_writes
+    fields:
+      - {name: address, type: inbox.messaging.Address}
+      - {name: owner, type: inbox.messaging.Principal}
+      - {name: adapter, type: inbox.messaging.Adapter}
+      - {name: state, type: inbox.messaging.Inbox.State}
+    naming:
+      wire: inboxes
+      display: Inboxes
+
+  - name: inbox.messaging.Pending
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: inbox, type: inbox.messaging.Address}]
+    filter: {all: [to == param.inbox, {any: [state == Sent, state == Delivered]}]}
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: pending
+      display: Pending
+      summary: "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row or the wait ends."
+
+  - name: inbox.messaging.Unanswered
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: inbox, type: inbox.messaging.Address}]
+    filter: {all: [to == param.inbox, state == Read]}
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: unanswered
+      display: Unanswered
+      summary: "The requests and decisions the owner of an inbox has read and not answered."
+
+  - name: inbox.messaging.Outbox
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: sender, type: inbox.messaging.Principal}]
+    filter: from == param.sender
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: outbox
+      display: Outbox
+      summary: "Every live message a principal sent, in whatever state."
+
+  - name: inbox.messaging.Settled
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: sender, type: inbox.messaging.Principal}]
+    filter: {all: [from == param.sender, {any: [state == Answered, state == Refused]}]}
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: settled
+      display: Settled
+      summary: "The messages of a sender that carry an answer or a refusal to collect."
+
+  - name: inbox.messaging.Thread
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: thread, type: inbox.messaging.ThreadId}]
+    filter: thread == param.thread
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: thread
+      display: Thread
+      summary: "Every live message of one thread: one row per recipient of a fan-out, with its state."
+
+  - name: inbox.messaging.Replies
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: thread, type: inbox.messaging.ThreadId}]
+    filter: {all: [thread == param.thread, state == Answered]}
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: replies
+      display: Replies
+      summary: "The answered messages of one thread: one row per recipient that answered, or that silence answered for."
+
+  - name: inbox.messaging.Due
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    params: [{name: now, type: Timestamp}]
+    filter: expires <= param.now
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: due
+      display: Due
+      summary: "The messages whose `expires` is at or before a clock reading: what the expiry task sends Expire for."
+
+  - name: inbox.messaging.Messages
+    source: inbox.messaging.Message
+    consistency: read_your_writes
+    fields:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: inbox.messaging.Body}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.Reply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
+    naming:
+      wire: messages
+      display: Messages

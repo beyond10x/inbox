@@ -1,0 +1,157 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.Collect/outcome/collected
+domain: inbox.messaging
+scenario: handled-message-is-gone
+summary: 'The sender collects the answer to its request. The message is handled by that and the service
+  holds it no longer: every later command on its id finds no message.'
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0HG000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: request
+    thread: 01JGT0HG000000000000000001
+    reply_shape:
+      shape: free
+      value: {}
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0HG000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0HG000000000000000001
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0HG000000000000000001
+      kind: request
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    in_reply_to: 01JGT0HG000000000000000001
+    reply_id: 01JGT0HG000000000000000002
+    from: agent:box/worker
+    on_behalf_of: agent:box/worker
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: It is in the delivery module.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0HG000000000000000001
+      reply_id: 01JGT0HG000000000000000002
+      to: agent:ws/planner
+      thread: 01JGT0HG000000000000000001
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Collect
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0HG000000000000000001
+  outcome: collected
+  events:
+  - event: inbox.messaging.MessageHandled
+    payload:
+      message_id: 01JGT0HG000000000000000001
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Collect
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0HG000000000000000001
+  outcome: unknown-message
+  error:
+    name: inbox.messaging.UnknownMessage
+  no_events:
+  - inbox.messaging.MessageHandled
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.MarkRead
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    message_id: 01JGT0HG000000000000000001
+  outcome: unknown-message
+  error:
+    name: inbox.messaging.UnknownMessage
+  no_events:
+  - inbox.messaging.MessageRead
+  - inbox.messaging.MessageHandled
+- at: '2026-01-05T09:06:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    in_reply_to: 01JGT0HG000000000000000001
+    reply_id: 01JGT0HG000000000000000003
+    from: agent:box/worker
+    on_behalf_of: agent:box/worker
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: It is in the delivery module.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: unknown-message
+  error:
+    name: inbox.messaging.UnknownMessage
+  no_events:
+  - inbox.messaging.MessageAnswered
+assert:
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_most: 0
+- view: inbox.messaging.Thread
+  params:
+    thread: 01JGT0HG000000000000000001
+  counts:
+    at_most: 0
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_most: 0

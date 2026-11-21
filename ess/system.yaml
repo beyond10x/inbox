@@ -1,0 +1,6 @@
+format: ess/37
+system: inbox
+version: v1
+
+domains:
+  - inbox.messaging

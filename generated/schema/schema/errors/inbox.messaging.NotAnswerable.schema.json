@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotAnswerable payload",
+  "description": "A note takes no answer.",
+  "x-ess-name": "inbox.messaging.NotAnswerable",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:e0694fe2e5d7d27e88b286ee42927aeb60394d557238f902e77927c572da262e",
+    "regenerate": "ess generate"
+  }
+}

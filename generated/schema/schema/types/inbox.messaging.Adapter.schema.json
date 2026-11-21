@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Adapter",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:f966db4cdd2f80e92ac34e8808ee4c1280924cc1d797aaa4e7ed5c7beac4068a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Adapter": {
+      "title": "Adapter",
+      "description": "The wake surface the owner of an inbox reads it through.",
+      "x-ess-name": "inbox.messaging.Adapter",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "claude_code",
+        "metaharness",
+        "slack",
+        "terminal"
+      ]
+    }
+  }
+}

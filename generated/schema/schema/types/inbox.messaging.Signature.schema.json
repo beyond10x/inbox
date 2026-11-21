@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Signature",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:9666dac63e5fb08ad92ba2de677e6b2cc51d96841d804b6f1caa66814fa4b277",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Signature": {
+      "title": "Signature",
+      "description": "The key id and the Ed25519 signature over the canonical JSON of every other envelope field.",
+      "x-ess-name": "inbox.messaging.Signature",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

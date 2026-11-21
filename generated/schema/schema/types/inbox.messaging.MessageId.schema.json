@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.MessageId",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:35689fb4c720452da6e9d36749728b02a2618f635f2cc9b619f78bcd1cbd3c6c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

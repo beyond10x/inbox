@@ -1,0 +1,61 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.PostMessage/outcome/signature-invalid
+domain: inbox.messaging
+scenario: bad-signature-refused
+summary: The SignatureVerifier port refuses the signature of a post. The post is refused, which tells
+  the sender, and nothing is stored for anyone to act on.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0BS000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: request
+    thread: 01JGT0BS000000000000000001
+    reply_shape:
+      shape: lines
+      value: 3
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0BS000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: signature-invalid
+  error:
+    name: inbox.messaging.SignatureInvalid
+  no_events:
+  - inbox.messaging.MessagePosted
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_most: 0
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_most: 0

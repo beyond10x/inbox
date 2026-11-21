@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotRecipient payload",
+  "description": "The caller does not own the inbox the message was sent to.",
+  "x-ess-name": "inbox.messaging.NotRecipient",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:1935ddb2dea59dc3c4a850f5b9efdbe485cca013486f15885aceb07953395c88",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MessageExpired payload",
+  "x-ess-name": "inbox.messaging.MessageExpired",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    }
+  },
+  "required": [
+    "message_id"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:f3b4931382bc47bd5c613a829608742bdba2e01001cb289f1ac90a0d1ff43ccc",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

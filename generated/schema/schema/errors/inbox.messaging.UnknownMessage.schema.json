@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UnknownMessage payload",
+  "description": "No live message has this id: it was never posted, it was handled, or it expired.",
+  "x-ess-name": "inbox.messaging.UnknownMessage",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:a8034b8f81ed5b55253cb74788db67ad76089f3671d3e9df901f417123e1ede5",
+    "regenerate": "ess generate"
+  }
+}

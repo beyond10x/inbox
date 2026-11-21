@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InboxOpened payload",
+  "x-ess-name": "inbox.messaging.InboxOpened",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "address": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    }
+  },
+  "required": [
+    "address"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:2e011d117b01351b2519bbaecb29f957f6ebedfed2f3064269448d2bde27f86c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

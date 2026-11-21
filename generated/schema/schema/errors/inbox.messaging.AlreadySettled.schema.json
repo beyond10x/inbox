@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlreadySettled payload",
+  "description": "The message is already answered or refused.",
+  "x-ess-name": "inbox.messaging.AlreadySettled",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "properties": {
+    "state": {
+      "$ref": "#/$defs/inbox.messaging.Message.State"
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:69efd07de5e6abcce7ed09a358e1e56ee873c2e97f32f2953e7a8b69fac545ea",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Message.State": {
+      "title": "State",
+      "x-ess-name": "inbox.messaging.Message.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Answered",
+        "Delivered",
+        "Read",
+        "Refused",
+        "Sent"
+      ]
+    }
+  }
+}

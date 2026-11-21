@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.DecisionAsk",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:885d06ae9cc1bbe997b7977bb03710f57357ef5a20fd9d06d8c74055005f8e5c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.DecisionAsk": {
+      "title": "DecisionAsk",
+      "description": "What a decision asks. The deadline is the envelope's `expires`; the option silence takes is the envelope's `default_on_silence`.",
+      "x-ess-name": "inbox.messaging.DecisionAsk",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inbox.messaging.DecisionOption"
+          }
+        },
+        "recommended_option": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "request_ref": {
+          "description": "The id of the decision request this envelope carries, where another system records it (for example an `sdc.decision.DecisionRequest`). The inbox never records the decision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DecisionOption": {
+      "title": "DecisionOption",
+      "x-ess-name": "inbox.messaging.DecisionOption",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "letter": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "letter",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
+  }
+}

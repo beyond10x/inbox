@@ -1,0 +1,115 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.Expire/outcome/expired
+- inbox.messaging.Expire/outcome/not-due
+domain: inbox.messaging
+scenario: note-expires
+summary: A note nobody reads before `expires` is removed by the expiry task. Before that instant the task
+  is refused; after the removal every command on the id finds no message.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0NX000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0NX000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-05T09:30:00Z'
+    dedup_key: 01JGT0NX000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0NX000000000000000001
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0NX000000000000000001
+      kind: note
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0NX000000000000000001
+    now: '2026-01-05T09:29:00Z'
+    keep_until: '2026-01-06T09:29:00Z'
+  outcome: not-due
+  error:
+    name: inbox.messaging.NotDue
+  no_events:
+  - inbox.messaging.MessageExpired
+  - inbox.messaging.DecisionTakenOnSilence
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0NX000000000000000001
+    now: '2026-01-05T09:30:00Z'
+    keep_until: '2026-01-06T09:30:00Z'
+  outcome: expired
+  events:
+  - event: inbox.messaging.MessageExpired
+    payload:
+      message_id: 01JGT0NX000000000000000001
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0NX000000000000000001
+    now: '2026-01-05T09:31:00Z'
+    keep_until: '2026-01-06T09:31:00Z'
+  outcome: unknown-message
+  error:
+    name: inbox.messaging.UnknownMessage
+  no_events:
+  - inbox.messaging.MessageExpired
+  - inbox.messaging.DecisionTakenOnSilence
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.MarkRead
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    message_id: 01JGT0NX000000000000000001
+  outcome: unknown-message
+  error:
+    name: inbox.messaging.UnknownMessage
+  no_events:
+  - inbox.messaging.MessageRead
+  - inbox.messaging.MessageHandled
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_most: 0
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_most: 0

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Inbox",
+  "description": "A named address that messages are posted to. It belongs to the principal the address names; only a caller authenticated for the address opens it, closes it or handles its messages.",
+  "x-ess-name": "inbox.messaging.Inbox",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "address": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    },
+    "owner": {
+      "$ref": "#/$defs/inbox.messaging.Principal",
+      "description": "The principal that opened the inbox."
+    },
+    "adapter": {
+      "$ref": "#/$defs/inbox.messaging.Adapter"
+    },
+    "state": {
+      "$ref": "#/$defs/inbox.messaging.Inbox.State"
+    }
+  },
+  "required": [
+    "address",
+    "owner",
+    "adapter",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:6485859cea1605a7c3799fdca517f099d03b04b5bf6554fa944b71810186df79",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Adapter": {
+      "title": "Adapter",
+      "description": "The wake surface the owner of an inbox reads it through.",
+      "x-ess-name": "inbox.messaging.Adapter",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "claude_code",
+        "metaharness",
+        "slack",
+        "terminal"
+      ]
+    },
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.Inbox.State": {
+      "title": "State",
+      "x-ess-name": "inbox.messaging.Inbox.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Closed",
+        "Open"
+      ]
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

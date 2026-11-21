@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloseInbox input",
+  "description": "Close an inbox. Posts to it are refused; the messages it holds stay until they expire.",
+  "x-ess-name": "inbox.messaging.CloseInbox",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "address": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    }
+  },
+  "required": [
+    "address"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:ae2776488fcf2d6cf1fc88c8f99cf0480a72bee2a071e9674f2b63a2366ab989",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

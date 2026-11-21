@@ -1,0 +1,57 @@
+version: '3'
+
+set: [pipefail]
+
+vars:
+  OUT: '{{.ROOT_DIR}}/.out'
+
+tasks:
+  default:
+    cmds: [{task: check}]
+
+  check:
+    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target.
+    cmds:
+      - task: spec
+      - task: projections-drift
+      - task: conform-interpreted
+
+  spec:
+    desc: Validate the ESS specification.
+    cmds:
+      - ess specify validate --path ess --strict-requires
+
+  projections:
+    desc: Rewrite generated/openapi, generated/asyncapi and generated/schema from ess/.
+    cmds:
+      - for: [openapi, asyncapi, schema]
+        cmd: ess generate --path ess --kind {{.ITEM}} --out generated/{{.ITEM}}
+
+  projections-drift:
+    desc: Fail when generated/openapi, generated/asyncapi or generated/schema differs from ess/.
+    cmds:
+      - for: [openapi, asyncapi, schema]
+        cmd: ess generate --path ess --kind {{.ITEM}} --out generated/{{.ITEM}} --check
+
+  conform-interpreted:
+    desc: Synthesize the conformance suite into .out/conform and run it on the ESS interpreted target; fails on a failed or errored scenario.
+    cmds:
+      - mkdir -p {{.OUT}}/conform
+      - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
+      - ess verify conform run --path ess --target interpreted --suite {{.OUT}}/conform/suite.json --report-format 2 --report-out {{.OUT}}/conform/report.json
+
+  coverage:
+    desc: Synthesize with declared coverage and list the generated scenarios nothing covers; exits 1 while one remains.
+    cmds:
+      - mkdir -p {{.OUT}}/coverage
+      - ess verify conform synthesize --path ess --scenarios ess --suite-format 5 --out {{.OUT}}/coverage/suite.json
+
+  scenarios:
+    desc: Rewrite ess/scenarios/ and ess/ess-inputs.yaml from tools/scenarios.py. Needs python3 with PyYAML.
+    cmds:
+      - python3 tools/scenarios.py ess
+
+  plan:
+    desc: Validate the AEP planning store.
+    cmds:
+      - aep plan artifact validate

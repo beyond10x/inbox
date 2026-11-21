@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DecisionTakenOnSilence payload",
+  "x-ess-name": "inbox.messaging.DecisionTakenOnSilence",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    },
+    "to": {
+      "$ref": "#/$defs/inbox.messaging.Principal"
+    },
+    "thread": {
+      "$ref": "#/$defs/inbox.messaging.ThreadId"
+    }
+  },
+  "required": [
+    "message_id",
+    "to",
+    "thread"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:863a497ca2dd592f0ca6327ec630328342d0ac2827b6eedaa861c0bd6a4ccdb3",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.ThreadId": {
+      "title": "ThreadId",
+      "description": "The ULID that ties the envelopes of one fan-out together: a request sent to 11 inboxes is 11 messages with one thread. A message sent to one inbox carries its own id.",
+      "x-ess-name": "inbox.messaging.ThreadId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

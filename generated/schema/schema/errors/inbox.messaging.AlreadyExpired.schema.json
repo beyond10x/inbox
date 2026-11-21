@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlreadyExpired payload",
+  "description": "`expires` is not after `created`.",
+  "x-ess-name": "inbox.messaging.AlreadyExpired",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:9934a49bcc5b25b957aa0b8f8749475246cb2e4e2acf4995964e5d45b432dc4e",
+    "regenerate": "ess generate"
+  }
+}

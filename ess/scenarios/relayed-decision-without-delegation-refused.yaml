@@ -1,0 +1,85 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.PostMessage/outcome/authority-invalid
+- inbox.messaging.PostMessage/outcome/no-authority
+domain: inbox.messaging
+scenario: relayed-decision-without-delegation-refused
+summary: 'A session relays a decision of the operator and names no delegation: refused. It then names
+  a delegation the SignatureVerifier port does not accept: refused. Nothing is stored either time.'
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/host-operator
+    inbox: agent:ws/host-operator
+  input:
+    message_id: 01JGT0RN000000000000000001
+    from: agent:ws/host-operator
+    on_behalf_of: human:operator
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0RN000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0RN000000000000000001
+    body: 'Decision D4: option A. Proceed with the release.'
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: no-authority
+  error:
+    name: inbox.messaging.NoAuthority
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/host-operator
+    inbox: agent:ws/host-operator
+  input:
+    message_id: 01JGT0RN000000000000000002
+    from: agent:ws/host-operator
+    on_behalf_of: human:operator
+    authority: delegation-lapsed
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0RN000000000000000002
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0RN000000000000000002
+    body: 'Decision D4: option A. Proceed with the release.'
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: authority-invalid
+  error:
+    name: inbox.messaging.NoAuthority
+  no_events:
+  - inbox.messaging.MessagePosted
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_most: 0
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/host-operator
+  counts:
+    at_most: 0

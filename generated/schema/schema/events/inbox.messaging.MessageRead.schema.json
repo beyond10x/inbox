@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MessageRead payload",
+  "x-ess-name": "inbox.messaging.MessageRead",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    }
+  },
+  "required": [
+    "message_id"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:8769c43cad92a7292fd62417ae14d7ec48368e7b6c11ad33a7ccbbaa86e42a53",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

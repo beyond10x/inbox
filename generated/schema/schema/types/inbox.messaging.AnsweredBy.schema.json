@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.AnsweredBy",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:9850ac23162418b9a0a0804421c6b94b8ebd6d1c68012562bec52d3e9bd23ede",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.AnsweredBy": {
+      "title": "AnsweredBy",
+      "description": "principal: the reply's `on_behalf_of` answered. silence: nobody answered before `expires`, and the service took the decision's `default_on_silence` (the convention of `sdc.decision.PrincipalKind`).",
+      "x-ess-name": "inbox.messaging.AnsweredBy",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "principal",
+        "silence"
+      ]
+    }
+  }
+}

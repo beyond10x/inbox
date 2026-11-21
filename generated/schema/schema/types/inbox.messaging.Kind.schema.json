@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Kind",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:56b23e167d3c1eca5fa8243d339fb8d1f25b8255bd6552677a486f44e9006e0f",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Kind": {
+      "title": "Kind",
+      "description": "note: handled when read. request: handled when answered or refused. decision: a request with lettered options, which silence may answer.",
+      "x-ess-name": "inbox.messaging.Kind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "note",
+        "request",
+        "decision"
+      ]
+    }
+  }
+}

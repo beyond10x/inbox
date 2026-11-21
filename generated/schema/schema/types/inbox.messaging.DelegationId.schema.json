@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.DelegationId",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:711f6b05ec82a209f375fb2c53eea32919d26792ec3f10872e93e0820905fd33",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.DelegationId": {
+      "title": "DelegationId",
+      "description": "The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.",
+      "x-ess-name": "inbox.messaging.DelegationId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

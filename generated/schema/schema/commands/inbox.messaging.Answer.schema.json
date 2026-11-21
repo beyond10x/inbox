@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Answer input",
+  "description": "Answer a request or a decision. The input is the reply envelope: its kind is reply and its `to` is the sender of the message it answers. The service checks it as it checks a post.",
+  "x-ess-name": "inbox.messaging.Answer",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "in_reply_to": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    },
+    "reply_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    },
+    "from": {
+      "$ref": "#/$defs/inbox.messaging.Principal"
+    },
+    "on_behalf_of": {
+      "$ref": "#/$defs/inbox.messaging.Principal"
+    },
+    "authority": {
+      "$ref": "#/$defs/inbox.messaging.DelegationId"
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires": {
+      "description": "How long the answer waits for the sender to collect it.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "option": {
+      "$ref": "#/$defs/inbox.messaging.OptionLetter"
+    },
+    "body": {
+      "$ref": "#/$defs/inbox.messaging.Body"
+    },
+    "signature": {
+      "$ref": "#/$defs/inbox.messaging.Signature"
+    }
+  },
+  "required": [
+    "in_reply_to",
+    "reply_id",
+    "from",
+    "on_behalf_of",
+    "created",
+    "expires",
+    "body",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:dea0bd6ed7b8e9b7a0f1b77d8f89a17d387b168d46841fae0cf33a63ea7e0ad3",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Body": {
+      "title": "Body",
+      "description": "The text of a message or a reply, at most 65536 bytes of UTF-8.",
+      "x-ess-name": "inbox.messaging.Body",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes <= 65536"
+      ]
+    },
+    "inbox.messaging.DelegationId": {
+      "title": "DelegationId",
+      "description": "The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.",
+      "x-ess-name": "inbox.messaging.DelegationId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    },
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.Signature": {
+      "title": "Signature",
+      "description": "The key id and the Ed25519 signature over the canonical JSON of every other envelope field.",
+      "x-ess-name": "inbox.messaging.Signature",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

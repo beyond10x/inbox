@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenInbox input",
+  "description": "Open the inbox at an address, or open it again. The caller becomes its owner. A client sends this after every reconnect, because a restarted service holds no inbox.",
+  "x-ess-name": "inbox.messaging.OpenInbox",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "address": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    },
+    "adapter": {
+      "$ref": "#/$defs/inbox.messaging.Adapter"
+    }
+  },
+  "required": [
+    "address",
+    "adapter"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:48921201853bfffc694fa013d80d7dcc4a47ccba8dbec837ab9f7cf6c298d230",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Adapter": {
+      "title": "Adapter",
+      "description": "The wake surface the owner of an inbox reads it through.",
+      "x-ess-name": "inbox.messaging.Adapter",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "claude_code",
+        "metaharness",
+        "slack",
+        "terminal"
+      ]
+    },
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

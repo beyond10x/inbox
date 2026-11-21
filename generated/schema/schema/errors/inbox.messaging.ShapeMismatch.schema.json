@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShapeMismatch payload",
+  "description": "The envelope does not fit its kind, or the reply does not fit what the message asked for.",
+  "x-ess-name": "inbox.messaging.ShapeMismatch",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:02334683f819ab6f1c27d13afb619430ea2f2a0defc885cc08b449d2c63ca3cf",
+    "regenerate": "ess generate"
+  }
+}

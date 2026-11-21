@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.DedupKey",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:6b19d7d61ca8ce27c9d4a2e19644196856b1d9d6a9df5c64fab83b90209e6a50",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.DedupKey": {
+      "title": "DedupKey",
+      "description": "The sender's key for one logical message. A sender with no key of its own writes the message id.",
+      "x-ess-name": "inbox.messaging.DedupKey",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

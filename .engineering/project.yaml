@@ -1,0 +1,12 @@
+version: aep.project/5
+
+protocol: adp/1
+profile: development.standard
+protocols: git+https://github.com/beyond10x/aep#af11af152de1732383a5edee0da723bb72d9acb4
+planning_scope: "inbox"
+store:
+  git: {}
+
+summary: >-
+  One durable, addressable inbox per agent or person: an ESS-specified service with
+  interchangeable backends

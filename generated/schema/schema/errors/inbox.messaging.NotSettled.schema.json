@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotSettled payload",
+  "description": "The message has no answer and no refusal to collect yet.",
+  "x-ess-name": "inbox.messaging.NotSettled",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:8f19ddb45c8e2ac35f7c160a23aeed102a2b50d5a6b33d76c51c257caad6e710",
+    "regenerate": "ess generate"
+  }
+}

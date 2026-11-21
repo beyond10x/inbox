@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.OptionLetter",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:d3f9636b5afd350aa9c9d9b88de96f3c5d375e306e3a89f96301b626850e7f49",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
+  }
+}

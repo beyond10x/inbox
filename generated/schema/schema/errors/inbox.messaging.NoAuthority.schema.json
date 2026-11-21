@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NoAuthority payload",
+  "description": "`on_behalf_of` differs from `from` and no valid delegation covers it.",
+  "x-ess-name": "inbox.messaging.NoAuthority",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:adf94325bf8e91aea94b39db1e9a9f8a668984857db29d28fefcb428bfd4a7b3",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,134 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.Message/state/Answered/refuses/inbox.messaging.Expire
+domain: inbox.messaging
+scenario: answered-decision-expires-uncollected
+summary: An answer carries its own `expires`, which replaces the decision's. The sender never collects
+  it, and the expiry task removes the message at that instant and not before.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    address: human:operator
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: human:operator
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0DA000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: human:operator
+    kind: decision
+    thread: 01JGT0DA000000000000000001
+    decision:
+      options:
+      - letter: A
+        text: Ship the release today.
+      - letter: B
+        text: Hold the release until Monday.
+      recommended_option: B
+    default_on_silence: B
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-05T10:00:00Z'
+    dedup_key: 01JGT0DA000000000000000001
+    body: Ship release 4.2 today?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0DA000000000000000001
+      to: human:operator
+      from: agent:ws/planner
+      thread: 01JGT0DA000000000000000001
+      kind: decision
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.MarkRead
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    message_id: 01JGT0DA000000000000000001
+  outcome: read
+  events:
+  - event: inbox.messaging.MessageRead
+    payload:
+      message_id: 01JGT0DA000000000000000001
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    in_reply_to: 01JGT0DA000000000000000001
+    reply_id: 01JGT0DA000000000000000002
+    from: human:operator
+    on_behalf_of: human:operator
+    created: '2026-01-05T09:10:00Z'
+    expires: '2026-01-05T11:00:00Z'
+    option: A
+    body: A. Ship it.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0DA000000000000000001
+      reply_id: 01JGT0DA000000000000000002
+      to: agent:ws/planner
+      thread: 01JGT0DA000000000000000001
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0DA000000000000000001
+    now: '2026-01-05T10:00:00Z'
+    keep_until: '2026-01-06T10:00:00Z'
+  outcome: not-due
+  error:
+    name: inbox.messaging.NotDue
+  no_events:
+  - inbox.messaging.MessageExpired
+  - inbox.messaging.DecisionTakenOnSilence
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0DA000000000000000001
+    now: '2026-01-05T11:00:00Z'
+    keep_until: '2026-01-06T11:00:00Z'
+  outcome: expired
+  events:
+  - event: inbox.messaging.MessageExpired
+    payload:
+      message_id: 01JGT0DA000000000000000001
+assert:
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_most: 0
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0DA000000000000000001
+  counts:
+    at_most: 0

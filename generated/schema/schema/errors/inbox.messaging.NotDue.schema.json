@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotDue payload",
+  "description": "`expires` is after the clock reading sent.",
+  "x-ess-name": "inbox.messaging.NotDue",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:c636a6b45fc3c3f87f6300048b7a3e2a237d8aa722480fbce772c4f5139ea405",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.FreeShape",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:84bf2342a8b2fa1c95415f0d607bceed59ff0b09df6b1515f0072ad8e3cf3a04",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.FreeShape": {
+      "title": "FreeShape",
+      "x-ess-name": "inbox.messaging.FreeShape",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "additionalProperties": false
+    }
+  }
+}

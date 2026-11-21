@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Principal",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:f01f831c697d7d72dbc120e2579c39184b688647624123717c0ff696fb73cb64",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

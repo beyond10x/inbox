@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.Inbox.State",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:6cca13e519b83fc3baefe45ddd6e38bf6340b5997c2ac8f35f66b97290049998",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Inbox.State": {
+      "title": "State",
+      "x-ess-name": "inbox.messaging.Inbox.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Closed",
+        "Open"
+      ]
+    }
+  }
+}

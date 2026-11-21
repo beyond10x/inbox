@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.DelegationEntry",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:a17ebace73fee4b4489877029e35629b339be3157d51549df68af6ddabc69c2c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.DelegationEntry": {
+      "title": "DelegationEntry",
+      "description": "One delegation of the key file: `agent` may speak for `on_behalf_of` until `valid_until`. It covers every message the agent sends for that principal; version 1 has no narrower scope and no chain. The operator key signs the entry.",
+      "x-ess-name": "inbox.messaging.DelegationEntry",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "delegation_id": {
+          "$ref": "#/$defs/inbox.messaging.DelegationId",
+          "description": "The id an envelope's `authority` names."
+        },
+        "agent": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "on_behalf_of": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "operator_signature": {
+          "description": "The operator key's Ed25519 signature over the canonical JSON of the other fields of the entry, in base64.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "delegation_id",
+        "agent",
+        "on_behalf_of",
+        "valid_until",
+        "operator_signature"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DelegationId": {
+      "title": "DelegationId",
+      "description": "The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.",
+      "x-ess-name": "inbox.messaging.DelegationId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

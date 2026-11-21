@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.DecisionOption",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:787a160eb0fd6521c27b3e8eb5f3d26cf912b28ff44fd6dee19ce66dc984acf9",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.DecisionOption": {
+      "title": "DecisionOption",
+      "x-ess-name": "inbox.messaging.DecisionOption",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "letter": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "letter",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
+  }
+}

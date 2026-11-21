@@ -1,0 +1,30 @@
+format: ess-inputs/2
+requires: ess 0.96.0
+specification:
+- system.yaml
+- components.yaml
+- domains/messaging.yaml
+scenarios:
+- scenarios/answered-decision-expires-uncollected.yaml
+- scenarios/bad-signature-refused.yaml
+- scenarios/closed-inbox-refuses-posts.yaml
+- scenarios/decision-answered-by-the-operator.yaml
+- scenarios/decision-taken-on-silence.yaml
+- scenarios/envelope-must-fit-its-kind.yaml
+- scenarios/handled-message-is-gone.yaml
+- scenarios/marks-repeat-without-effect.yaml
+- scenarios/note-expires.yaml
+- scenarios/note-read-is-gone.yaml
+- scenarios/note-takes-no-answer.yaml
+- scenarios/only-the-owner-handles-its-inbox.yaml
+- scenarios/post-read-answer.yaml
+- scenarios/refusal-collected-is-gone.yaml
+- scenarios/refused-message-waits-for-the-sender.yaml
+- scenarios/refused-reply-leaves-the-request-unanswered.yaml
+- scenarios/relayed-decision-with-delegation-accepted.yaml
+- scenarios/relayed-decision-without-delegation-refused.yaml
+- scenarios/repeated-dedup-key.yaml
+- scenarios/reply-envelope-is-checked.yaml
+- scenarios/reply-of-the-wrong-shape-refused.yaml
+- scenarios/repost-after-restart-arrives-once.yaml
+- scenarios/request-fanned-out-to-eleven.yaml

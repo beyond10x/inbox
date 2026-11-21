@@ -1,0 +1,179 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.CloseInbox/outcome/already-closed
+- inbox.messaging.OpenInbox/outcome/opened
+domain: inbox.messaging
+scenario: closed-inbox-refuses-posts
+summary: A post to a closed inbox and a post to an address nobody opened are refused alike. The owner
+  opens the inbox again and the next post is stored.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: already-open
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.CloseInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+  outcome: closed
+  events:
+  - event: inbox.messaging.InboxClosed
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.CloseInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+  outcome: already-closed
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0CX000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0CX000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0CX000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: inbox-closed
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0CX000000000000000002
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/nobody
+    kind: note
+    thread: 01JGT0CX000000000000000002
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0CX000000000000000002
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-inbox
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:06:00Z'
+  command: inbox.messaging.CloseInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/nobody
+    inbox: agent:box/nobody
+  input:
+    address: agent:box/nobody
+  outcome: unknown-inbox
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.InboxClosed
+- at: '2026-01-05T09:07:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: terminal
+  outcome: reopened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:08:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0CX000000000000000003
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0CX000000000000000003
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0CX000000000000000003
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0CX000000000000000003
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0CX000000000000000003
+      kind: note
+assert:
+- view: inbox.messaging.Inboxes
+  params: {}
+  contains:
+    address: agent:box/worker
+    state: Open
+    adapter: terminal
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  contains:
+    message_id: 01JGT0CX000000000000000003

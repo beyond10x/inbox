@@ -1,0 +1,627 @@
+type: ess-scenario/7
+domain: inbox.messaging
+scenario: request-fanned-out-to-eleven
+summary: 'A sender asks 11 recipients one question: 11 envelopes under one thread. Three answer and one
+  refuses. The Thread view holds 11 rows, one per recipient, and the Replies view the 3 answers.'
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-01
+    inbox: agent:box/worker-01
+  input:
+    address: agent:box/worker-01
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-01
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-02
+    inbox: agent:box/worker-02
+  input:
+    address: agent:box/worker-02
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-02
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-03
+    inbox: agent:box/worker-03
+  input:
+    address: agent:box/worker-03
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-03
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-04
+    inbox: agent:box/worker-04
+  input:
+    address: agent:box/worker-04
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-04
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-05
+    inbox: agent:box/worker-05
+  input:
+    address: agent:box/worker-05
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-05
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-06
+    inbox: agent:box/worker-06
+  input:
+    address: agent:box/worker-06
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-06
+- at: '2026-01-05T09:06:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-07
+    inbox: agent:box/worker-07
+  input:
+    address: agent:box/worker-07
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-07
+- at: '2026-01-05T09:07:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-08
+    inbox: agent:box/worker-08
+  input:
+    address: agent:box/worker-08
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-08
+- at: '2026-01-05T09:08:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-09
+    inbox: agent:box/worker-09
+  input:
+    address: agent:box/worker-09
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-09
+- at: '2026-01-05T09:09:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-10
+    inbox: agent:box/worker-10
+  input:
+    address: agent:box/worker-10
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-10
+- at: '2026-01-05T09:10:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-11
+    inbox: agent:box/worker-11
+  input:
+    address: agent:box/worker-11
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker-11
+- at: '2026-01-05T09:11:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-01
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: &id001
+      shape: lines
+      value: 3
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000001
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000001
+      to: agent:box/worker-01
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:12:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000002
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-02
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000002
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000002
+      to: agent:box/worker-02
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:13:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000003
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-03
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000003
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000003
+      to: agent:box/worker-03
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:14:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000004
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-04
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000004
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000004
+      to: agent:box/worker-04
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:15:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000005
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-05
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000005
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000005
+      to: agent:box/worker-05
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:16:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000006
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-06
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000006
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000006
+      to: agent:box/worker-06
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:17:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000007
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-07
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000007
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000007
+      to: agent:box/worker-07
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:18:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000008
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-08
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000008
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000008
+      to: agent:box/worker-08
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:19:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000009
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-09
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000009
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000009
+      to: agent:box/worker-09
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:20:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000010
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-10
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000010
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000010
+      to: agent:box/worker-10
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:21:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FN000000000000000011
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker-11
+    kind: request
+    thread: 01JGT0FN000000000000000001
+    reply_shape: *id001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FN000000000000000011
+    body: Is your worktree clean?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FN000000000000000011
+      to: agent:box/worker-11
+      from: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+      kind: request
+- at: '2026-01-05T09:22:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-01
+    inbox: agent:box/worker-01
+  input:
+    in_reply_to: 01JGT0FN000000000000000001
+    reply_id: 01JGT0FN000000000000000100
+    from: agent:box/worker-01
+    on_behalf_of: agent:box/worker-01
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: Yes.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0FN000000000000000001
+      reply_id: 01JGT0FN000000000000000100
+      to: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+- at: '2026-01-05T09:23:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-02
+    inbox: agent:box/worker-02
+  input:
+    in_reply_to: 01JGT0FN000000000000000002
+    reply_id: 01JGT0FN000000000000000101
+    from: agent:box/worker-02
+    on_behalf_of: agent:box/worker-02
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: Yes.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0FN000000000000000002
+      reply_id: 01JGT0FN000000000000000101
+      to: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+- at: '2026-01-05T09:24:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-03
+    inbox: agent:box/worker-03
+  input:
+    in_reply_to: 01JGT0FN000000000000000003
+    reply_id: 01JGT0FN000000000000000102
+    from: agent:box/worker-03
+    on_behalf_of: agent:box/worker-03
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: Yes.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: answered
+  events:
+  - event: inbox.messaging.MessageAnswered
+    payload:
+      message_id: 01JGT0FN000000000000000003
+      reply_id: 01JGT0FN000000000000000102
+      to: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+- at: '2026-01-05T09:25:00Z'
+  command: inbox.messaging.Refuse
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker-04
+    inbox: agent:box/worker-04
+  input:
+    message_id: 01JGT0FN000000000000000004
+    reason: This session has no worktree.
+  outcome: refused
+  events:
+  - event: inbox.messaging.MessageRefused
+    payload:
+      message_id: 01JGT0FN000000000000000004
+      to: agent:ws/planner
+      thread: 01JGT0FN000000000000000001
+assert:
+- view: inbox.messaging.Thread
+  params:
+    thread: 01JGT0FN000000000000000001
+  counts:
+    at_least: 11
+    at_most: 11
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0FN000000000000000001
+  counts:
+    at_least: 3
+    at_most: 3
+- view: inbox.messaging.Settled
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_least: 4
+    at_most: 4
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0FN000000000000000001
+  contains:
+    message_id: 01JGT0FN000000000000000003
+    to: agent:box/worker-03
+    state: Answered
+- view: inbox.messaging.Thread
+  params:
+    thread: 01JGT0FN000000000000000001
+  contains:
+    message_id: 01JGT0FN000000000000000004
+    state: Refused
+    refusal: This session has no worktree.
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker-05
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker-01
+  counts:
+    at_most: 0

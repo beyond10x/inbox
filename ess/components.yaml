@@ -1,0 +1,33 @@
+components:
+  - component: inbox-service
+    summary: >-
+      The one service every client talks to (`inbox serve`). It holds the inboxes and their
+      messages in the backend it was started with, checks every post and every answer through the
+      SignatureVerifier port, and removes a message when it is handled or its `expires` passes.
+    owns:
+      domains:
+        - inbox.messaging
+    accepts:
+      commands:
+        - inbox.messaging.OpenInbox
+        - inbox.messaging.CloseInbox
+        - inbox.messaging.PostMessage
+        - inbox.messaging.MarkDelivered
+        - inbox.messaging.MarkRead
+        - inbox.messaging.Answer
+        - inbox.messaging.Refuse
+        - inbox.messaging.Collect
+        - inbox.messaging.Expire
+    publishes:
+      events:
+        - inbox.messaging.InboxOpened
+        - inbox.messaging.InboxClosed
+        - inbox.messaging.MessagePosted
+        - inbox.messaging.MessageDelivered
+        - inbox.messaging.MessageRead
+        - inbox.messaging.MessageHandled
+        - inbox.messaging.MessageAnswered
+        - inbox.messaging.MessageRefused
+        - inbox.messaging.DecisionTakenOnSilence
+        - inbox.messaging.MessageExpired
+    reached_by: network
