@@ -106,7 +106,7 @@ def answer_fields(view):
     return [wrapped(view, at) for at in (REPLY_BODY, REPLY_ID, REPLY_OPTION, DECIDED)]
 
 
-# The generated scenarios synthesis refuses on ess 0.96.0 that an authored scenario checks instead.
+# The generated scenarios synthesis refuses on ess 0.97.1 that an authored scenario checks instead.
 COVERS = {
     "post-read-answer": [
         out("MarkDelivered", "delivered"), out("MarkRead", "read"), out("Answer", "answered"),
@@ -122,10 +122,7 @@ COVERS = {
         out("Expire", "decided-on-silence"), tr("decide_on_silence", "Expire", "decided-on-silence"),
     ],
     "note-expires": [out("Expire", "expired"), out("Expire", "not-due")],
-    "bad-signature-refused": [out("PostMessage", "signature-invalid")],
-    "relayed-decision-without-delegation-refused": [
-        out("PostMessage", "no-authority"), out("PostMessage", "authority-invalid"),
-    ],
+    "relayed-decision-without-delegation-refused": [out("PostMessage", "no-authority")],
     "only-the-owner-handles-its-inbox": [
         out("MarkDelivered", "not-recipient"), out("MarkRead", "not-recipient"),
         out("Answer", "not-recipient"), out("Refuse", "not-recipient"), out("Collect", "not-sender"),
@@ -142,9 +139,7 @@ COVERS = {
           for i in answer_fields(view)],
     ],
     "closed-inbox-refuses-posts": [out("OpenInbox", "opened"), out("CloseInbox", "already-closed")],
-    "envelope-must-fit-its-kind": [
-        out("PostMessage", "request-without-shape"), out("PostMessage", "unknown-option"),
-    ],
+    "envelope-must-fit-its-kind": [out("PostMessage", "request-without-shape")],
     "marks-repeat-without-effect": [
         out("MarkDelivered", "already-delivered"), out("MarkRead", "already-read"),
         st("Delivered", "Collect"), st("Read", "Collect"),
@@ -160,6 +155,7 @@ COVERS = {
         out(command, "foreign-message")
         for command in ("MarkDelivered", "MarkRead", "Answer", "Refuse", "Collect")
     ],
+    "a-message-id-another-sender-holds-is-taken": [out("PostMessage", "id-taken")],
 }
 
 PLANNER = "agent:ws/planner"
@@ -800,6 +796,40 @@ s.check("Pending", inbox(WORKER), contains={"message_id": m2, "from": PLANNER, "
 s.exactly("Outbox", sender(), 1)
 s.check("Outbox", sender(), excludes={"message_id": m3})
 s.check("Outbox", sender(), excludes={"message_id": m4})
+names.append(s.write())
+
+# 29
+m = mid("TQ", 1)
+m2 = mid("TQ", 2)
+s = Scenario("a-third-principal-cannot-tell-a-message-id-by-post",
+             "A principal posts under the id of a message between two others and under a free id, to an address no inbox has and into its own closed inbox: answered alike, nothing stored.")
+s.open(WORKER).open(OTHER).post(m, WORKER, "note")
+s.post(m, "agent:box/nobody", "note", sender=OTHER, body="Probe.", outcome="unknown-inbox",
+       error="UnknownInbox")
+s.post(m2, "agent:box/nobody", "note", sender=OTHER, body="Probe.", outcome="unknown-inbox",
+       error="UnknownInbox")
+s.post(m, "agent:box/nobody", "note", outcome="unknown-inbox", error="UnknownInbox")
+s.close(OTHER)
+s.post(m, OTHER, "note", sender=OTHER, body="Probe.", outcome="inbox-closed", error="UnknownInbox")
+s.post(m2, OTHER, "note", sender=OTHER, body="Probe.", outcome="inbox-closed", error="UnknownInbox")
+s.exactly("Pending", inbox(WORKER), 1)
+s.check("Pending", inbox(WORKER), contains={"message_id": m, "from": PLANNER, "body": "Build 512 is green."})
+s.empty("Pending", inbox(OTHER)).empty("Outbox", sender(OTHER)).exactly("Outbox", sender(), 1)
+names.append(s.write())
+
+# 30
+m = mid("QT", 1)
+s = Scenario("a-message-id-another-sender-holds-is-taken",
+             "A post under the id of another sender's live message is refused as taken and stores nothing. The sender's own repost is still a duplicate, also after the recipient closed the inbox.")
+s.open(WORKER).open(OTHER).post(m, WORKER, "note")
+s.post(m, OTHER, "note", sender=OTHER, body="Taken.", outcome="id-taken", error="MessageIdTaken")
+s.post(m, WORKER, "note", sender=OTHER, body="Taken.", outcome="id-taken", error="MessageIdTaken")
+s.post(m, WORKER, "note", outcome="duplicate", error="Duplicate")
+s.close(WORKER)
+s.post(m, WORKER, "note", outcome="duplicate", error="Duplicate")
+s.exactly("Pending", inbox(WORKER), 1)
+s.check("Pending", inbox(WORKER), contains={"message_id": m, "from": PLANNER, "body": "Build 512 is green."})
+s.empty("Pending", inbox(OTHER)).empty("Outbox", sender(OTHER))
 names.append(s.write())
 
 for name in COVERS:

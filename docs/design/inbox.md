@@ -98,7 +98,8 @@ Each can be changed; the alternative is named where there is one.
    `Refuse` and `Collect`, after `unknown-message` and before `not-recipient`, `not-sender` and
    every refusal of the message's state; the service answers it as `unknown-message`
    (`docs/design/service.md`), so from these 5 commands a third principal cannot tell a message
-   between others from no message; `PostMessage` still can tell it (decision 6). The sender
+   between others from no message. `PostMessage` tells it only into an open inbox (decision 6).
+   The sender
    still gets `not-recipient` from the 4 commands of the owner, and the owner `not-sender` from
    `Collect`: each of them knows the message exists. A message id is a ULID and not a secret.
 6. **Dedup holds among live messages only**, by `message_id` and by `dedup_key`. A refused post
@@ -106,9 +107,21 @@ Each can be changed; the alternative is named where there is one.
    stored messages whose `from` is the `from` of the post, which `not-sender` holds to the
    caller. A sender that uses one key for two inboxes is refused the second post; the key of
    another sender, a third principal's in its own inbox included, refuses nothing, and a post
-   tells nobody whether another sender uses a key. Open: a post answers `duplicate` for a
-   message id that is stored, whoever sent it, so a client that knows or guesses a message id
-   still learns from a post whether it is in use (`story:post-does-not-tell-a-message-id-exists`).
+   tells nobody whether another sender uses a key. A message id is one name space for every
+   sender, and `duplicate` answers only the sender's own stored message: a post under the id of
+   another sender's live message is refused `id-taken` (`MessageIdTaken`), after every other
+   refusal. The row refusals of `PostMessage` are answered in this order (measured on the ESS
+   0.97.1 interpreted target): `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`,
+   `id-taken`. The model declares `duplicate` before `unknown-inbox`, and the interpreter still
+   answers `unknown-inbox` (`exists: false`) first; a sender's repost goes to the inbox its
+   message is in, which exists, so it answers `duplicate`, also after the recipient closed the
+   inbox. A post to an address no inbox has, or into a closed inbox, answers alike for an id
+   another sender holds and a free one (`story:post-does-not-tell-a-message-id-exists`). What
+   stays: a principal that holds a message id learns from a post into an open inbox whether the
+   id is live (`id-taken` against `posted`, which stores a message), and it can take a free id
+   first, after which the sender's post is refused `id-taken`. That is accepted for principals
+   of one operator; a message id unique per sender removes it
+   (`story:message-id-per-sender`).
 7. **`on_behalf_of` is always present** and equals `from` when the sender speaks for nobody else.
    A reply is the input of `Answer`, not a stored kind. `Body` is at most 65536 bytes.
 8. **The wire API is the one ESS derives**: `POST /messaging/commands/<wire>` and

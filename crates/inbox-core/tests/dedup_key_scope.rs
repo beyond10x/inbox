@@ -3,8 +3,10 @@
 //! post of another; the same sender is refused a second post under its key, to the same inbox
 //! and to another; a key of a message that is gone refuses nothing.
 //!
-//! The order of `duplicate` against `duplicate-key` is stated by the 2 `duplicate_*` cases at the
-//! end. No case here states the order of `duplicate` against `unknown-inbox` or `inbox-closed`.
+//! The order of `duplicate` against `duplicate-key` is stated by the `duplicate_*` case at the
+//! end, and the answer to another sender's message id by the `id_taken_*` case after it. No case
+//! here states the order of either against `unknown-inbox` or `inbox-closed`
+//! (`tests/post_message_id.rs` does).
 
 use inbox::actor::{Actor, Caller};
 use inbox::behaviour::MessageStorage;
@@ -150,18 +152,25 @@ fn posted(backend: &MemoryBackend, id: &str, kind: &str, from: &str, to: &str) {
     assert_eq!(published(&answer), 1, "{answer:?}");
 }
 
-/// A post that is refused: its outcome, after asserting that it stored and published nothing.
-fn refused(backend: &MemoryBackend, id: &str, from: &str, to: &str) -> String {
+/// A post that is refused: its outcome and its error, after asserting that it stored and
+/// published nothing.
+fn refusal(backend: &MemoryBackend, id: &str, from: &str, to: &str) -> (String, Option<String>) {
     let before = stored(backend);
     let answer = post(backend, id, "note", from, to);
     assert_eq!(published(&answer), 0, "{answer:?}");
     assert_eq!(stored(backend), before, "a refused post changed the store");
+    (outcome(&answer), error(&answer))
+}
+
+/// A post that is refused with `inbox.messaging.Duplicate`: its outcome.
+fn refused(backend: &MemoryBackend, id: &str, from: &str, to: &str) -> String {
+    let (outcome, error) = refusal(backend, id, from, to);
     assert_eq!(
-        error(&answer).as_deref(),
+        error.as_deref(),
         Some("inbox.messaging.Duplicate"),
-        "{answer:?}"
+        "{outcome}"
     );
-    outcome(&answer)
+    outcome
 }
 
 #[test]
@@ -260,13 +269,18 @@ fn duplicate_answers_before_duplicate_key_for_the_same_sender() {
     assert_eq!(refused(&backend, FIRST, PLANNER, THIRD), "duplicate");
 }
 
-/// `duplicate` across senders: another sender posts the stored message id under the same key into
-/// an open inbox. Its key is free, the id is not, and `duplicate` answers, as the model states
-/// it after this story (`existing_instance: true`, decided by `message_id` alone).
-/// story:post-does-not-tell-a-message-id-exists changes that answer; this is the case it rewrites.
+/// A message id across senders: another sender posts the stored message id under the same key
+/// into its own open inbox. Its key is free, the id is held by another sender, and `id-taken`
+/// answers, not `duplicate` (story:post-does-not-tell-a-message-id-exists).
 #[test]
-fn duplicate_answers_for_a_stored_message_id_across_senders() {
+fn id_taken_answers_for_a_stored_message_id_across_senders() {
     let backend = world();
     posted(&backend, FIRST, "note", PLANNER, WORKER);
-    assert_eq!(refused(&backend, FIRST, THIRD, THIRD), "duplicate");
+    assert_eq!(
+        refusal(&backend, FIRST, THIRD, THIRD),
+        (
+            "id-taken".to_owned(),
+            Some("inbox.messaging.MessageIdTaken".to_owned())
+        )
+    );
 }

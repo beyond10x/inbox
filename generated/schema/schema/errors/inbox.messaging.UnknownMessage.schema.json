@@ -9,7 +9,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:a8034b8f81ed5b55253cb74788db67ad76089f3671d3e9df901f417123e1ede5",
+    "contract_digest": "slice-sha256/2:f554aac6a58a9b9d13023f0e2e5d673df78eb08bffe36e9ba53b03468b031f0c",
     "regenerate": "ess generate"
   }
 }

@@ -1,7 +1,6 @@
 type: ess-scenario/7
 covers:
 - inbox.messaging.PostMessage/outcome/request-without-shape
-- inbox.messaging.PostMessage/outcome/unknown-option
 domain: inbox.messaging
 scenario: envelope-must-fit-its-kind
 summary: A request without a reply shape, a decision without options or with a silence option it does

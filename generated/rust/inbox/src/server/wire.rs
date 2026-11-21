@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest f869a5a1740e9811fcd3f86e232e30ffb7139f6b366a19ae0a77c8f5524a719c
+// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1020,6 +1020,12 @@ pub fn encode_error_inbox_messaging_already_settled(value: &crate::messaging::Al
 
 /// Writes the declared error `inbox.messaging.Duplicate` as JSON.
 pub fn encode_error_inbox_messaging_duplicate(_value: &crate::messaging::Duplicate, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
+/// Writes the declared error `inbox.messaging.MessageIdTaken` as JSON.
+pub fn encode_error_inbox_messaging_message_id_taken(_value: &crate::messaging::MessageIdTaken, out: &mut String) {
     out.push('{');
     out.push('}');
 }
@@ -2817,6 +2823,20 @@ pub fn encode_outcome_inbox_messaging_post_message(value: &crate::messaging::Pos
             json::push_text(out, "inbox.messaging.UnknownInbox");
             json::member(out, "payload");
             encode_error_inbox_messaging_unknown_inbox(error, out);
+            out.push('}');
+        }
+        crate::messaging::PostMessageOutcome::IdTaken { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "id-taken");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.MessageIdTaken");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_message_id_taken(error, out);
             out.push('}');
         }
         crate::messaging::PostMessageOutcome::Posted { message_posted } => {

@@ -269,8 +269,9 @@ fn concurrent_posts_with_one_dedup_key_store_one_message_under_the_scheduler() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The order among the 4 row refusals, as the ESS 0.96.0 interpreted target answers each pair
-// (probe scenarios in the adversary's scratch directory; each pair run once per candidate).
+// The order among the row refusals, as the ESS 0.97.1 interpreted target answers each pair
+// (probe scenarios in the adversary's scratch directory; each pair run once per candidate). The
+// pairs with `id-taken` are in `tests/post_message_id.rs`.
 // ---------------------------------------------------------------------------------------------
 
 #[test]
@@ -285,16 +286,30 @@ fn unknown_inbox_answers_before_duplicate_key() {
     assert_eq!(answered, "unknown-inbox");
 }
 
+/// The sender's own stored message id and the same id from another sender, each posted to an
+/// address no inbox has: both answer `unknown-inbox`, as a free id does. The model declares
+/// `duplicate` first, and the interpreted target still answers `exists: false` before it and
+/// before `id-taken`.
 #[test]
-fn duplicate_answers_before_unknown_inbox() {
+fn unknown_inbox_answers_before_duplicate_and_id_taken() {
     let backend = MemoryBackend::new();
     open(&backend, "agent:box/worker");
     assert_eq!(
         post(&backend, &note(FIRST, "agent:box/worker", "key-a")),
         "posted"
     );
-    let answered = post(&backend, &note(FIRST, "agent:box/nobody", "key-b"));
-    assert_eq!(answered, "duplicate");
+    let own = post(&backend, &note(FIRST, "agent:box/nobody", "key-b"));
+    let foreign = outcome(&client(
+        &backend,
+        "agent:box/other",
+        "inbox.messaging.PostMessage",
+        &note(FIRST, "agent:box/nobody", "key-c").replace("agent:ws/planner", "agent:box/other"),
+    ));
+    let free = post(&backend, &note(SECOND, "agent:box/nobody", "key-d"));
+    assert_eq!(
+        (own.as_str(), foreign.as_str(), free.as_str()),
+        ("unknown-inbox", "unknown-inbox", "unknown-inbox")
+    );
 }
 
 #[test]

@@ -265,7 +265,10 @@ actors:
 
 errors:
   - name: inbox.messaging.Duplicate
-    summary: A live message already carries this id or this dedup key; nothing was stored.
+    summary: A live message of this sender already carries this id or this dedup key; nothing was stored.
+    fields: []
+  - name: inbox.messaging.MessageIdTaken
+    summary: A live message of another sender carries this id; nothing was stored.
     fields: []
   - name: inbox.messaging.UnknownInbox
     summary: No open inbox has this address.
@@ -425,7 +428,16 @@ commands:
         external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
         before_row: true
         error: inbox.messaging.NoAuthority
-      - {name: duplicate, existing_instance: true, error: inbox.messaging.Duplicate}
+      # SYNTHESIS: ESS 0.97.1 answers `unknown-inbox` (`exists: false`) before this outcome and
+      # before `duplicate-key`, whatever the declaration order; the outcomes with `where` and
+      # `inbox-closed` follow in declaration order. A sender's repost goes to an inbox that exists.
+      - name: duplicate
+        when_related:
+          entity: inbox.messaging.Message
+          where: {all: [message_id == input.message_id, from == input.from]}
+          exists: true
+        error: inbox.messaging.Duplicate
+        summary: A live message of this sender carries this id.
       - name: duplicate-key
         when_related:
           entity: inbox.messaging.Message
@@ -438,6 +450,13 @@ commands:
       - name: inbox-closed
         when_related: {via: input.to, predicate: state == Closed}
         error: inbox.messaging.UnknownInbox
+      - name: id-taken
+        when_related:
+          entity: inbox.messaging.Message
+          where: message_id == input.message_id
+          exists: true
+        error: inbox.messaging.MessageIdTaken
+        summary: A live message of another sender carries this id.
       - name: posted
         creates: inbox.messaging.Message
         instance: message_id
