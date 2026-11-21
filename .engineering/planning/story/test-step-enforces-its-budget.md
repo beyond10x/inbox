@@ -7,7 +7,7 @@ title: The test step kills a test at 60 s and fails over 120 s
 summary: 'cargo test in task check has no bound per test: a case that waits on a silent peer stood 38 minutes in a changed copy and held a build slot.'
 tags:
 - budget
-revision: 2
+revision: 3
 ---
 ## Outcome
 
@@ -53,9 +53,16 @@ workspace has none that the gate counts, which the unit checks.
   is costly to one of the 2 forms; the built `inbox` binary of `task acceptance` and of the
   serve lane is already a setup step.
 - Test binaries are few: one integration-test binary per crate (`tests/main.rs` with modules),
-  and a test profile without full debug info (`[profile.dev] debug = false` or a profile of
-  its own). The workspace has one test binary per file under `crates/*/tests/` today; the unit
-  counts them before and after and gives the size of `target/debug/deps` for both.
+  and tests built without full debug info. A `[profile.dev] debug = false` in `Cargo.toml` has
+  no effect where a cargo config file of the user sets `debug` for that profile, because a
+  cargo config file wins over the manifest (measured in another repository of the folder on
+  2026-11-21: test binaries stayed 183 MB, about 142 MB of it `.debug_*` sections). So the
+  setting goes in the repository's `.cargo/config.toml`, or in the gate's environment as
+  `CARGO_PROFILE_DEV_DEBUG=false`, in CI and locally alike. The unit proves it with
+  `readelf -S` on one test binary (no `.debug_info` section of size) and runs `cargo clean`
+  once after the switch. The workspace has one test binary per file under `crates/*/tests/`
+  today; the unit counts them before and after and gives the size of `target/debug/deps` for
+  both.
 
 Also in scope: the stand-ins of `crates/inbox-cli/tests/support/mod.rs` and
 `crates/inbox-server/tests/support/mod.rs` bound their wait for a connection, so that a case
@@ -67,6 +74,6 @@ whose client sends nothing fails with a message in seconds.
 - `.config/nextest.toml` (new, if that way is taken)
 - `.github/workflows/check.yml` (the runner's install, the step's bound)
 - `crates/inbox-cli/tests/support/mod.rs`, `crates/inbox-server/tests/support/mod.rs`
-- `crates/*/tests/` (one `main.rs` per crate, the case files as modules), `Cargo.toml` (the
+- `crates/*/tests/` (one `main.rs` per crate, the case files as modules), `.cargo/config.toml` (the
   profile)
 - `AGENTS.md` (the row of `task check`, the rows of the crates that name test files)
