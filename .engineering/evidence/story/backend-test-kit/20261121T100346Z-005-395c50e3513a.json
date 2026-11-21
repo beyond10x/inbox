@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:03:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (mutant: the not-stored-as-that branch): the adversary's guard case a_list_that_keeps_the_replaced_snapshot_fails stays in the suite",
+    "review": "review-result:adversary-backend-test-kit-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:24:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 5 (the rule printed for a section not free on a later factory call): every backend the factory answers in check_exclusive first gets one command that must run within 2 s, failing the waits rule; tests/adversary2.rs 4 passed",
+    "review": "review-result:adversary-backend-test-kit-pass-2",
+    "outcome": "fixed"
+  }
+}

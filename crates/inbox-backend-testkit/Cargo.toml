@@ -1,0 +1,15 @@
+[package]
+name = "inbox-backend-testkit"
+description = "The checks every backend of the inbox passes: the two generated storage ports and the command section of inbox-core."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+inbox = { path = "../../generated/rust/inbox", features = ["server"] }
+inbox-core = { path = "../inbox-core" }
+
+[lints]
+workspace = true

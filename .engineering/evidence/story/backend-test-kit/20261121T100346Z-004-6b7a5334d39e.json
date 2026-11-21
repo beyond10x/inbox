@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:03:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (the empty-store guard on the first factory call only): every factory call of the two storage checks is guarded; check_exclusive has no storage bound and documents that it cannot guard; tests/adversary.rs 9 passed",
+    "review": "review-result:adversary-backend-test-kit-pass-1",
+    "outcome": "fixed"
+  }
+}

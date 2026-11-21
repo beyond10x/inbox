@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:03:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a per-handle read cache passes): the clone check reads get and list through each handle before and after the other handle's put, replacement and delete, in both directions; tests/adversary.rs 9 passed",
+    "review": "review-result:adversary-backend-test-kit-pass-1",
+    "outcome": "fixed"
+  }
+}

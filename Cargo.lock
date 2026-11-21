@@ -305,6 +305,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "inbox-backend-testkit"
+version = "0.1.0"
+dependencies = [
+ "inbox",
+ "inbox-core",
+]
+
+[[package]]
 name = "inbox-core"
 version = "0.1.0"
 dependencies = [

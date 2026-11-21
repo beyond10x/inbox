@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T10:24:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 2 (clones made before the panic): a clone taken before the command that panics must run again within 2 s and waits in the after-panic check; tests/adversary2.rs 4 passed",
+    "review": "review-result:adversary-backend-test-kit-pass-2",
+    "outcome": "fixed"
+  }
+}
