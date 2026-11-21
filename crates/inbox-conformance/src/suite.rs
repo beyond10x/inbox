@@ -4,7 +4,8 @@
 //! does not know depends on who owns it:
 //!
 //! - at the top level of the suite or in `provenance`, no single scenario owns it: [`read`]
-//!   refuses the whole suite, naming the key (the binary exits 2);
+//!   refuses the whole suite, naming the key (the binary exits 2); so it does with a member name
+//!   an object states twice, at any depth, a suite ESS itself would not read;
 //! - in a scenario, a step, an expectation, a value reference, a predicate or a declaration (a
 //!   step kind, a key, a shape it has no reading for): the scenario is admitted as
 //!   [`Scenario::unsupported`] with the reason, and no step of it is executed.
@@ -253,15 +254,38 @@ pub enum Step {
     },
 }
 
+/// `Err` naming the first member an object of `value` states twice: ESS reads the suite with
+/// serde, which refuses a field stated twice, and the JSON reader here keeps both.
+fn stated_once(value: &Value, location: &str) -> Result<(), String> {
+    match value {
+        Value::Object(members) => {
+            for (at, (key, member)) in members.iter().enumerate() {
+                if members[..at].iter().any(|(earlier, _)| earlier == key) {
+                    return Err(format!("{location} states the member `{key}` twice"));
+                }
+                stated_once(member, &format!("{location}.{key}"))?;
+            }
+            Ok(())
+        }
+        Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, item)| stated_once(item, &format!("{location}[{index}]"))),
+        _ => Ok(()),
+    }
+}
+
 /// Reads a suite document.
 ///
 /// # Errors
 ///
 /// A document that is not JSON, not a suite of [`SUITE_VERSION`], not one that starts every
 /// scenario from an empty system, or one carrying a top-level or `provenance` key this runner
-/// does not know. A scenario this runner cannot interpret is no error: it is read as unsupported.
+/// does not know, or an object that states one member name twice, at any depth. A scenario this
+/// runner cannot interpret is no error: it is read as unsupported.
 pub fn read(text: &str) -> Result<Suite, String> {
     let document = json::parse_written(text).map_err(|error| format!("the suite: {error}"))?;
+    stated_once(&document, "the suite")?;
     let root = object(&document, "the suite")?;
     only(root, &["provenance", "events", "scenarios"], "the suite")?;
     let provenance = object(member(root, "provenance", "the suite")?, "provenance")?;

@@ -2,14 +2,16 @@
 //! `inbox-core` and writes the `ess-conformance-results/1` document; exit 0 when it is written,
 //! whatever the scenarios answered.
 //!
-//! `inbox-conformance gate --suite <suite> --report <report> --unsupported <unsupported.tsv>`:
-//! prints the result line and the `conformance_status` of the report/2 ESS wrote from those
-//! results, and exits 1 unless the report is for that suite (its `suite.digest`), its counts add
-//! up, 0 scenarios failed, 0 errored, 0 were skipped, the unsupported ones are exactly those the
-//! file lists, and its `conformance_status` is the one such a run carries.
+//! `inbox-conformance gate --suite <suite> --report <report> --unsupported <unsupported.tsv>
+//! [--implementation <name>]`: prints the result line and the `conformance_status` of the
+//! report/2 ESS wrote from those results, and exits 1 unless the report is for that suite (its
+//! `suite.digest`, and each of its scenario ids named once in the outcome lists, no other), for
+//! that implementation where `--implementation` is given, its counts add up, 0 scenarios failed,
+//! 0 errored, 0 were skipped, the unsupported ones are exactly those the file lists, and its
+//! `conformance_status` is the one such a run carries.
 //!
 //! Exit 2: an argument, a file or a document this command cannot read, among them a suite with a
-//! top-level or `provenance` key the runner does not know.
+//! top-level or `provenance` key the runner does not know or a member stated twice.
 
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -33,7 +35,7 @@ fn main() -> ExitCode {
 }
 
 fn usage() -> String {
-    "usage: inbox-conformance run --suite <suite> --results <results> | gate --suite <suite> --report <report> --unsupported <unsupported.tsv>".to_owned()
+    "usage: inbox-conformance run --suite <suite> --results <results> | gate --suite <suite> --report <report> --unsupported <unsupported.tsv> [--implementation <name>]".to_owned()
 }
 
 /// The value of each named option, in the order of `names`.
@@ -89,10 +91,36 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Takes the optional `--implementation <name>` out of `arguments`: its value, and the rest.
+fn implementation(arguments: &[String]) -> Result<(Option<String>, Vec<String>), String> {
+    let mut rest = arguments.to_vec();
+    let Some(at) = rest.iter().position(|name| name == "--implementation") else {
+        return Ok((None, rest));
+    };
+    if at + 1 >= rest.len() {
+        return Err("`--implementation` needs a value".to_owned());
+    }
+    let name = rest.remove(at + 1);
+    rest.remove(at);
+    if rest.iter().any(|other| other == "--implementation") {
+        return Err("`--implementation` is given twice".to_owned());
+    }
+    Ok((Some(name), rest))
+}
+
 fn check(arguments: &[String]) -> Result<ExitCode, String> {
+    let (implementation, arguments) = implementation(arguments)?;
     let [suite_path, report_path, listed_path] =
-        options(arguments, ["--suite", "--report", "--unsupported"])?;
+        options(&arguments, ["--suite", "--report", "--unsupported"])?;
     let suite = std::fs::read(&suite_path).map_err(|error| format!("{suite_path}: {error}"))?;
+    let suite_text =
+        std::str::from_utf8(&suite).map_err(|error| format!("{suite_path}: {error}"))?;
+    let scenarios: Vec<String> = suite::read(suite_text)
+        .map_err(|reason| format!("{suite_path}: {reason}"))?
+        .scenarios
+        .into_iter()
+        .map(|scenario| scenario.id)
+        .collect();
     let text = read(&report_path)?;
     let report = gate::read_report(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
     let binding = gate::read_binding(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
@@ -104,6 +132,14 @@ fn check(arguments: &[String]) -> Result<ExitCode, String> {
         &binding,
         &results::suite_digest(&suite),
     ));
+    verdict
+        .problems
+        .extend(gate::accounts(&binding, &scenarios));
+    if let Some(expected) = &implementation {
+        verdict
+            .problems
+            .extend(gate::implemented(&binding, expected));
+    }
     println!("  {}", verdict.line);
     println!("  conformance_status: {}", binding.conformance_status);
     for problem in &verdict.problems {

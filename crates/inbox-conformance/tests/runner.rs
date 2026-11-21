@@ -454,6 +454,75 @@ fn the_step_context_takes_only_the_expected_branch() {
     assert!(StepContext::new(&stray, None).is_err());
 }
 
+/// The declarations the suite's `value_invariants` steps on `Due` carry: the 4 types the root and
+/// the identity reach.
+const DECISION_TYPES: &str = r#"{"inbox.messaging.DecisionAsk": {"kind": "struct", "fields": [
+      {"name": "options", "type": "List<inbox.messaging.DecisionOption>"},
+      {"name": "recommended_option", "type": "Optional<inbox.messaging.OptionLetter>"},
+      {"name": "request_ref", "type": "Optional<String>"}], "invariants": []},
+    "inbox.messaging.DecisionOption": {"kind": "struct", "fields": [
+      {"name": "letter", "type": "inbox.messaging.OptionLetter"},
+      {"name": "text", "type": "String"}], "invariants": []},
+    "inbox.messaging.MessageId": {"kind": "newtype", "of": "String",
+      "invariants": [{"statement": "value.count == 26", "predicate": "value.count == 26"}]},
+    "inbox.messaging.OptionLetter": {"kind": "newtype", "of": "String",
+      "invariants": [{"statement": "value.count == 1", "predicate": "value.count == 1"}], "alphabet": "AB"}}"#;
+
+/// A decision whose second option carries `letter`.
+fn options(letter: &str) -> String {
+    format!(
+        r#"{{"options": [{{"letter": "A", "text": "t"}}, {{"letter": "{letter}", "text": "u"}}]}}"#
+    )
+}
+
+/// `posts` posts, then a read of `Due` held to `value_invariants` on the decision's option
+/// letters, witnessed by the first `MessagePosted`.
+fn value_invariants_steps(posts: usize, declarations: &str) -> String {
+    let posts: String = (0..posts)
+        .map(|at| post(FIRST, &format!("k{at}")) + ", ")
+        .collect();
+    format!(
+        r#"[{posts}{{"step": "query_view", "view": "inbox.messaging.Due"}},
+        {{"step": "expect_view", "view": "inbox.messaging.Due", "expectation": {{"expect": "value_invariants",
+          "root": {{"name": "decision", "type": "Optional<inbox.messaging.DecisionAsk>"}},
+          "declarations": {declarations},
+          "value": "inbox.messaging.OptionLetter",
+          "position": {{"kind": "site", "path": [{{"op": "present"}}, {{"op": "field", "name": "options"}}, {{"op": "element"}}, {{"op": "field", "name": "letter"}}]}},
+          "witness": {{"kind": "arranged_row", "selector": {{"kind": "projected_identity", "entity": "inbox.messaging.Message",
+            "identity": {{"name": "message_id", "type": "inbox.messaging.MessageId"}},
+            "expected": {{"kind": "observed", "event": "inbox.messaging.MessagePosted", "field": "message_id"}}}}}},
+          "work_limit": 1048576}}}}]"#
+    )
+}
+
+/// [`value_invariants_steps`] with one post per payload, each answered with a `MessagePosted` of
+/// that payload, and the read answering `rows`.
+fn invariant_run(
+    payloads: &[String],
+    rows: &str,
+    declarations: &str,
+) -> inbox_conformance::ScenarioResult {
+    let mut target = Scripted {
+        answers: payloads
+            .iter()
+            .map(|payload| {
+                outcome(
+                    "posted",
+                    None,
+                    &[("inbox.messaging.MessagePosted", payload.as_str())],
+                )
+            })
+            .collect(),
+        reads: vec![Read::Rows(match parse(rows) {
+            Value::Array(rows) => rows,
+            _ => unreachable!(),
+        })],
+        ..Scripted::default()
+    };
+    let steps = value_invariants_steps(payloads.len(), declarations);
+    run_scenario(&scenario(&steps, ""), &mut target)
+}
+
 #[test]
 fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
     let satisfies = |rows: &str| {
@@ -486,52 +555,13 @@ fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
         Status::Failed
     );
 
-    let declarations = r#"{"inbox.messaging.DecisionAsk": {"kind": "struct", "fields": [
-                  {"name": "options", "type": "List<inbox.messaging.DecisionOption>"},
-                  {"name": "recommended_option", "type": "Optional<inbox.messaging.OptionLetter>"},
-                  {"name": "request_ref", "type": "Optional<String>"}], "invariants": []},
-                "inbox.messaging.DecisionOption": {"kind": "struct", "fields": [
-                  {"name": "letter", "type": "inbox.messaging.OptionLetter"},
-                  {"name": "text", "type": "String"}], "invariants": []},
-                "inbox.messaging.MessageId": {"kind": "newtype", "of": "String",
-                  "invariants": [{"statement": "value.count == 26", "predicate": "value.count == 26"}]},
-                "inbox.messaging.OptionLetter": {"kind": "newtype", "of": "String",
-                  "invariants": [{"statement": "value.count == 1", "predicate": "value.count == 1"}], "alphabet": "AB"}}"#;
-    let options = |letter: &str| {
-        format!(
-            r#"{{"options": [{{"letter": "A", "text": "t"}}, {{"letter": "{letter}", "text": "u"}}]}}"#
-        )
-    };
+    let declarations = DECISION_TYPES;
     let witnessed = |rows: &str, declarations: &str| {
-        let steps = format!(
-            r#"[{}, {{"step": "query_view", "view": "inbox.messaging.Due"}},
-            {{"step": "expect_view", "view": "inbox.messaging.Due", "expectation": {{"expect": "value_invariants",
-              "root": {{"name": "decision", "type": "Optional<inbox.messaging.DecisionAsk>"}},
-              "declarations": {declarations},
-              "value": "inbox.messaging.OptionLetter",
-              "position": {{"kind": "site", "path": [{{"op": "present"}}, {{"op": "field", "name": "options"}}, {{"op": "element"}}, {{"op": "field", "name": "letter"}}]}},
-              "witness": {{"kind": "arranged_row", "selector": {{"kind": "projected_identity", "entity": "inbox.messaging.Message",
-                "identity": {{"name": "message_id", "type": "inbox.messaging.MessageId"}},
-                "expected": {{"kind": "observed", "event": "inbox.messaging.MessagePosted", "field": "message_id"}}}}}},
-              "work_limit": 1048576}}}}]"#,
-            post(FIRST, "k")
-        );
-        let mut target = Scripted {
-            answers: vec![outcome(
-                "posted",
-                None,
-                &[(
-                    "inbox.messaging.MessagePosted",
-                    format!(r#"{{"message_id": "{FIRST}"}}"#).as_str(),
-                )],
-            )],
-            reads: vec![Read::Rows(match parse(rows) {
-                Value::Array(rows) => rows,
-                _ => unreachable!(),
-            })],
-            ..Scripted::default()
-        };
-        run_scenario(&scenario(&steps, ""), &mut target)
+        invariant_run(
+            &[format!(r#"{{"message_id": "{FIRST}"}}"#)],
+            rows,
+            declarations,
+        )
     };
     let invariant = |letter: &str| {
         witnessed(
@@ -681,4 +711,401 @@ fn the_report_is_read_and_its_counts_must_agree_with_its_lists() {
     let disagreeing = text.replace(r#""failed": 1"#, r#""failed": 0"#);
     assert!(gate::read_report(&disagreeing).is_err());
     assert!(gate::read_report(&text.replace("report/2", "report/1")).is_err());
+}
+
+// ---- satisfies, value_invariants and subject rows, each against the ESS 0.96.0 runner -------
+
+/// ESS `satisfies`: "Every row satisfies the predicate, and there is at least one".
+#[test]
+fn satisfies_fails_on_a_view_with_no_rows() {
+    let steps = r#"[{"step": "query_view", "view": "inbox.messaging.Due"},
+        {"step": "expect_view", "view": "inbox.messaging.Due", "expectation": {"expect": "satisfies", "predicate": "message_id.count == 3"}}]"#;
+    let mut target = Scripted {
+        reads: vec![Read::Rows(Vec::new())],
+        ..Scripted::default()
+    };
+    let empty = run_scenario(&scenario(steps, ""), &mut target);
+    assert_eq!(empty.status, Status::Failed, "{empty:?}");
+}
+
+/// ESS `Contract::admit`: a value type with no invariants is refused, an error.
+#[test]
+fn a_value_type_without_invariants_is_an_error() {
+    let bare = DECISION_TYPES.replace(
+        r#""invariants": [{"statement": "value.count == 1", "predicate": "value.count == 1"}], "alphabet": "AB""#,
+        r#""invariants": [], "alphabet": "AB""#,
+    );
+    assert_ne!(bare, DECISION_TYPES);
+    let result = invariant_run(
+        &[format!(r#"{{"message_id": "{FIRST}"}}"#)],
+        &format!(
+            r#"[{{"message_id": "{FIRST}", "decision": {}}}]"#,
+            options("B")
+        ),
+        &bare,
+    );
+    assert_eq!(result.status, Status::Error, "{result:?}");
+}
+
+/// The suite reader: a declaration key, or a value type, the runner does not read makes the
+/// scenario unsupported (nothing the suite states is silently ignored).
+#[test]
+fn a_declaration_the_runner_does_not_read_makes_the_scenario_unsupported() {
+    let unsupported = |declarations: &str| {
+        let steps = value_invariants_steps(0, declarations);
+        scenario(&steps, "").unsupported().map(str::to_owned)
+    };
+    assert_eq!(unsupported(DECISION_TYPES), None);
+    let changes = [
+        (
+            r#"{"name": "text", "type": "String"}"#,
+            r#"{"name": "text", "type": "String", "doc": "d"}"#,
+        ),
+        (
+            r#""inbox.messaging.MessageId": {"kind": "newtype", "of": "String","#,
+            r#""inbox.messaging.MessageId": {"kind": "newtype", "of": "String", "doc": "d","#,
+        ),
+        (
+            r#"{"statement": "value.count == 26", "predicate": "value.count == 26"}"#,
+            r#"{"statement": "value.count == 26", "predicate": "value.count == 26", "doc": "d"}"#,
+        ),
+        (
+            r#"{"kind": "struct", "fields": [
+      {"name": "letter""#,
+            r#"{"kind": "struct", "doc": "d", "fields": [
+      {"name": "letter""#,
+        ),
+        (
+            r#""inbox.messaging.OptionLetter": {"kind": "newtype", "of": "String","#,
+            r#""inbox.messaging.OptionLetter": {"kind": "newtype", "of": "Integer","#,
+        ),
+        (
+            r#"{"inbox.messaging.DecisionAsk""#,
+            r#"{"inbox.messaging.Shade": {"kind": "enum", "variants": ["a"], "doc": "d"}, "inbox.messaging.DecisionAsk""#,
+        ),
+    ];
+    for (from, to) in changes {
+        let changed = DECISION_TYPES.replace(from, to);
+        assert_ne!(changed, DECISION_TYPES, "{from}");
+        assert!(unsupported(&changed).is_some(), "{to}");
+    }
+}
+
+/// ESS `Contract::closure`: every type reached is declared, every declared type is reached, and
+/// no `Binary64` is reached.
+#[test]
+fn the_declarations_must_be_the_closure_of_what_the_root_reaches() {
+    use inbox_conformance::invariants::{Body, Primitive, TypeRef, closure};
+    let text = |name: &str| {
+        (
+            name.to_owned(),
+            Body::Newtype {
+                of: TypeRef::Primitive(Primitive::Text),
+                alphabet: None,
+                prefix: None,
+            },
+        )
+    };
+    let named = |name: &str| TypeRef::Named(name.to_owned());
+    let one = std::collections::BTreeMap::from([text("t.A")]);
+    assert_eq!(closure(vec![named("t.A")], &one), Ok(()));
+    assert!(closure(vec![named("t.A"), named("t.B")], &one).is_err());
+    let two = std::collections::BTreeMap::from([text("t.A"), text("t.B")]);
+    assert!(closure(vec![named("t.A")], &two).is_err());
+    let binary = std::collections::BTreeMap::from([(
+        "t.A".to_owned(),
+        Body::Newtype {
+            of: TypeRef::Primitive(Primitive::Binary64),
+            alphabet: None,
+            prefix: None,
+        },
+    )]);
+    assert!(closure(vec![named("t.A")], &binary).is_err());
+}
+
+/// ESS `Contract::observe`: every row's root value is checked against its declared
+/// representation, and a malformed row fails the step even where the witness row holds.
+#[test]
+fn every_row_is_held_to_the_declared_representation() {
+    use inbox_conformance::invariants::{
+        Body, Observed, PathOp, Primitive, TypeRef, ValueInvariants,
+    };
+    let named = |name: &str| TypeRef::Named(name.to_owned());
+    let primitive = TypeRef::Primitive;
+    let newtype = |prefix: Option<&str>| Body::Newtype {
+        of: primitive(Primitive::Text),
+        alphabet: None,
+        prefix: prefix.map(str::to_owned),
+    };
+    let check = ValueInvariants {
+        root: "root".to_owned(),
+        root_type: named("t.Root"),
+        types: std::collections::BTreeMap::from([
+            (
+                "t.Root".to_owned(),
+                Body::Struct {
+                    fields: vec![
+                        ("flag".to_owned(), primitive(Primitive::Boolean)),
+                        ("count".to_owned(), primitive(Primitive::Integer)),
+                        ("note".to_owned(), primitive(Primitive::Text)),
+                        ("kind".to_owned(), named("t.Kind")),
+                        ("tag".to_owned(), named("t.Tag")),
+                        (
+                            "letters".to_owned(),
+                            TypeRef::List(Box::new(named("t.Letter"))),
+                        ),
+                    ],
+                },
+            ),
+            (
+                "t.Kind".to_owned(),
+                Body::Enum {
+                    variants: vec!["a".to_owned(), "b".to_owned()],
+                },
+            ),
+            ("t.Tag".to_owned(), newtype(Some("x-"))),
+            ("t.Letter".to_owned(), newtype(None)),
+        ]),
+        value_type: "t.Letter".to_owned(),
+        counts: vec![("value.count == 1".to_owned(), suite::Op::Eq, 1.0)],
+        path: vec![PathOp::Field("letters".to_owned()), PathOp::Element],
+        identity: "id".to_owned(),
+        event: "t.Posted".to_owned(),
+        field: "id".to_owned(),
+        broken: None,
+    };
+    let good =
+        r#"{"flag": true, "count": 3, "note": "n", "kind": "a", "tag": "x-1", "letters": ["A"]}"#;
+    let observe = |other: &str| {
+        let rows = parse(&format!(
+            r#"[{{"id": "w", "root": {good}}}, {{"id": "o", "root": {other}}}]"#
+        ));
+        let Value::Array(rows) = rows else {
+            unreachable!()
+        };
+        check.observe(&rows, &Value::Text("w".to_owned()))
+    };
+    assert_eq!(observe(good), Ok(()));
+    let malformed = [
+        good.replace(r#""flag": true"#, r#""flag": "yes""#),
+        good.replace(r#""flag": true, "#, ""),
+        good.replace(r#""count": 3"#, r#""count": "3""#),
+        good.replace(r#""note": "n""#, r#""note": 5"#),
+        good.replace(r#""kind": "a""#, r#""kind": "c""#),
+        good.replace(r#""tag": "x-1""#, r#""tag": "y-1""#),
+        good.replace(r#""letters": ["A"]"#, r#""letters": "A""#),
+        good.replace('}', r#", "more": 1}"#),
+        r#""a root that is no struct""#.to_owned(),
+    ];
+    for other in malformed {
+        assert_ne!(other, good);
+        assert!(
+            matches!(observe(&other), Err(Observed::Unsatisfied(_))),
+            "{other}: {:?}",
+            observe(&other)
+        );
+    }
+}
+
+/// ESS resolves `observed` to the first occurrence of the event (`seen.iter().find`), and an
+/// occurrence without the field leaves the witness unresolved, an error.
+#[test]
+fn the_witness_is_the_first_occurrence_of_its_event() {
+    let rows = format!(
+        r#"[{{"message_id": "{FIRST}", "decision": null}}, {{"message_id": "{SECOND}", "decision": {}}}]"#,
+        options("B")
+    );
+    let first_unwitnessed = invariant_run(
+        &[
+            format!(r#"{{"message_id": "{FIRST}"}}"#),
+            format!(r#"{{"message_id": "{SECOND}"}}"#),
+        ],
+        &rows,
+        DECISION_TYPES,
+    );
+    assert_eq!(
+        first_unwitnessed.status,
+        Status::Failed,
+        "{first_unwitnessed:?}"
+    );
+    let no_field = invariant_run(&["{}".to_owned()], &rows, DECISION_TYPES);
+    assert_eq!(no_field.status, Status::Error, "{no_field:?}");
+}
+
+/// Runs a snapshot of `Inboxes` by `subject`, a second read, and `unchanged`; the reads answer
+/// `before` and `after`.
+fn snapshot(
+    subject: &str,
+    unchanged: &str,
+    before: &str,
+    after: &str,
+) -> inbox_conformance::ScenarioResult {
+    let steps = format!(
+        r#"[{{"step": "query_view", "view": "inbox.messaging.Inboxes"}},
+            {{"step": "snapshot_subject", "view": "inbox.messaging.Inboxes", "subject": {subject}}},
+            {{"step": "query_view", "view": "inbox.messaging.Inboxes"}},
+            {{"step": "{unchanged}", "view": "inbox.messaging.Inboxes"}}]"#
+    );
+    let read = |text: &str| {
+        Read::Rows(match parse(text) {
+            Value::Array(rows) => rows,
+            _ => unreachable!(),
+        })
+    };
+    let mut target = Scripted {
+        reads: vec![read(before), read(after)],
+        ..Scripted::default()
+    };
+    run_scenario(&scenario(&steps, ""), &mut target)
+}
+
+/// ESS `snapshot_subject`: the subject row is the one row whose subject fields are carried and
+/// exactly equal (`row.get(field) == Some(value)`), and "unchanged" is whole-row equality.
+#[test]
+fn a_subject_row_is_selected_exactly_and_kept_exactly() {
+    let by_a = r#"{"address": {"kind": "literal", "value": "a"}}"#;
+    let unchanged = "expect_subject_unchanged";
+    let two = r#"[{"address": "a", "state": "Open"}, {"address": "b", "state": "Open"}]"#;
+    let other_row = snapshot(by_a, unchanged, two, two);
+    assert_eq!(other_row.status, Status::Passed, "{other_row:?}");
+    let twice = r#"[{"address": "a", "state": "Open"}, {"address": "a", "state": "Closed"}]"#;
+    let several = snapshot(by_a, unchanged, twice, twice);
+    assert_eq!(several.status, Status::Failed, "{several:?}");
+    let by_null = r#"{"owner": {"kind": "literal", "value": null}}"#;
+    let absent = r#"[{"address": "a"}]"#;
+    let absent_is_not_null = snapshot(by_null, unchanged, absent, absent);
+    assert_eq!(
+        absent_is_not_null.status,
+        Status::Failed,
+        "{absent_is_not_null:?}"
+    );
+    let null_then_absent = snapshot(
+        by_a,
+        unchanged,
+        r#"[{"address": "a", "owner": null}]"#,
+        absent,
+    );
+    assert_eq!(
+        null_then_absent.status,
+        Status::Failed,
+        "{null_then_absent:?}"
+    );
+}
+
+/// This runner's reading of a suite defect: a plain snapshot held by
+/// `expect_complete_subject_unchanged` names two different checks, an error, not a pass.
+#[test]
+fn a_snapshot_and_its_unchanged_step_must_agree_on_completeness() {
+    let row = r#"[{"address": "a", "state": "Open"}]"#;
+    let mixed = snapshot(
+        r#"{"address": {"kind": "literal", "value": "a"}}"#,
+        "expect_complete_subject_unchanged",
+        row,
+        row,
+    );
+    assert_eq!(mixed.status, Status::Error, "{mixed:?}");
+}
+
+// ---- the gate's binding of a report to its run ---------------------------------------------
+
+/// A report/2 with these outcome ids (all passed), status, digest and implementation.
+fn bound_report(passed: &[&str], status: &str, digest: &str, implementation: &str) -> String {
+    let ids = passed
+        .iter()
+        .map(|id| format!("{id:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        r#"{{"format": "ess-conformance-report/2", "conformance_status": "{status}", "implementation": "{implementation}",
+            "suite": {{"digest": "{digest}", "version": "ess-conformance/52"}},
+            "counts": {{"total": {n}, "passed": {n}, "failed": 0, "error": 0, "skipped": 0, "unsupported": 0}},
+            "outcomes": {{"passed": [{ids}], "failed": [], "error": [], "skipped": [], "unsupported": []}}}}"#,
+        n = passed.len()
+    )
+}
+
+/// The gate: a report binds to the suite whose digest it names, to the status a passing run
+/// carries (`inconclusive`, or `failed` where only listed scenarios are unsupported), to each
+/// scenario id once, and to the implementation the task names.
+#[test]
+fn the_gate_binds_a_report_to_its_suite_status_scenarios_and_implementation() {
+    let digest = results::suite_digest(b"suite");
+    let read = |text: &str| {
+        (
+            gate::read_report(text).unwrap(),
+            gate::read_binding(text).unwrap(),
+        )
+    };
+    let (report, binding) = read(&bound_report(&["a"], "inconclusive", &digest, "core"));
+    assert!(gate::bound(&report, &binding, &digest).is_empty());
+    assert_eq!(gate::bound(&report, &binding, "sha256:other").len(), 1);
+    let (failed_report, failed) = read(&bound_report(&["a"], "failed", &digest, "core"));
+    assert_eq!(gate::bound(&failed_report, &failed, &digest).len(), 1);
+    let with_unsupported = gate::Report {
+        total: 2,
+        passed: 1,
+        unsupported: vec!["b".to_owned()],
+        ..gate::Report::default()
+    };
+    assert_eq!(gate::passing_status(&with_unsupported), "failed");
+    assert!(gate::bound(&with_unsupported, &failed, &digest).is_empty());
+
+    let ids = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>();
+    assert!(gate::accounts(&binding, &ids(&["a"])).is_empty());
+    assert_eq!(gate::accounts(&binding, &ids(&["a", "b"])).len(), 1);
+    assert_eq!(gate::accounts(&binding, &ids(&["b"])).len(), 2);
+    let (_, twice) = read(&bound_report(&["a", "a"], "inconclusive", &digest, "core"));
+    assert_eq!(gate::accounts(&twice, &ids(&["a"])).len(), 1);
+
+    assert_eq!(gate::implemented(&binding, "core"), None);
+    assert!(gate::implemented(&binding, "interpreted 0.96.0").is_some());
+}
+
+/// The gate binary: a report that is not the suite's, or not the named implementation's, fails
+/// it (exit 1); the report of a run of that suite passes (exit 0).
+#[test]
+fn the_gate_binary_holds_the_report_to_the_suite_and_the_implementation() {
+    let suite_text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
+        "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": []}}}"#;
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("runner-gate-binding");
+    std::fs::create_dir_all(&dir).unwrap();
+    let suite_path = dir.join("suite.json");
+    let listed = dir.join("unsupported.tsv");
+    std::fs::write(&suite_path, suite_text).unwrap();
+    std::fs::write(&listed, "").unwrap();
+    let digest = results::suite_digest(suite_text.as_bytes());
+    let gate = |name: &str, report: String, implementation: Option<&str>| {
+        let path = dir.join(format!("{name}.json"));
+        std::fs::write(&path, report).unwrap();
+        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_inbox-conformance"));
+        command
+            .arg("gate")
+            .arg("--suite")
+            .arg(&suite_path)
+            .arg("--report")
+            .arg(&path)
+            .arg("--unsupported")
+            .arg(&listed);
+        if let Some(implementation) = implementation {
+            command.arg("--implementation").arg(implementation);
+        }
+        command.output().unwrap().status.code()
+    };
+    let own = || bound_report(&["a"], "inconclusive", &digest, "core");
+    assert_eq!(gate("own", own(), Some("core")), Some(0));
+    assert_eq!(gate("unnamed", own(), None), Some(0));
+    assert_eq!(gate("other", own(), Some("interpreted 0.96.0")), Some(1));
+    let foreign = bound_report(&["a"], "inconclusive", "sha256:other", "core");
+    assert_eq!(gate("foreign", foreign, Some("core")), Some(1));
+}
+
+/// The suite reader: an object stating a member twice is refused, as ESS's serde reader does.
+#[test]
+fn a_member_stated_twice_refuses_the_suite() {
+    let text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
+        "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": [
+          {"step": "query_view", "view": "inbox.messaging.Due",
+           "params": {"inbox": {"kind": "literal", "value": "x", "value": "y"}}}]}}}"#;
+    let refused = suite::read(text).map(|_| ()).unwrap_err();
+    assert!(refused.contains("`value` twice"), "{refused}");
 }

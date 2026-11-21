@@ -533,6 +533,11 @@ impl Run {
                 ))
             }
             Expectation::Satisfies(predicate) => {
+                if rows.is_empty() {
+                    return failed(format!(
+                        "`{view}` holds no rows; `satisfies` needs at least one"
+                    ));
+                }
                 for row in rows {
                     if let Err(reason) = satisfies(row, predicate) {
                         return failed(format!("a row of `{view}` {reason}: {}", render(row)));

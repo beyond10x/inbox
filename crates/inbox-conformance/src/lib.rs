@@ -5,7 +5,8 @@
 //!
 //! - a key the runner does not know at the top level of the suite or in `provenance` belongs to
 //!   no single scenario, so the whole suite is refused, naming the key (`run` exits 2), as is a
-//!   suite of another format or one not starting from an empty system;
+//!   suite of another format, one not starting from an empty system, or one with an object that
+//!   states a member name twice at any depth (ESS's own reader refuses that too);
 //! - a step kind, key, value reference, predicate, shape or declaration the runner does not
 //!   interpret inside a scenario makes that scenario unsupported, with the reason, and none of its
 //!   steps runs; `unsupported.tsv` must list it for the gate to pass.
@@ -17,8 +18,10 @@
 //! 6 `external:` branches as the step's expected outcome says.
 //!
 //! [`results::document`] writes the `ess-conformance-results/1` document `ess verify conform
-//! report` turns into a report/2, and [`gate::verdict`] holds that report to the suite it was
-//! made for and to `unsupported.tsv`. `task conform` runs the three.
+//! report` turns into a report/2, and [`gate::verdict`] and [`gate::bound`] hold that report to
+//! the suite it was made for (its digest and its scenario ids, each once), to the implementation
+//! it names where `gate --implementation` is given, and to `unsupported.tsv`. `task conform` runs
+//! the three, with one name for the implementation the report is written for and the gate holds.
 //!
 //! What the runner compares, as far as the suite states it and as the ESS 0.96.0 runner compares
 //! it: the outcome and the command it answers, the declared error or its absence, a refusal as

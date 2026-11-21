@@ -1,5 +1,6 @@
 //! The gate on the report ESS writes from the results: 0 failed, 0 errored, 0 skipped, and the
-//! unsupported scenarios exactly those `unsupported.tsv` names.
+//! unsupported scenarios exactly those `unsupported.tsv` names; the report bound to the suite
+//! (its digest, each of its scenario ids once) and, where one is given, to the implementation.
 
 use std::collections::BTreeMap;
 
@@ -134,13 +135,22 @@ pub struct Binding {
     pub conformance_status: String,
     /// `suite.digest`: `sha256:<hex>` of the suite's bytes.
     pub suite_digest: String,
+    /// `implementation`, where the report names one.
+    pub implementation: Option<String>,
+    /// Every id of the outcome lists (passed, failed, error, skipped, unsupported), in that
+    /// order, as often as the lists name it.
+    pub ids: Vec<String>,
 }
+
+/// The outcome lists of a report/2, in the order [`Binding::ids`] reads them.
+const OUTCOMES: [&str; 5] = ["passed", "failed", "error", "skipped", "unsupported"];
 
 /// Reads the [`Binding`] of an `ess-conformance-report/2`.
 ///
 /// # Errors
 ///
-/// A document that is not JSON or carries no `conformance_status` or `suite.digest`.
+/// A document that is not JSON, carries no `conformance_status` or `suite.digest`, an
+/// `implementation` that is not text, or an outcome list holding something other than ids.
 pub fn read_binding(text: &str) -> Result<Binding, String> {
     let document = json::parse_written(text).map_err(|error| format!("the report: {error}"))?;
     let Some(Value::Text(conformance_status)) = document.member("conformance_status") else {
@@ -152,10 +162,73 @@ pub fn read_binding(text: &str) -> Result<Binding, String> {
     else {
         return Err("the report has no `suite.digest`".to_owned());
     };
+    let implementation = match document.member("implementation") {
+        None => None,
+        Some(Value::Text(name)) => Some(name.clone()),
+        Some(_) => return Err("the report's `implementation` is not text".to_owned()),
+    };
+    let mut ids = Vec::new();
+    for name in OUTCOMES {
+        let listed = document
+            .member("outcomes")
+            .and_then(|outcomes| outcomes.member(name));
+        match listed {
+            None => {}
+            Some(Value::Array(items)) => {
+                for item in items {
+                    let Value::Text(id) = item else {
+                        return Err(format!("`outcomes.{name}` holds a value that is no id"));
+                    };
+                    ids.push(id.clone());
+                }
+            }
+            Some(_) => return Err(format!("`outcomes.{name}` is not a list")),
+        }
+    }
     Ok(Binding {
         conformance_status: conformance_status.clone(),
         suite_digest: suite_digest.clone(),
+        implementation,
+        ids,
     })
+}
+
+/// Holds the ids a report accounts for to the scenario ids of its suite: each of `scenarios`
+/// named exactly once, and no other. One problem per id that breaks it.
+pub fn accounts(binding: &Binding, scenarios: &[String]) -> Vec<String> {
+    let mut named: BTreeMap<&str, usize> = BTreeMap::new();
+    for id in &binding.ids {
+        *named.entry(id.as_str()).or_default() += 1;
+    }
+    let mut problems = Vec::new();
+    for scenario in scenarios {
+        match named.get(scenario.as_str()) {
+            None => problems.push(format!("the report does not account for {scenario}")),
+            Some(1) => {}
+            Some(times) => problems.push(format!("the report names {scenario} {times} times")),
+        }
+    }
+    problems.extend(
+        named
+            .keys()
+            .filter(|id| !scenarios.iter().any(|scenario| scenario == *id))
+            .map(|id| format!("the report names {id}, which is no scenario of the suite")),
+    );
+    problems
+}
+
+/// Holds a report to the implementation it should be written for: a problem where its
+/// `implementation` is another or absent.
+pub fn implemented(binding: &Binding, expected: &str) -> Option<String> {
+    match &binding.implementation {
+        Some(name) if name == expected => None,
+        Some(name) => Some(format!(
+            "the report is for the implementation `{name}`, not `{expected}`"
+        )),
+        None => Some(format!(
+            "the report names no implementation; `{expected}` was expected"
+        )),
+    }
 }
 
 /// The `conformance_status` ESS 0.96.0 gives a run this gate passes: `inconclusive` where every
