@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-21
+
 The first release. It ships no binary and publishes no crate: there is no program to run until
 the command-line client exists.
 

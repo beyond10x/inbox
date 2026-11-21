@@ -29,9 +29,10 @@ The commands use the gates as the bot, from a checkout of this repository:
    `cargo metadata --format-version 1 > /dev/null` so `Cargo.lock` carries it. The first
    release is the version already there, `0.1.0`.
 2. **Changelog.** In `CHANGELOG.md`, rename `## [Unreleased]` to `## [<version>] - <date>` and
-   put an empty `## [Unreleased]` above it. Commit both on `main`; `slot task check` is green on
-   that commit, and so are the required checks of `main` (`common / Security and privacy`,
-   `inbox / task check`, `Build documentation`).
+   put an empty `## [Unreleased]` above it. Commit both and bring the commit to `main` through a
+   pull request (`AGENTS.md`, "Publishing"); `slot task check` is green on that commit, and so
+   are the required checks of `main` (`common / Security and privacy`, `inbox / task check`,
+   `Build documentation`).
 3. **Try it.** Run the workflow by hand on `main` and wait for it:
 
        $gates gh -- workflow run release.yml --ref main
