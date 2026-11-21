@@ -14,6 +14,12 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | delivered 2026-11-21 |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | delivered 2026-11-21 |
+| 6 | story:post-from-is-the-caller, story:dedup-key-scope, story:foreign-message-id-answers-as-unknown | the 3 security findings of wave 3 closed before the service is used | running |
+
+Wave 6 is not part of the plan approved as waves 1 to 5. It is the plan derived after those
+were delivered, from the 3 drafts the host operator accepted on 2026-11-21
+(approval-record:wave-6-security-drafts-accepted). epic:service-in-memory stays `active`
+until it is delivered.
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
 (50 uncovered refusals at the start of stage 2; story:declared-coverage owns them). Since wave 5
@@ -543,6 +549,109 @@ Result:
   story:post-from-is-the-caller lands, a caller with a valid key can post an envelope whose
   `from` is another principal (the replay named in the result of wave 3).
 
+## Wave 6
+
+3 units, one after another. The 3 stories were drafts of the Backlog below; the host operator
+accepted them on 2026-11-21 and ordered them run as one wave, with the gate of the earlier waves,
+a report after the wave and no release (approval-record:wave-6-security-drafts-accepted).
+
+Scoped by 3 `aep:story-scoper` runs on `main` at `7b43de0`; each story's Scope section and its
+typed entries are theirs, with the coordinator's corrections under each section. Derived with
+`aep plan artifact waves --kind story --status active` (aep 0.80.0):
+
+```
+wave 1
+  story:post-from-is-the-caller (inferred)
+wave 2
+  story:dedup-key-scope (inferred)
+wave 3
+  story:foreign-message-id-answers-as-unknown (inferred)
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown AGENTS.md
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown CHANGELOG.md (inferred)
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown README.md
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown crates/inbox-server/tests/adversary.rs
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown docs/design/inbox.md (inferred)
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown ess/domains/messaging.yaml
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown ess/scenarios (inferred)
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown generated
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown tools/scenarios.py (inferred)
+collision: story:dedup-key-scope story:foreign-message-id-answers-as-unknown website/docs/limits.md
+collision: story:dedup-key-scope story:post-from-is-the-caller AGENTS.md
+collision: story:dedup-key-scope story:post-from-is-the-caller CHANGELOG.md (inferred)
+collision: story:dedup-key-scope story:post-from-is-the-caller README.md
+collision: story:dedup-key-scope story:post-from-is-the-caller crates/inbox-core/src/obligations.rs
+collision: story:dedup-key-scope story:post-from-is-the-caller crates/inbox-core/tests (inferred)
+collision: story:dedup-key-scope story:post-from-is-the-caller crates/inbox-server/tests/adversary.rs
+collision: story:dedup-key-scope story:post-from-is-the-caller docs/design/inbox.md
+collision: story:dedup-key-scope story:post-from-is-the-caller ess/domains/messaging.yaml
+collision: story:dedup-key-scope story:post-from-is-the-caller ess/ess-inputs.yaml (inferred)
+collision: story:dedup-key-scope story:post-from-is-the-caller ess/scenarios (inferred)
+collision: story:dedup-key-scope story:post-from-is-the-caller generated
+collision: story:dedup-key-scope story:post-from-is-the-caller tools/scenarios.py (inferred)
+collision: story:dedup-key-scope story:post-from-is-the-caller website/docs/limits.md
+collision: story:dedup-key-scope story:post-from-is-the-caller website/docs/status.md (inferred)
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller AGENTS.md
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller CHANGELOG.md
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller README.md
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller crates/inbox-conformance/unsupported.tsv (inferred)
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller crates/inbox-server/tests/adversary.rs
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller docs/design/inbox.md (inferred)
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller docs/design/service.md (inferred)
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller ess/domains/messaging.yaml
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller ess/scenarios
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller generated
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller tools/scenarios.py
+collision: story:foreign-message-id-answers-as-unknown story:post-from-is-the-caller website/docs/limits.md
+3 wave(s), 36 collision(s), 0 unassessed
+```
+
+Every pair collides, on the model file `ess/domains/messaging.yaml`, on `generated/` (each
+regeneration rewrites the digest line of every generated file) and on the scenario script. The
+stories cannot run at once. They run as one wave all the same, as ordered: one integration
+branch, one closing gate, one report, and the units in sequence, each forked from the
+integration branch after the unit before it is merged. The order is story:post-from-is-the-caller
+(it closes the replay, and the per-sender key of the second story stops a third principal only
+once `from` is the caller), story:dedup-key-scope, story:foreign-message-id-answers-as-unknown.
+It is recorded as `depends_on` relations, which is why the verb prints it.
+
+Settled by the coordinator before dispatch, in each story's Decisions section; the 2 drafts that
+left a point open "for whoever accepts this" were accepted without an answer to it:
+
+- story:post-from-is-the-caller: the outcome is `not-sender` with the error `NotSender`, first
+  outcome of `PostMessage` and of `Answer`.
+- story:dedup-key-scope: the scope of a dedup key is the sender (`from`).
+- story:foreign-message-id-answers-as-unknown: the model names the case as the outcome
+  `foreign-message`, and the listener answers that one outcome as `unknown-message`. The model
+  alone cannot give the answer on ESS 0.96.0: a second outcome named `unknown-message` is
+  refused (`ESS-COMMAND-006`), and a caller-guarded outcome is answered 403 under its own name.
+
+Each was probed on a copy of the model with `ess specify validate` and
+`ess generate --kind openapi`; synthesis and the suite were not run.
+
+Files and who owns them: a unit owns `ess/domains/messaging.yaml`, `tools/scenarios.py` and what
+`task scenarios` writes, `generated/` (regenerated, never edited), the crates and their tests,
+`crates/inbox-conformance/unsupported.tsv`, `docs/design/inbox.md` and `docs/design/service.md`.
+`website/`, `README.md`, `CHANGELOG.md`, the count lines and the backlog rule of `AGENTS.md` and
+this page are the coordinator's at the close, from the gate's numbers.
+
+Sub-agents: `aep:implementor` and `aep:adversary`, on Opus, one of each per unit, the adversary
+at most 2 passes (aep plugin 0.26.0).
+
+Commits this wave makes: the opening commit (this section and the store), 1 commit per unit and
+1 per correction round, 3 merges, the closing commit, the fast-forward of `main` after the
+opening commit and after the close.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `7b43de0`; the trees of wave
+5 are removed; 125 GB free on the root file system. The 3 scoper runs: 43, 44 and 65 tool
+uses.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-6` | `inbox-s2-w6` | `w6/` | open |
+| story:post-from-is-the-caller | `impl/post-from-is-the-caller` | `inbox-s2-w6-from` | `w6/post-from-is-the-caller/` | next |
+| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w6-key` | `w6/dedup-key-scope/` | waits for the unit above |
+| story:foreign-message-id-answers-as-unknown | `impl/foreign-message-id` | `inbox-s2-w6-foreign` | `w6/foreign-message-id/` | waits for the unit above |
+
 ## Backlog
 
 Drafts filed from findings wait here until every wave of this plan is delivered. Accepting one
@@ -562,6 +671,9 @@ NATS backend wave, a deployment, use by a real session. Each carries `blocks` re
 epic:two-hosts-and-wake and epic:jetstream-backend. Until story:post-from-is-the-caller lands, a
 recipient can post a sender's signed envelope again under its own request signature. Its guard
 goes into `ess/` (`from != caller.principal`); no copy of it is written in the listener.
+
+The 3 were accepted on 2026-11-21 and are wave 6, above. They stay listed here until that
+wave is delivered.
 
 - story:post-from-is-the-caller (wave 3): a post or an answer is refused when its `from` is not
   the caller. Its case `adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal`
