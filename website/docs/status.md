@@ -7,7 +7,8 @@ description: What is on main today, with the numbers the gate prints and the pat
 
 Stage 2 builds the service with the in-memory backend and the command-line client, in 5 waves
 ([`docs/plan/stage-2.md`](https://github.com/beyond10x/inbox/blob/main/docs/plan/stage-2.md)).
-All 5 waves are on `main`, and 2 more waves that close security findings (waves 6 and 7).
+All 5 waves are on `main`, and 3 more: 2 waves that close security findings (waves 6 and 7)
+and wave 8, which closes gaps in the checks.
 Release 0.1.0 holds waves 1 to 3.
 
 In short: the rules of the inbox run in process and behind an HTTP listener, and the
@@ -22,17 +23,17 @@ Numbers from 2026-11-21, ESS 0.97.1, Rust 1.99.1. Case counts are the passed cas
 
 | Part | What it does | Number | Proof |
 |---|---|---|---|
-| The specification | The domain `inbox.messaging`: inboxes, messages, their lifecycle, every refusal | 2 entities, 9 commands, 9 views, 10 events, 14 errors, 2 actors; 32 authored scenarios | [`ess/`](https://github.com/beyond10x/inbox/tree/main/ess), `task spec` |
+| The specification | The domain `inbox.messaging`: inboxes, messages, their lifecycle, every refusal | 2 entities, 9 commands, 9 views, 10 events, 14 errors, 2 actors; 38 authored scenarios | [`ess/`](https://github.com/beyond10x/inbox/tree/main/ess), `task spec` |
 | The generated crate | Model types, command behaviours, view queries, storage and context ports, route table and JSON codecs, written by ESS from `ess/` | 86 of 88 capabilities generated; 2 obligations left to hand-written code (`PostMessage`, `Expire`) | [`generated/rust/inbox/`](https://github.com/beyond10x/inbox/tree/main/generated/rust/inbox), `task drift` |
 | The core | The 2 obligations over a backend; one command at a time per store | 128 cases | [`crates/inbox-core/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-core) |
 | The in-memory backend | Both storage ports in memory; part of the core crate (`MemoryBackend`) | in the 128 cases above, and in the test kit's | [`crates/inbox-core/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-core) |
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-verify), [`docs/design/signing.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-backend-testkit) |
-| The HTTP listener | A library: request signatures, the read rule, the wait on `Pending`, the expiry task, the limits; loopback only | 59 cases, none ignored | [`crates/inbox-server/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-server), [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 74 cases, none ignored | [`crates/inbox-cli/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-cli), [first use](first-use.md) |
-| Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 105 scenarios: 105 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
-| The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 105 scenarios: 105 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-conformance), `task conform` |
-| The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 105 scenarios: 25 passed, 0 failed, 0 error, 80 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv), `task conform` |
+| The HTTP listener | A library: request signatures, the read rule, the wait on `Pending`, the expiry task, the limits; loopback only | 60 cases, none ignored | [`crates/inbox-server/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-server), [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/service.md) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 83 cases, none ignored | [`crates/inbox-cli/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-cli), [first use](first-use.md) |
+| Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 111 scenarios: 111 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
+| The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 111 scenarios: 111 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-conformance), `task conform` |
+| The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 111 scenarios: 31 passed, 0 failed, 0 error, 80 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv), `task conform` |
 | Acceptance | 3 checks against the built binary: a signed request and its reply between 2 keys; a read note and an expired request in no view; a repost after a restart, and a second repost that posts nothing | 3 passed | [`tests/acceptance/`](https://github.com/beyond10x/inbox/tree/main/tests/acceptance), `task acceptance` |
 | The conformance runner | Reads the suite, runs it against both targets, holds each report | 78 cases, 1 ignored | [`crates/inbox-conformance/`](https://github.com/beyond10x/inbox/tree/main/crates/inbox-conformance) |
 | Declared coverage | Every refusal of the specification is claimed by an authored scenario; `task check` fails on one that is not | 93 refused generated scenarios, 93 covered; the suite reports `conformance_status: passed` on the interpreted target | `task coverage` |
@@ -47,15 +48,19 @@ narrows one limit of the client.
   a kept envelope that the epochs file records at the epoch the service names now. The limit
   that stays is on the [limits](limits.md) page.
 - 2 authored scenarios: a decision its recipient read is decided on silence at `expires`, and
-  the row a decision decided on silence leaves keeps its other fields. The suite has 32
-  authored scenarios and 105 in all; both are unsupported over HTTP, as steps of the Sweeper.
+  the row a decision decided on silence leaves keeps its other fields. Both are unsupported
+  over HTTP, as steps of the Sweeper.
+- 6 authored scenarios hold the order in which `PostMessage` refuses when 2 refusals apply:
+  the signature, the option, the delegation and the reply shape are refused before any row is
+  read, and the 5 row refusals answer in one order. All 6 run over HTTP. The suite has 38
+  authored scenarios and 111 in all.
 - Cases of the core: one occurrence of each event `Expire` hands back, the order of the 3
   external refusals of `PostMessage`, a read decision decided on silence, and the fields
   `Expire` leaves unchanged.
 
-## Why 25 of 105 over HTTP
+## Why 31 of 111 over HTTP
 
-Against the core in process all 105 scenarios pass, and ESS reports `passed`. Against the
+Against the core in process all 111 scenarios pass, and ESS reports `passed`. Against the
 running service a scenario runs only where every step can be sent and witnessed over HTTP.
 80 cannot: a caller whose principal and inbox differ (68 scenarios; over HTTP both
 are the principal of the caller's key), a step as the Sweeper (38; only the service's own

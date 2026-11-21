@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:expire-publishes-once
 kind: story
-status: active
+status: implemented
 title: Expire is held to one occurrence of the event it publishes
 summary: A core that publishes the event of Expire twice passes task conform and the core's own tests; no scenario bounds the number of occurrences.
 tags:
@@ -12,10 +12,11 @@ relations:
 scope:
 - confidence: inferred
   path: crates/inbox-core/tests/expire_once.rs
-revision: 5
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T20:14:09Z", actor: "agent:inbox", revision: 4}
 - {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 5}
+- {from: "active", to: "implemented", at: "2026-11-21T23:49:43Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}}
 ---
 ## Outcome
 
@@ -61,3 +62,23 @@ Taken by the coordinator on 2026-11-21:
 
 - `tools/scenarios.py`, `ess/scenarios/`, `ess/ess-inputs.yaml`, or
 - `crates/inbox-core/tests/`
+
+## As built
+
+Wave 8 of stage 2, 2026-11-21: commits `7b00bbb` and `c13275e` (the adversary's cases), merged
+as `1cf9230`.
+
+- 9 cases in `crates/inbox-core/tests/expire_once.rs` compare the whole list of events `Expire`
+  hands back, so each event occurs once.
+- 6 cases in `crates/inbox-core/tests/adversary_w8_expire.rs` hold the same off the points the
+  first 9 build: a thread that is not the message id, a sender that is not the principal spoken
+  for, a sweep after `expires`, 1 of 4 messages expired with 5 `Expire` calls on one backend,
+  and a refused decision that names a silence option.
+- No source line of a crate, no rule and no scenario changed.
+- Adversary: 1 pass on `7b00bbb`, 4 findings (1 blocker and 1 note introduced, 2 warnings there
+  before the unit); 5 changed cores that publish an event twice passed the unit's 9 cases and
+  each fails at least 1 of the 6 (review-result:adversary-expire-publishes-once-pass-1). The 2
+  findings from before the unit are held by cases since `c13275e` and are open in the
+  scenarios: story:expiry-scenarios-hold-the-remaining-cases (a draft).
+
+Numbers after the wave: `docs/plan/stage-2.md`, "Wave 8".

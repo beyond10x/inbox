@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:repost-does-not-redeliver-a-handled-note
 kind: story
-status: active
+status: implemented
 title: Repost does not deliver again a note its recipient already read
 summary: inbox repost posts a note again after its recipient read it and the service answers posted; the client cannot tell a read note from one a restart dropped.
 tags:
@@ -30,10 +30,11 @@ scope:
   path: tests/acceptance/src
 - confidence: cited
   path: tests/acceptance/tests/checks.rs
-revision: 14
+revision: 16
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 13}
 - {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 14}
+- {from: "active", to: "implemented", at: "2026-11-21T23:49:43Z", actor: "agent:inbox", revision: 16, decided_on: {"recorded":{"test_result":1,"review_outcome":11,"verification":1}}}
 ---
 ## Outcome
 
@@ -128,3 +129,38 @@ Derived on 2026-11-21 by an `aep:story-scoper` run for the second way.
   `website/docs/limits.md`, `website/docs/status.md`, `AGENTS.md`, `CHANGELOG.md`.
 - Not touched: `ess/`, `generated/`, `crates/inbox-core`, `crates/inbox-conformance` (its wire
   target reads the status line of an answer and no other header).
+
+## As built
+
+Wave 8 of stage 2, 2026-11-21: commits `e8266d5` (the unit), `996748a` (an
+acceptance case), `a9bd783` and `8b71c0f` (2 corrections), merged as `0ee3b2f`, `8195f85` and
+`2e6e987`. Built as the second way of the Decisions above, with one difference named below.
+
+- The service sends the header `Inbox-Epoch` on every answer: 32 lower-case hex digits, one
+  value per start, no time and no secret in it.
+- The client keeps the file `<outbox>.epochs` beside the outbox file, one line
+  `<message id>\t<epoch>` per kept envelope whose post the service said it holds (an accepted
+  post, or the outcome `duplicate`; `duplicate-key` records none). `repost` asks the service
+  for its epoch when a kept envelope has one, and leaves alone the envelopes recorded at that
+  epoch. It posts every other kept envelope, and every one when the service sends no epoch.
+- `repost` records each epoch right after its answer. When the epochs file or the outbox file
+  cannot be written, every envelope is still posted, the report is printed and the exit is 4;
+  that exit decides over a refusal and over an unreadable outbox line.
+- Differs from the Decisions: the epoch is not written into the outbox file. A line of that
+  file is the envelope's JSON and nothing else, and the encoding the unit first tried (white
+  space after the JSON) was rejected by the coordinator; the outbox file keeps its form.
+- What stays open is on the limits page: the first `repost` after a restart delivers once more
+  a note its recipient read before the restart.
+- `tests/acceptance/tests/adversary.rs` changed in `996748a` under a decision of the host
+  operator of 2026-11-21: its case removes the epochs file before each of its 2 reposts.
+- Adversary: 2 passes. Pass 1 on `e8266d5`: 7 findings, 6 introduced (`a9bd783` corrects them
+  and adds the adversary's 7 cases), 1 there before the unit and in the scope of
+  story:test-step-enforces-its-budget (a draft)
+  (review-result:adversary-repost-does-not-redeliver-pass-1). Pass 2 on `a9bd783`: 4 findings,
+  all introduced by the first correction; `8b71c0f` records per answer again and adds the
+  adversary's 3 cases (review-result:adversary-repost-does-not-redeliver-pass-2). No third
+  pass ran: 2 is the most a unit gets.
+- One case of pass 1 was rewritten in `8b71c0f` for story:dedup-key-scope of wave 7: the dedup
+  key is held by a second note of the same sender.
+
+Numbers after the wave: `docs/plan/stage-2.md`, "Wave 8".

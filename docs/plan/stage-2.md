@@ -937,13 +937,88 @@ this repository exist and belong to the second coordinating session (`inbox-s2-w
 
 | Unit | Branch | Worktree id | Model | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-8` | `inbox-s2-w8` | | open |
-| story:external-refusal-order-cases | `impl/w8-external-order` | `inbox-s2-w8-order` | Haiku | dispatched |
-| story:expire-publishes-once | `impl/w8-expire-once` | `inbox-s2-w8-expire` | Sonnet | dispatched |
-| story:repost-does-not-redeliver-a-handled-note | `impl/w8-repost` | `inbox-s2-w8-repost` | Opus | dispatched |
-| story:read-decision-expires-on-silence-scenario | `impl/w8-read-silence` | `inbox-s2-w8-read` | Sonnet | waits for wave 7 |
-| story:silence-leaves-the-other-fields-scenario | `impl/w8-silence-fields` | `inbox-s2-w8-fields` | Sonnet | waits for wave 7 |
-| story:post-refusal-order-scenarios | `impl/w8-post-order` | `inbox-s2-w8-post` | Opus | waits for wave 7 |
+| integration | `wave/s2-8` | `inbox-s2-w8` | | closed |
+| story:external-refusal-order-cases | `impl/w8-external-order` | `inbox-s2-w8-order` | Haiku | merged |
+| story:expire-publishes-once | `impl/w8-expire-once` | `inbox-s2-w8-expire` | Sonnet | merged |
+| story:repost-does-not-redeliver-a-handled-note | `impl/w8-repost` | `inbox-s2-w8-repost` | Opus | merged |
+| story:read-decision-expires-on-silence-scenario | `impl/w8-read-silence` | `inbox-s2-w8-read` | Sonnet | merged |
+| story:silence-leaves-the-other-fields-scenario | `impl/w8-silence-fields` | `inbox-s2-w8-fields` | Sonnet | merged |
+| story:post-refusal-order-scenarios | `impl/w8-post-order` | `inbox-s2-w8-post` | Opus | merged |
+
+Closed on 2026-11-21. As built:
+
+- The gate on `wave/s2-8` after the merges and the closing edits, on ESS 0.97.1
+  (`CARGO_INCREMENTAL=0 slot task check`, at 2026-11-21T23:46:40Z): exit 0. `task coverage`: 111
+  scenarios, 38 authored, 93 refused, 93 covered. `task conform-interpreted` and the core lane
+  of `task conform`: "111 scenarios: 111 passed, 0 failed, 0 error, 0 unsupported",
+  `conformance_status: passed`. The serve lane: "111 scenarios: 31 passed, 0 failed, 0 error,
+  80 unsupported", held to the 80 lines of `crates/inbox-conformance/unsupported.tsv`.
+  `task acceptance`: "3 checks passed". `cargo test --workspace`: 476 cases passed, 0 failed
+  and 5 ignored (403 and 6 after wave 7). By crate: 128 in `crates/inbox-core`, 63 in
+  `crates/inbox-verify`, 29 in `crates/inbox-backend-testkit`, 60 in `crates/inbox-server`, 83
+  in `crates/inbox-cli`, 78 in `crates/inbox-conformance` (1 more ignored), 35 in
+  `crates/inbox-xtask`; the 4 cases of `tests/acceptance` are ignored there and 3 of them run
+  in `task acceptance`. The run took 140 s in the pool. A second run with `CI=true` and
+  `GITHUB_ACTIONS=true` set gave the same result. The documentation site builds
+  (`npm --prefix website run build`, exit 0).
+- story:external-refusal-order-cases: `cf4cee0` and `2d45865`, merged as `b140557`. 4 cases
+  hold the order of the 3 external refusals of `PostMessage`; the adversary's 9 cases hold it
+  for a request and hold what the verifier is asked. Adversary pass 1: 2 low findings, 1
+  introduced.
+- story:expire-publishes-once: `7b00bbb` and `c13275e`, merged as `1cf9230`. 9 cases compare the
+  whole list of events `Expire` hands back; the adversary's 6 cases do it off the points the 9
+  build. Adversary pass 1: 4 findings, 2 introduced; 5 changed cores that publish an event
+  twice passed the 9 cases and fail the 6.
+- story:repost-does-not-redeliver-a-handled-note: `e8266d5`, `996748a`, `a9bd783` and `8b71c0f`,
+  merged as `0ee3b2f`, `8195f85` and `2e6e987`. The service sends the header `Inbox-Epoch`, one
+  value per start; the client records the epoch of each answer that says the message is stored
+  in `<outbox>.epochs`, and `repost` leaves alone the envelopes recorded at the epoch the
+  service names now. Adversary pass 1: 7 findings, 6 introduced, corrected in `a9bd783`. Pass
+  2: 4 findings, all introduced by that correction, corrected in `8b71c0f`: `a9bd783` recorded
+  the epochs once after the loop, so a `repost` ended between 2 posts delivered again a note
+  read meanwhile.
+- story:read-decision-expires-on-silence-scenario: `469d7ee` and `e6554ff`, merged as
+  `df50876`. The scenario `read-decision-is-decided-on-silence`, and the adversary's 8 cases of
+  the core. Adversary pass 1: 4 findings, each there before the unit.
+- story:silence-leaves-the-other-fields-scenario: `b0a4ac5` and `0ece50d`, merged as `923f535`
+  and `48f727b`. The scenario `silence-leaves-the-decision-as-it-was`, and the adversary's 3
+  cases of the core. Adversary pass 1: 4 findings, 1 introduced.
+- story:post-refusal-order-scenarios: `fbf2a82`, merged as `c4ecc80`. 6 authored scenarios: the
+  signature, the option, the delegation and the reply shape against each of the 5 row
+  refusals, the 9 pairs of row refusals, and a message id a delegate posted. 4 of 11 changed
+  cores passed the suite before the unit and none after. Adversary pass 1: 4 findings, 2
+  introduced (sentences of the new section of `docs/design/inbox.md`, corrected in the closing
+  commit).
+- Differs from the plan:
+  - The epoch is not recorded in the outbox file. A line of that file is the envelope's JSON
+    and nothing else; the encoding the unit first tried (white space after the JSON) was
+    rejected by the coordinator, and the epochs are in a second file beside it.
+  - Part 1 was not published on its own. Wave 7 moved `main` first; the integration branch
+    merged `main` and the wave closes once.
+  - story:post-refusal-order-scenarios was built on `44c37f6` while the corrections of the
+    repost unit and of story:silence-leaves-the-other-fields-scenario were merged; its merge
+    had no conflict.
+  - The scenario that holds in the model that `duplicate` reads `from` and not `on_behalf_of`
+    (finding 1 of wave 7's second story) is part of story:post-refusal-order-scenarios:
+    `a-relayed-message-id-is-its-senders`.
+  - `tests/acceptance/tests/adversary.rs` changed in `996748a`, under a decision of the host
+    operator of 2026-11-21: the case removes the epochs file before each of its 2 reposts.
+  - One case of the adversary on the repost unit was rewritten at the merge with wave 7: a
+    dedup key belongs to its sender since story:dedup-key-scope, so the key is held by a second
+    note of the same sender. A client that records an epoch for `duplicate-key` fails it on the
+    merged branch.
+  - The first gate of the merged branch failed on that case; the second passed.
+  - Each merge was made before its unit's adversary reported, and each correction was merged
+    after it; the pool of build slots was full and a job waited up to 30 minutes.
+- Drafts filed in this wave, each from findings that were there before a unit:
+  story:expiry-scenarios-hold-the-remaining-cases, story:pinned-scenario-total-can-fail,
+  story:silence-scenarios-claim-the-whole-message and
+  story:post-order-scenarios-hold-the-input-guards (gaps of the suite);
+  story:test-step-enforces-its-budget and story:planning-only-changes-skip-the-gate (rules of
+  the folder of 2026-11-21, ahead of the next feature).
+- Open after wave 8: those 6 drafts and story:message-id-per-sender (a draft). The first
+  `repost` after a restart still delivers once more a note its recipient read before the
+  restart (the limits page).
 
 ## Backlog
 
@@ -1000,6 +1075,23 @@ Draft from the client unit:
   handled it. Today a note its recipient already read is posted again and answered `posted`.
   Its case `repost_does_not_deliver_again_a_note_its_recipient_already_read` is in
   `crates/inbox-cli/tests/adversary.rs` with an ignore attribute naming the story.
+
+The 6 drafts above that wave 8 names were accepted on 2026-11-21 and are wave 8, above; all 6
+are implemented. story:dedup-key-scope and story:post-does-not-tell-a-message-id-exists are
+implemented in wave 7.
+
+Drafts open after wave 8:
+
+- story:message-id-per-sender (wave 7): a message id unique per sender. Required before
+  principals of different operators share one service.
+- story:test-step-enforces-its-budget and story:planning-only-changes-skip-the-gate (the rules
+  of the folder of 2026-11-21): the test step is killed at its budget, and a change of
+  planning files alone skips the build and the tests. Both come ahead of the next feature.
+- story:expiry-scenarios-hold-the-remaining-cases, story:silence-scenarios-claim-the-whole-message
+  and story:post-order-scenarios-hold-the-input-guards (wave 8): gaps of the suite that cases
+  of the core hold in part.
+- story:pinned-scenario-total-can-fail (wave 8): a pinned total in a case of
+  `crates/inbox-conformance` that cannot fail.
 
 Defects filed on beyond10x/ess in wave 3: #798 and #799 (see the result of wave 3). In wave 6:
 #804 and #805 (see the result of wave 6).

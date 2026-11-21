@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:39:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:external-refusal-order-cases",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the adversary on a copy of the tree at cf4cee0: the 5 other orders of the 3 external refusals of PostMessage each fail cargo test -p inbox-core, and the core that asks them in reverse for a request fails 1 of the 9 cases of 2d45865"
+  }
+}

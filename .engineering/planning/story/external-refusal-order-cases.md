@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:external-refusal-order-cases
 kind: story
-status: active
+status: implemented
 title: A case of the core holds the order of the three external refusals of PostMessage
 summary: A core that asks the external refusals in reverse order passes task conform and its own tests; no conformance run can see that order.
 tags:
@@ -12,10 +12,11 @@ relations:
 scope:
 - confidence: cited
   path: crates/inbox-core/tests/core/precedence.rs
-revision: 5
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 4}
 - {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 5}
+- {from: "active", to: "implemented", at: "2026-11-21T23:49:43Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Outcome
 
@@ -54,3 +55,23 @@ Taken by the coordinator on 2026-11-21:
 ## Scope
 
 - `crates/inbox-core/tests/`
+
+## As built
+
+Wave 8 of stage 2, 2026-11-21: commits `cf4cee0` and `2d45865` (the adversary's cases), merged
+as `b140557`.
+
+- 4 cases in `crates/inbox-core/tests/core/precedence.rs` hold the order of the 3 external
+  refusals of `PostMessage` (`unknown-option`, `signature-invalid`, `authority-invalid`) for a
+  note and a decision.
+- 9 cases in `crates/inbox-core/tests/adversary_w8_order.rs` hold the order for a request, for
+  faults made in other ways, and what the verifier is asked: nothing on `unknown-option`, only
+  the signature on `signature-invalid`.
+- No source line of a crate, no rule and no scenario changed.
+- Adversary: 1 pass on `cf4cee0`, 2 low findings (1 introduced, 1 there before the unit);
+  `2d45865` adds the adversary's 9 cases, which fail both changed cores of the findings
+  (review-result:adversary-external-refusal-order-pass-1). The 5 other orders of the 3
+  refusals and 31 placements of them among the other refusals each fail
+  `cargo test -p inbox-core`.
+
+Numbers after the wave: `docs/plan/stage-2.md`, "Wave 8".

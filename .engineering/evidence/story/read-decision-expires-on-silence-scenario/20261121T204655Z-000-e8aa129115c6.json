@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:46:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:read-decision-expires-on-silence-scenario",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the adversary on a copy of the tree at 469d7ee: a core whose Expire leaves Read out of the states it decides on silence fails step 18 of the scenario read-decision-is-decided-on-silence (97 of 98 passed)"
+  }
+}

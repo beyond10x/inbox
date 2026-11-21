@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:read-decision-expires-on-silence-scenario
 kind: story
-status: active
+status: implemented
 title: A scenario holds that a read decision is decided on silence at expiry
 summary: A core that deletes a read decision at expiry passes every gate; the one scenario for decided-on-silence never reads the message.
 tags:
@@ -23,10 +23,11 @@ scope:
   path: generated
 - confidence: inferred
   path: tools/scenarios.py
-revision: 10
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 9}
 - {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 10}
+- {from: "active", to: "implemented", at: "2026-11-21T23:49:43Z", actor: "agent:inbox", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}}
 ---
 ## Outcome
 
@@ -64,3 +65,26 @@ regenerated in that move. That is the `depends_on` relation to story:dedup-key-s
 ## Scope
 
 - `tools/scenarios.py`, `ess/scenarios/`, `ess/ess-inputs.yaml`
+
+## As built
+
+Wave 8 of stage 2, 2026-11-21: commits `469d7ee` and `e6554ff` (the adversary's cases), merged
+as `df50876`.
+
+- The authored scenario `read-decision-is-decided-on-silence`: a decision its recipient read
+  is decided on silence at `expires`. A core whose `Expire` leaves `Read` out of the states it
+  decides on silence fails step 18 of it.
+- The scenario has a step as the Sweeper, so it is listed as unsupported over HTTP
+  (`crates/inbox-conformance/unsupported.tsv`).
+- 8 cases in `crates/inbox-core/tests/adversary_w8_read.rs` run `Expire` over a stored row: a
+  read decision is decided at `expires` and not a second before, with the option it names for
+  silence; a read decision without a silence option, a read request, a delivered request and a
+  sent note are removed at expiry.
+- No source line of a crate and no rule changed.
+- Adversary: 1 pass on `469d7ee`, 4 findings (1 warning, 3 notes), each there before the unit;
+  4 changed cores passed `task check` with the unit and each fails at least 1 of the 8 cases
+  (review-result:adversary-read-decision-expires-on-silence-pass-1). The same in scenarios is
+  story:expiry-scenarios-hold-the-remaining-cases (a draft); the pinned total that cannot fail
+  is story:pinned-scenario-total-can-fail (a draft).
+
+Numbers after the wave: `docs/plan/stage-2.md`, "Wave 8".

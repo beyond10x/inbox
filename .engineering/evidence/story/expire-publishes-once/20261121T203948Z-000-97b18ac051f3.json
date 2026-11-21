@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:39:48Z",
+  "actor": "agent:inbox",
+  "artifact": "story:expire-publishes-once",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the adversary on a copy of the tree: 5 changed cores that publish an event of Expire twice passed the 9 cases of 7b00bbb, and each fails at least 1 of the 6 cases of c13275e"
+  }
+}

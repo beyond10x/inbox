@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-refusal-order-scenarios",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "H1 (no scenario holds no-authority, already-expired or decision-without-options before a row refusal, or not-sender before unknown-inbox and inbox-closed; there before the unit): not changed in the unit; the case every_other_input_refusal_answers_before_unknown_inbox of crates/inbox-core/tests/core/precedence.rs holds 3 of the pairs; the scenarios are filed as story:post-order-scenarios-hold-the-input-guards",
+    "review": "review-result:adversary-post-refusal-order-pass-1",
+    "outcome": "no-op"
+  }
+}

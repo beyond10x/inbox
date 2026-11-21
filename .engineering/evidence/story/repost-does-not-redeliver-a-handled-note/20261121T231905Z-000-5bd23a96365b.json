@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T23:19:05Z",
+  "actor": "agent:inbox",
+  "artifact": "story:repost-does-not-redeliver-a-handled-note",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the case repost_does_not_deliver_again_a_note_its_recipient_already_read of crates/inbox-cli/tests/adversary.rs runs without an ignore attribute and passes in the closing gate; the case a_repost_ended_after_a_post_arrived_leaves_that_note_alone_once_its_recipient_read_it is red on a9bd783 and passes on 8b71c0f (one pool job on that tree: cargo test -p inbox-cli -p inbox-server --locked exit 0, 82 and 53 cases passed, 0 failed, 2 ignored)"
+  }
+}

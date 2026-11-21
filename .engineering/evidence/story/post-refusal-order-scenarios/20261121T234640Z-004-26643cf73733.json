@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-refusal-order-scenarios",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "the gate on wave/s2-8 after the merges (2e6e987) and the closing edits, on ESS 0.97.1: CARGO_INCREMENTAL=0 slot task check exit 0 in 140 s, task coverage 111 scenarios with 38 authored, 93 refused and 93 covered, the interpreted target and the core lane 111 of 111 passed with conformance_status passed, the serve lane 31 passed and 80 unsupported, task acceptance 3 checks passed, cargo test --workspace 476 passed, 0 failed, 5 ignored; a second run with CI=true and GITHUB_ACTIONS=true gave the same result",
+    "reference": "docs/plan/stage-2.md#wave-8"
+  }
+}

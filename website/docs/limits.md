@@ -110,7 +110,7 @@ without them.
 
 ## What the checks do not cover
 
-- **The run over HTTP witnesses 25 of the 105 scenarios.** All 105 pass against the core in
+- **The run over HTTP witnesses 31 of the 111 scenarios.** All 111 pass against the core in
   process. Against a running `inbox serve`, 80 are unsupported and listed with their
   reasons in
   [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv)
@@ -130,9 +130,18 @@ without them.
   [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md))
   are implemented by the service and tested outside the suite.
 - Gaps in the suite found by the adversary passes, each a draft story:
-  - `story:post-refusal-order-scenarios`: no scenario holds the order in which `PostMessage`
-    refuses when two refusals apply; an implementation that reads a row before it checks the
-    signature passed the suite when the gap was found (92 scenarios then).
+  - `story:post-order-scenarios-hold-the-input-guards`: the suite holds the signature, the
+    option, the delegation and the reply shape of a post before every row refusal, and the 5
+    row refusals in one order. No scenario holds `no-authority`, `already-expired` or
+    `decision-without-options` before a row refusal, or `not-sender` before `unknown-inbox` and
+    `inbox-closed`; a core that answers the row refusal first there passes `task conform`
+    (cases of the core hold 3 of these pairs). A `duplicate` rule that also compares
+    `on_behalf_of` passes it too.
+  - `story:silence-scenarios-claim-the-whole-message`: the scenarios on a decision decided on
+    silence claim 10 members of the stored message, from one start state. A core that changes
+    another member, or a claimed one only for a delivered or read decision, passes
+    `task conform`; cases of the core hold both. No scenario and no case holds the other
+    messages of the thread.
   - `story:expiry-scenarios-hold-the-remaining-cases`: 5 behaviours of `Expire` that no scenario
     holds (cases of the core do); a core that gets one wrong passes `task conform`: a
     read decision that names no silence option is decided on silence, a decision is decided 1

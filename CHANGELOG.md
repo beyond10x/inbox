@@ -22,13 +22,13 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 - Declared coverage: every refusal of the specification is claimed by an authored scenario.
   `task coverage` exits 0 (93 refused generated scenarios, 93 covered) and is part of
   `task check`; the suite it writes reports `conformance_status: passed` on ESS's
-  interpreted target. 9 authored scenarios are new (32 authored, 105 in the suite).
+  interpreted target. 15 authored scenarios are new (38 authored, 111 in the suite).
 - `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
   `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
 - `task conform` also runs the conformance suite against a running `inbox serve` over
   HTTP (`crates/inbox-conformance`, `run --target serve`): a fresh service per scenario,
   every request and envelope signed with keys made for the run, each answer held to the
-  HTTP status of the generated contract. 25 of the 105 scenarios pass there; 80 cannot be
+  HTTP status of the generated contract. 31 of the 111 scenarios pass there; 80 cannot be
   witnessed over HTTP and are listed with their reasons in
   `crates/inbox-conformance/unsupported.tsv`.
 - `task acceptance`, in `task check`: 3 checks against the built binary
@@ -52,10 +52,13 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   (`story:repost-does-not-redeliver-a-handled-note`).
 - Tests and scenarios: 2 authored scenarios, `read-decision-is-decided-on-silence` and
   `silence-leaves-the-decision-as-it-was`, listed as unsupported over HTTP (a step as the
-  Sweeper); cases of `inbox-core` for the events `Expire` hands back (each list compared
-  whole, so one occurrence of each), for the order of the 3 external refusals of
-  `PostMessage`, for a read decision decided on silence and for the fields `Expire` leaves
-  as they were when it decides on silence; the acceptance case
+  Sweeper); 6 authored scenarios that hold the order in which `PostMessage` refuses when 2
+  refusals apply (the signature, the option, the delegation and the reply shape before any
+  row is read; the 5 row refusals in one order; a message id a delegate posted is its
+  sender's), all 6 run over HTTP; cases of `inbox-core` for the events `Expire` hands back
+  (each list compared whole, so one occurrence of each), for the order of the 3 external
+  refusals of `PostMessage`, for a read decision decided on silence and for the fields
+  `Expire` leaves as they were when it decides on silence; the acceptance case
   `tests/acceptance/tests/adversary.rs` removes the epochs file before each repost.
 
 ### Changed
@@ -126,7 +129,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   recipient read before the restart. So does a `repost` against a service that sends no
   `Inbox-Epoch`, and one whose epochs file is lost or unreadable
   (`story:repost-does-not-redeliver-a-handled-note`).
-- Over HTTP 80 of the 105 scenarios are unsupported: a caller whose principal and
+- Over HTTP 80 of the 111 scenarios are unsupported: a caller whose principal and
   inbox differ (68), a step as the Sweeper (38), a step as no actor (9), a claim on the
   stored `signature` (7), one delegation id for two pairs (1); a scenario can have
   several. ESS reports that run as `failed`, and the gate holds it to the list.

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:post-refusal-order-scenarios
 kind: story
-status: active
+status: implemented
 title: Authored scenarios hold the order in which PostMessage refuses
 summary: Scenarios with two refusals holding at once, so the suite fails an implementation that reads a row before it has checked the signature.
 tags:
@@ -26,10 +26,11 @@ scope:
   path: generated
 - confidence: inferred
   path: tools/scenarios.py
-revision: 11
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 10}
 - {from: "proposed", to: "active", at: "2026-11-21T20:14:10Z", actor: "agent:inbox", revision: 11}
+- {from: "active", to: "implemented", at: "2026-11-21T23:49:43Z", actor: "agent:inbox", revision: 13, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}}
 ---
 ## Outcome
 
@@ -101,3 +102,33 @@ refusals. Since the draft was written, `not-sender` became the first outcome of 
 - `ess/scenarios/` (new files), `ess/ess-inputs.yaml`
 - `docs/design/inbox.md`
 - `AGENTS.md` (the scenario counts in Layout and Commands)
+
+## As built
+
+Wave 8 of stage 2, 2026-11-21: commit `fbf2a82`, merged as `c4ecc80`; 2 sentences of the design
+section corrected in the closing commit of the wave.
+
+- 6 authored scenarios, written by `task scenarios` from `tools/scenarios.py`. 4 hold
+  `signature-invalid`, `unknown-option`, `authority-invalid` and `request-without-shape` against
+  each of the 5 row refusals. `row-refusals-of-a-post-answer-in-one-order` holds the 9 pairs of
+  row refusals one post can make hold. `a-relayed-message-id-is-its-senders` holds that a
+  message id a delegate posted is taken when the principal spoken for posts under it.
+- The acceptance: `task conform-interpreted` runs a scenario that expects `signature-invalid`
+  for a post to an inbox that does not exist (0 such steps before, 1 after).
+- The row order, measured on the ESS 0.97.1 interpreted target pair by pair: `unknown-inbox`,
+  `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken`.
+- All 6 scenarios run on the 3 lanes; the serve lane goes from 25 to 31 passed, and
+  `crates/inbox-conformance/unsupported.tsv` has no new line.
+- 11 changed cores were run against the suite before and after the unit: 4 passed it before,
+  none passes it after, on the core lane and on the serve lane.
+- `docs/design/inbox.md` has a section on the order, and on where the contract text of the
+  generated crate states another one (beyond10x/ess#798).
+- No source line of a crate and no rule changed.
+- Adversary: 1 pass on `fbf2a82`, 4 findings (review-result:adversary-post-refusal-order-pass-1).
+  2 introduced, both sentences of the new section, corrected. 2 there before the unit: the
+  input-guarded refusals `no-authority`, `already-expired` and `decision-without-options`
+  against a row refusal, `not-sender` against the 2 inbox refusals, and a `duplicate` rule that
+  also compares `on_behalf_of` are held by no scenario:
+  story:post-order-scenarios-hold-the-input-guards (a draft).
+
+Numbers after the wave: `docs/plan/stage-2.md`, "Wave 8".

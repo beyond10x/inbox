@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-refusal-order-scenarios",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "H2 (the sentence on ESS-AUTHOR-041 stood in the list of what the suite holds): the closing commit of wave 8 rewrites it in docs/design/inbox.md: it checks the scenario and no implementation, and the pairs no scenario holds are named; no scenario, rule or source line changed",
+    "review": "review-result:adversary-post-refusal-order-pass-1",
+    "outcome": "fixed"
+  }
+}

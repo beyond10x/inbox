@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T22:46:48Z",
+  "actor": "agent:inbox",
+  "artifact": "story:silence-leaves-the-other-fields-scenario",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the adversary on a copy of the tree at b0a4ac5: 2 of the 5 changed cores of the brief, measured again, fail the scenario silence-leaves-the-decision-as-it-was (98 of 99 passed); the 3 cases of 0ece50d fail 18 of the 19 changed cores that passed task conform"
+  }
+}

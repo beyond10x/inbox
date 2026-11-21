@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-refusal-order-scenarios",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "H3 (the section stated an order of input-guarded before external refusals that the suite cannot hold, and named no case for it): the closing commit of wave 8 names the case an_input_refusal_answers_before_an_external_refusal of crates/inbox-core/tests/core/precedence.rs and why the suite cannot hold the order",
+    "review": "review-result:adversary-post-refusal-order-pass-1",
+    "outcome": "fixed"
+  }
+}

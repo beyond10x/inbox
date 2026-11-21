@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:repost-does-not-redeliver-a-handled-note",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "G4 (the unit's suite held neither the record before a transport failure nor exit 4 on a local failure): 8b71c0f adds the adversary's 2 green cases, each the only case that failed its changed client in the adversary's copy; the closing gate of wave 8 on 2e6e987 with the closing edits: task check exit 0, cargo test --workspace 476 passed, 0 failed, 5 ignored",
+    "review": "review-result:adversary-repost-does-not-redeliver-pass-2",
+    "outcome": "fixed"
+  }
+}

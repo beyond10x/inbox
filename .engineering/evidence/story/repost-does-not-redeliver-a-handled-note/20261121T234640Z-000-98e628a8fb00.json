@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T23:46:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:repost-does-not-redeliver-a-handled-note",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "G1 (repost recorded the epochs once after the loop, so a run ended between 2 posts recorded none and the next repost delivered again a note read meanwhile): 8b71c0f records each epoch right after its answer; the adversary's case a_repost_ended_after_a_post_arrived_leaves_that_note_alone_once_its_recipient_read_it, red on a9bd783 and green on e8266d5, passes without its ignore attribute; the closing gate of wave 8 on 2e6e987 with the closing edits: task check exit 0, cargo test --workspace 476 passed, 0 failed, 5 ignored",
+    "review": "review-result:adversary-repost-does-not-redeliver-pass-2",
+    "outcome": "fixed"
+  }
+}

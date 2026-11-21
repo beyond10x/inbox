@@ -7,23 +7,23 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. The 5 waves of stage 2 of 6 are on `main`, and 2 more waves that close security
-findings. Release 0.1.0 holds waves 1 to 3.
+Early. The 5 waves of stage 2 of 6 are on `main`, and 3 more waves: 2 that close security
+findings and 1 that closes gaps in the checks. Release 0.1.0 holds waves 1 to 3.
 
 What works on `main`:
 
 - The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 32 authored scenarios.
+  their lifecycle, every refusal, and 38 authored scenarios.
 - The Rust crate ESS generates from it, the core that implements its 2 obligations, the
   in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
   library, loopback only).
 - The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
   address over the in-memory backend, and the other commands are the client. It is built
   from source; no release holds it.
-- The conformance suite: 105 scenarios pass on ESS's interpreted target and against the core,
+- The conformance suite: 111 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
   (`task coverage`: 93 of 93). ESS reports the run against the core as `passed`.
-- The same suite against a running `inbox serve` over HTTP: 25 scenarios pass, and 80
+- The same suite against a running `inbox serve` over HTTP: 31 scenarios pass, and 80
   cannot be witnessed over HTTP and are listed with their reasons
   (`crates/inbox-conformance/unsupported.tsv`).
 - 3 acceptance checks against the built binary (`task acceptance`): a signed request and
@@ -91,7 +91,7 @@ the sender's own message only, and `id-taken` is new).
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
 loses every message; no release holds the binary; the first `inbox repost` after a restart
 delivers once more a note its recipient read before it; the run of the suite over HTTP
-witnesses 25 of the 105 scenarios;
+witnesses 31 of the 111 scenarios;
 gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
@@ -110,7 +110,7 @@ its evidence are in `.engineering/`.
 
 | Path | Contents |
 |---|---|
-| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 32 scenarios |
+| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 38 authored scenarios |
 | `generated/rust/inbox/` | The Rust crate ESS generates from `ess/`; never edited by hand |
 | `generated/{openapi,asyncapi,schema}/` | OpenAPI, AsyncAPI and JSON Schema projections of the specification |
 | `generated/docs/` | The specification pages ESS generates; the site shows them |

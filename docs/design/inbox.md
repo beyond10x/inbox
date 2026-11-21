@@ -144,11 +144,19 @@ row refusals one post can make hold, in the authored scenarios
 `a-refused-delegation-is-answered-before-any-row-is-read`,
 `a-request-without-shape-is-refused-before-any-row-is-read` and
 `row-refusals-of-a-post-answer-in-one-order`; `post-from-another-principal-refused` holds
-`not-sender` before `duplicate`, and synthesis refuses a scenario that expects a row refusal where
-an input guard holds (`ESS-AUTHOR-041`). A conformance step forces one external outcome, so the
-order among the 3 external refusals is held by the cases of the core
+`not-sender` before `duplicate`, `duplicate-key` and `id-taken`. No scenario holds `no-authority`,
+`already-expired` or `decision-without-options` against a row refusal, or `not-sender` against
+`unknown-inbox` and `inbox-closed`: a core that answers the row refusal first there passes the
+suite (story:post-order-scenarios-hold-the-input-guards, a draft). The case
+`every_other_input_refusal_answers_before_unknown_inbox` of
+`crates/inbox-core/tests/core/precedence.rs` holds the first 3 against `unknown-inbox`. Synthesis
+refuses a scenario that expects a row refusal where an input guard holds (`ESS-AUTHOR-041`); that
+checks the scenario and no implementation. A conformance step forces one external outcome, and
+synthesis refuses a step that expects an external refusal while an input guard holds, so 2 orders
+are held by the cases of the core and not by the suite: the order among the 3 external refusals
 (`crates/inbox-core/tests/core/precedence.rs`, `crates/inbox-core/tests/adversary_w8_order.rs`),
-not by the suite. The contract text of `PostMessage` in `generated/rust/inbox/PLAN.md` (line 117)
+and an input-guarded refusal before an external one
+(`an_input_refusal_answers_before_an_external_refusal` of `precedence.rs`). The contract text of `PostMessage` in `generated/rust/inbox/PLAN.md` (line 117)
 states another order: "Selection precedence: on commands with `when_related:`, check
 `existing_instance` then `exists: false` before input-guarded refusals; … then accepting and
 external branches in declaration order", which puts `unknown-inbox` before the input-guarded
@@ -201,9 +209,9 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 105 scenarios (32 authored) and refuses 93,
+- **`task coverage` on ESS 0.97.1**: synthesis writes 111 scenarios (38 authored) and refuses 93,
   and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 105 passed and reports `conformance_status: passed`.
+  runs on the interpreted target as 111 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 

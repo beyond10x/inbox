@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T23:14:21Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-refusal-order-scenarios",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the unit before the merge: 0 steps of the base suite and 1 step of the unit's suite expect signature-invalid for a post to an inbox no step opened, and it passes on the interpreted target; 4 of 11 changed cores passed the base suite and none passes the unit's, on the core lane and the serve lane"
+  }
+}
