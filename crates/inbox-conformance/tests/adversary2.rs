@@ -13,9 +13,16 @@ use inbox::server::json::{self, Value};
 use inbox_conformance::suite::{self, Scenario};
 use inbox_conformance::{Command, Executed, Read, Reader, Status, Target, results, run_scenario};
 
+/// The `coverage` block of a coverage suite whose one scenario, `probe`, is generated.
+const PROBE_COVERAGE: &str = r#"{"authored": [], "authored_sources": {},
+    "counts": {"authored": 0, "generated": 1, "outside": 0, "refused": 0},
+    "generated": ["probe"], "knowledge": "complete_inventory", "outside": [], "refused": [],
+    "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}}"#;
+
 fn scenario(steps: &str) -> Scenario {
     let text = format!(
-        r#"{{"provenance": {{"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"}},
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {PROBE_COVERAGE},
             "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
             "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
     );
@@ -71,14 +78,17 @@ fn ess_satisfies_needs_at_least_one_row() {
 /// serde, which refuses a field stated twice.
 #[test]
 fn a_key_stated_twice_in_a_step_is_not_ignored() {
-    let text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
-        "events": [], "scenarios": {"probe": {"purpose": "p", "source": [], "steps": [
-          {"step": "query_view", "view": "inbox.messaging.Due"},
-          {"step": "expect_view", "view": "inbox.messaging.Due",
-           "expectation": {"expect": "counts", "at_least": 0},
-           "expectation": {"expect": "counts", "at_least": 7, "at_most": 0}}]}}}"#;
-    match suite::read(text) {
-        Err(_) => {}
+    let text = format!(
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {PROBE_COVERAGE},
+            "events": [], "scenarios": {{"probe": {{"purpose": "p", "source": [], "steps": [
+              {{"step": "query_view", "view": "inbox.messaging.Due"}},
+              {{"step": "expect_view", "view": "inbox.messaging.Due",
+               "expectation": {{"expect": "counts", "at_least": 0}},
+               "expectation": {{"expect": "counts", "at_least": 7, "at_most": 0}}}}]}}}}}}"#
+    );
+    match suite::read(&text) {
+        Err(refused) => assert!(refused.contains("`expectation` twice"), "{refused}"),
         Ok(read) => assert!(
             read.scenarios[0].unsupported().is_some(),
             "a step stating `expectation` twice is admitted and its second expectation ignored: {:?}",
@@ -89,7 +99,11 @@ fn a_key_stated_twice_in_a_step_is_not_ignored() {
 
 // ---- the gate with the suite as input -------------------------------------------------------
 
-const SUITE: &str = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
+const SUITE: &str = r#"{"provenance": {"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"},
+    "coverage": {"authored": [], "authored_sources": {},
+      "counts": {"authored": 0, "generated": 2, "outside": 0, "refused": 0},
+      "generated": ["a", "b"], "knowledge": "complete_inventory", "outside": [], "refused": [],
+      "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}},
     "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": []},
                                 "b": {"purpose": "p", "source": [], "steps": []}}}"#;
 
@@ -111,8 +125,8 @@ fn gate(name: &str, passed: &[&str]) -> Option<i32> {
     std::fs::write(
         &report,
         format!(
-            r#"{{"format": "ess-conformance-report/2", "conformance_status": "inconclusive",
-                "suite": {{"digest": "{}", "version": "ess-conformance/52"}},
+            r#"{{"format": "ess-conformance-report/2", "conformance_status": "passed",
+                "suite": {{"digest": "{}", "version": "ess-conformance/65"}},
                 "counts": {{"total": {n}, "passed": {n}, "failed": 0, "error": 0, "skipped": 0, "unsupported": 0}},
                 "outcomes": {{"passed": [{ids}], "failed": [], "error": [], "skipped": [], "unsupported": []}}}}"#,
             results::suite_digest(SUITE.as_bytes()),

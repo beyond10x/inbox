@@ -231,12 +231,14 @@ pub fn implemented(binding: &Binding, expected: &str) -> Option<String> {
     }
 }
 
-/// The `conformance_status` ESS 0.96.0 gives a run this gate passes: `inconclusive` where every
-/// scenario passed (the suite declares no coverage), and `failed` where the only scenarios that
-/// did not pass are unsupported ones the list names (ESS fails any unsupported scenario).
+/// The `conformance_status` ESS 0.96.0 gives a run of the coverage suite this gate passes:
+/// `passed` where every scenario passed (the suite declares its coverage), and `failed` where the
+/// only scenarios that did not pass are unsupported ones the list names (ESS fails any
+/// unsupported scenario). `inconclusive`, the status of a suite without declared coverage, fails
+/// the gate.
 pub fn passing_status(report: &Report) -> &'static str {
     if report.unsupported.is_empty() {
-        "inconclusive"
+        "passed"
     } else {
         "failed"
     }

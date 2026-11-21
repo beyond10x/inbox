@@ -71,8 +71,24 @@ fn same_number(left: &str, right: &str) -> bool {
 /// under every `presence:` while the suite claims `null` for it (beyond10x/ess#799). When that
 /// issue is closed this rule goes, the comparison becomes exact, and the ignored adversary case
 /// `ess_contains_null_at_the_top_level_needs_the_member_published` runs.
+///
+/// A dotted `field` (`signature.key_id`, written by an `ess-scenario/6` row claim) names one
+/// nested member, reached member by member through the objects on its way; that member alone is
+/// compared, and the row's other members are not read. A path through a member that is absent,
+/// `null` or not an object reaches nothing, which holds a claimed `null` only. Measured against
+/// the ESS 0.96.0 interpreted target on a coverage suite with such claims: a wrong nested value
+/// fails, a path naming no member fails a claimed value, a path through an absent `Optional`
+/// holds a claimed `null` and fails a claimed value.
 pub fn field_matches(row: &Value, field: &str, wanted: &Value) -> bool {
-    view_equal(Some(wanted), row.member(field))
+    let mut path = field.split('.');
+    let mut reached = path.next().and_then(|first| row.member(first));
+    for name in path {
+        reached = match reached {
+            Some(value @ Value::Object(_)) => value.member(name),
+            _ => None,
+        };
+    }
+    view_equal(Some(wanted), reached)
 }
 
 /// Whether `actual` holds what a view assertion claims: a member that is absent and one that is

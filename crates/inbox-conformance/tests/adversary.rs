@@ -10,9 +10,16 @@ use inbox_conformance::run_scenario;
 use inbox_conformance::suite::{self, Scenario};
 use inbox_conformance::{Answer, Command, Event, Executed, Read, Reader, Status, Target, gate};
 
+/// The `coverage` block of a coverage suite whose one scenario, `probe`, is generated.
+const PROBE_COVERAGE: &str = r#"{"authored": [], "authored_sources": {},
+    "counts": {"authored": 0, "generated": 1, "outside": 0, "refused": 0},
+    "generated": ["probe"], "knowledge": "complete_inventory", "outside": [], "refused": [],
+    "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}}"#;
+
 fn scenario(steps: &str) -> Scenario {
     let text = format!(
-        r#"{{"provenance": {{"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"}},
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {PROBE_COVERAGE},
             "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
             "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
     );
@@ -127,11 +134,14 @@ fn ess_contains_null_at_the_top_level_needs_the_member_published() {
 /// the top level of the suite is read by name and anything else on it is ignored.
 #[test]
 fn an_unknown_top_level_key_of_the_suite_is_not_ignored() {
-    let text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
-        "events": [], "fixtures": [{"entity": "inbox.messaging.Inbox", "rows": []}],
-        "scenarios": {"probe": {"purpose": "p", "source": [], "steps": []}}}"#;
-    match suite::read(text) {
-        Err(_) => {}
+    let text = format!(
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {PROBE_COVERAGE},
+            "events": [], "fixtures": [{{"entity": "inbox.messaging.Inbox", "rows": []}}],
+            "scenarios": {{"probe": {{"purpose": "p", "source": [], "steps": []}}}}}}"#
+    );
+    match suite::read(&text) {
+        Err(refused) => assert!(refused.contains("`fixtures`"), "{refused}"),
         Ok(read) => assert!(
             read.scenarios
                 .iter()
@@ -143,11 +153,14 @@ fn an_unknown_top_level_key_of_the_suite_is_not_ignored() {
 
 #[test]
 fn an_unknown_provenance_key_is_not_ignored() {
-    let text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty",
-        "scenario_clock": "held"},
-        "events": [], "scenarios": {"probe": {"purpose": "p", "source": [], "steps": []}}}"#;
-    match suite::read(text) {
-        Err(_) => {}
+    let text = format!(
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty",
+            "scenario_clock": "held"}},
+            "coverage": {PROBE_COVERAGE},
+            "events": [], "scenarios": {{"probe": {{"purpose": "p", "source": [], "steps": []}}}}}}"#
+    );
+    match suite::read(&text) {
+        Err(refused) => assert!(refused.contains("`scenario_clock`"), "{refused}"),
         Ok(read) => assert!(
             read.scenarios
                 .iter()

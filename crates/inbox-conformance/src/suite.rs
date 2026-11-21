@@ -9,19 +9,60 @@
 //! - in a scenario, a step, an expectation, a value reference, a predicate or a declaration (a
 //!   step kind, a key, a shape it has no reading for): the scenario is admitted as
 //!   [`Scenario::unsupported`] with the reason, and no step of it is executed.
+//!
+//! The suite's `coverage` block is read into [`Coverage`] and held to the suite (see there); it
+//! names no step, so nothing of it is executed.
 
 use std::collections::BTreeMap;
 
 use inbox::server::json::{self, Value};
 
-/// The suite format this runner is written against: the one ESS 0.96.0 synthesizes for `ess/`.
-pub const SUITE_VERSION: &str = "ess-conformance/52";
+/// The suite format this runner is written against: the one `ess verify conform synthesize
+/// --suite-format 5` of ESS 0.96.0 writes for `ess/`, the ordinary scenarios with a declared
+/// `coverage` block. The ordinary `ess-conformance/52` (no coverage) is refused like any other
+/// format: no task synthesizes it any more.
+pub const SUITE_VERSION: &str = "ess-conformance/65";
 
 /// A suite this runner read.
 #[derive(Debug, Clone)]
 pub struct Suite {
     /// Every scenario, in the suite's order.
     pub scenarios: Vec<Scenario>,
+    /// What the suite declares about its own coverage.
+    pub coverage: Coverage,
+}
+
+/// The suite's `coverage` block: which of its scenarios are authored and which generated, and
+/// what synthesis refused to write.
+///
+/// The runner reads it as ESS's own reader does on 0.96.0 (measured with `ess verify conform run
+/// --target interpreted` on altered copies of the suite `task coverage` writes), and refuses the
+/// suite where:
+///
+/// - `coverage` is absent, or carries a member other than the 8 of the format (`authored`,
+///   `authored_sources`, `counts`, `generated`, `knowledge`, `outside`, `refused`, `selection`),
+///   or lacks one;
+/// - `authored` and `generated` together do not name each scenario of the suite exactly once, or
+///   name one the suite does not hold (ESS: "selected origin union differs from scenarios");
+/// - a count in `counts` differs from the length of its list (ESS: "inventory counts differ from
+///   array lengths");
+/// - `knowledge` is neither `complete_inventory` nor `unknown`.
+///
+/// `refused` (each an object), `outside`, `authored_sources` and `selection` are read for their
+/// shape only. They speak of scenarios synthesis did not write, or of where the written ones came
+/// from, so no target can run anything of them; `ess verify conform report` reads them from the
+/// suite itself when it decides `conformance_status`. ESS additionally checks that each
+/// `covered_by` of `refused` is spelled as a scenario id; the runner does not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Coverage {
+    /// The authored scenarios, by id.
+    pub authored: Vec<String>,
+    /// The generated scenarios, by id.
+    pub generated: Vec<String>,
+    /// How many scenarios synthesis refused to write.
+    pub refused: usize,
+    /// `complete_inventory` or `unknown`.
+    pub knowledge: String,
 }
 
 /// One scenario: its steps, or why the runner cannot interpret it.
@@ -280,14 +321,19 @@ fn stated_once(value: &Value, location: &str) -> Result<(), String> {
 /// # Errors
 ///
 /// A document that is not JSON, not a suite of [`SUITE_VERSION`], not one that starts every
-/// scenario from an empty system, or one carrying a top-level or `provenance` key this runner
-/// does not know, or an object that states one member name twice, at any depth. A scenario this
-/// runner cannot interpret is no error: it is read as unsupported.
+/// scenario from an empty system, one carrying a top-level or `provenance` key this runner does
+/// not know, an object that states one member name twice, at any depth, or a `coverage` block
+/// that does not account for the suite ([`Coverage`]). A scenario this runner cannot interpret is
+/// no error: it is read as unsupported.
 pub fn read(text: &str) -> Result<Suite, String> {
     let document = json::parse_written(text).map_err(|error| format!("the suite: {error}"))?;
     stated_once(&document, "the suite")?;
     let root = object(&document, "the suite")?;
-    only(root, &["provenance", "events", "scenarios"], "the suite")?;
+    only(
+        root,
+        &["coverage", "provenance", "events", "scenarios"],
+        "the suite",
+    )?;
     let provenance = object(member(root, "provenance", "the suite")?, "provenance")?;
     only(
         provenance,
@@ -317,14 +363,123 @@ pub fn read(text: &str) -> Result<Suite, String> {
         .iter()
         .map(|event| as_text(event, "an event of the catalog").map(str::to_owned))
         .collect::<Result<Vec<_>, _>>()?;
-    let scenarios = object(member(root, "scenarios", "the suite")?, "scenarios")?
+    let scenarios: Vec<Scenario> = object(member(root, "scenarios", "the suite")?, "scenarios")?
         .iter()
         .map(|(id, body)| Scenario {
             id: id.clone(),
             steps: scenario(body, &catalog),
         })
         .collect();
-    Ok(Suite { scenarios })
+    let ids: Vec<&str> = scenarios
+        .iter()
+        .map(|scenario| scenario.id.as_str())
+        .collect();
+    let coverage = coverage(member(root, "coverage", "the suite")?, &ids)?;
+    Ok(Suite {
+        scenarios,
+        coverage,
+    })
+}
+
+/// The members of a `coverage` block.
+const COVERAGE: [&str; 8] = [
+    "authored",
+    "authored_sources",
+    "counts",
+    "generated",
+    "knowledge",
+    "outside",
+    "refused",
+    "selection",
+];
+
+/// Reads the `coverage` block and holds it to the scenario ids of the suite ([`Coverage`]).
+fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
+    let fields = object(value, "coverage")?;
+    only(fields, &COVERAGE, "coverage")?;
+    for name in COVERAGE {
+        member(fields, name, "coverage")?;
+    }
+    let list = |name: &str| -> Result<&[Value], String> {
+        items(
+            member(fields, name, "coverage")?,
+            &format!("coverage `{name}`"),
+        )
+    };
+    let names = |name: &str| -> Result<Vec<String>, String> {
+        list(name)?
+            .iter()
+            .map(|id| as_text(id, &format!("an id of coverage `{name}`")).map(str::to_owned))
+            .collect()
+    };
+    let authored = names("authored")?;
+    let generated = names("generated")?;
+    let outside = list("outside")?.len();
+    let refused = list("refused")?;
+    for entry in refused {
+        object(entry, "an entry of coverage `refused`")?;
+    }
+    object(
+        member(fields, "authored_sources", "coverage")?,
+        "coverage `authored_sources`",
+    )?;
+    object(
+        member(fields, "selection", "coverage")?,
+        "coverage `selection`",
+    )?;
+    let counts = object(member(fields, "counts", "coverage")?, "coverage `counts`")?;
+    let lengths = [
+        ("authored", authored.len()),
+        ("generated", generated.len()),
+        ("outside", outside),
+        ("refused", refused.len()),
+    ];
+    only(counts, &lengths.map(|(name, _)| name), "coverage `counts`")?;
+    for (name, length) in lengths {
+        let stated = count(
+            member(counts, name, "coverage `counts`")?,
+            &format!("coverage `counts.{name}`"),
+        )?;
+        if stated != length as u64 {
+            return Err(format!(
+                "coverage `counts.{name}` is {stated}, and coverage `{name}` lists {length}"
+            ));
+        }
+    }
+    let knowledge = text_member(fields, "knowledge", "coverage")?;
+    if !["complete_inventory", "unknown"].contains(&knowledge) {
+        return Err(format!(
+            "coverage `knowledge` is `{knowledge}`, which is neither `complete_inventory` nor `unknown`"
+        ));
+    }
+    let mut named: BTreeMap<&str, usize> = BTreeMap::new();
+    for id in authored.iter().chain(&generated) {
+        *named.entry(id.as_str()).or_default() += 1;
+    }
+    for id in ids {
+        match named.get(id) {
+            None => {
+                return Err(format!(
+                    "coverage names the scenario `{id}` neither authored nor generated"
+                ));
+            }
+            Some(1) => {}
+            Some(times) => {
+                return Err(format!("coverage names the scenario `{id}` {times} times"));
+            }
+        }
+    }
+    if let Some(stray) = named.keys().find(|id| !ids.contains(id)) {
+        return Err(format!(
+            "coverage names `{stray}`, which is no scenario of the suite"
+        ));
+    }
+    Ok(Coverage {
+        authored,
+        generated,
+        refused: refused.len(),
+        knowledge: knowledge.to_owned(),
+    })
 }
 
 fn scenario(body: &Value, catalog: &[String]) -> Result<Vec<Step>, String> {
@@ -512,7 +667,7 @@ fn step(value: &Value) -> Result<Step, String> {
             keys(&["view", "subject"])?;
             Step::Snapshot {
                 view: text("view")?,
-                subject: refs(member(fields, "subject", &what)?, "subject")?,
+                subject: subject(member(fields, "subject", &what)?)?,
                 complete: None,
             }
         }
@@ -534,7 +689,7 @@ fn step(value: &Value) -> Result<Step, String> {
                 .collect::<Result<Vec<_>, _>>()?;
             Step::Snapshot {
                 view: text("view")?,
-                subject: refs(member(fields, "subject", &what)?, "subject")?,
+                subject: subject(member(fields, "subject", &what)?)?,
                 complete: Some(names),
             }
         }
@@ -566,9 +721,12 @@ fn expectation(value: &Value) -> Result<Expectation, String> {
         "contains" | "excludes" => {
             keys(&["fields"])?;
             let claimed = refs(member(fields, "fields", &what)?, "fields")?;
-            if let Some((name, _)) = claimed.iter().find(|(name, _)| name.contains('.')) {
+            if let Some((name, _)) = claimed
+                .iter()
+                .find(|(name, _)| name.split('.').any(str::is_empty))
+            {
                 return Err(format!(
-                    "the dotted row path `{name}` is not interpreted by this runner"
+                    "the row path `{name}` names an empty member, which no row carries"
                 ));
             }
             if kind == "contains" {
@@ -902,6 +1060,18 @@ fn shapes(value: &Value) -> Result<Vec<(String, Shape)>, String> {
             Ok((name.clone(), read))
         })
         .collect()
+}
+
+/// The fields of a snapshot's subject. A subject selects its row by top-level members compared
+/// exactly; a dotted path there is not interpreted by this runner.
+fn subject(value: &Value) -> Result<Fields, String> {
+    let subject = refs(value, "subject")?;
+    if let Some((name, _)) = subject.iter().find(|(name, _)| name.contains('.')) {
+        return Err(format!(
+            "the dotted subject path `{name}` is not interpreted by this runner"
+        ));
+    }
+    Ok(subject)
 }
 
 fn refs(value: &Value, what: &str) -> Result<Fields, String> {

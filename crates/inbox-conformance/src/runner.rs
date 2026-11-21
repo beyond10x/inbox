@@ -87,6 +87,18 @@ pub struct Command<'a> {
 
 /// The implementation the suite runs against, one scenario at a time.
 pub trait Target {
+    /// Looks at a scenario's steps before anything of it runs, and before [`Target::reset`]:
+    /// `Err` with the reason where the target cannot witness what the scenario claims, which
+    /// makes the scenario unsupported, and nothing of it is sent. A target that witnesses every
+    /// step the runner interprets keeps the default.
+    ///
+    /// # Errors
+    ///
+    /// The reason the target cannot witness the scenario.
+    fn prepare(&mut self, _steps: &[Step]) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Forgets everything: the next scenario starts from an empty system.
     fn reset(&mut self);
 
@@ -153,6 +165,9 @@ pub fn run_scenario(scenario: &Scenario, target: &mut dyn Target) -> ScenarioRes
         Ok(steps) => steps,
         Err(reason) => return result(Status::Unsupported, Some(reason.clone())),
     };
+    if let Err(reason) = target.prepare(steps) {
+        return result(Status::Unsupported, Some(reason));
+    }
     target.reset();
     let mut run = Run::default();
     for (at, step) in steps.iter().enumerate() {
@@ -639,7 +654,7 @@ impl Run {
 }
 
 /// The outcome the step's own `expect_outcome` names, looked up before the next command.
-fn expected_outcome<'a>(steps: &'a [Step], at: usize, command: &str) -> Option<&'a str> {
+pub(crate) fn expected_outcome<'a>(steps: &'a [Step], at: usize, command: &str) -> Option<&'a str> {
     steps[at + 1..]
         .iter()
         .take_while(|step| !matches!(step, Step::Execute { .. }))

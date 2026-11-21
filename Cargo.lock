@@ -315,6 +315,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inbox-acceptance"
+version = "0.1.0"
+dependencies = [
+ "inbox",
+ "inbox-server",
+ "inbox-verify",
+]
+
+[[package]]
 name = "inbox-backend-testkit"
 version = "0.1.0"
 dependencies = [
@@ -342,6 +351,8 @@ version = "0.1.0"
 dependencies = [
  "inbox",
  "inbox-core",
+ "inbox-server",
+ "inbox-verify",
  "sha2",
 ]
 

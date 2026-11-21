@@ -11,9 +11,11 @@ use inbox_conformance::{
 /// A suite of one scenario with these steps and these extra scenario members.
 fn scenario(steps: &str, extra: &str) -> Scenario {
     let text = format!(
-        r#"{{"provenance": {{"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"}},
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {},
             "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
-            "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}{extra}}}}}}}"#
+            "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}{extra}}}}}}}"#,
+        coverage_of(&["probe"])
     );
     let mut read = suite::read(&text).expect("the probe suite reads");
     assert_eq!(read.scenarios.len(), 1);
@@ -1017,7 +1019,7 @@ fn bound_report(passed: &[&str], status: &str, digest: &str, implementation: &st
         .join(", ");
     format!(
         r#"{{"format": "ess-conformance-report/2", "conformance_status": "{status}", "implementation": "{implementation}",
-            "suite": {{"digest": "{digest}", "version": "ess-conformance/52"}},
+            "suite": {{"digest": "{digest}", "version": "ess-conformance/65"}},
             "counts": {{"total": {n}, "passed": {n}, "failed": 0, "error": 0, "skipped": 0, "unsupported": 0}},
             "outcomes": {{"passed": [{ids}], "failed": [], "error": [], "skipped": [], "unsupported": []}}}}"#,
         n = passed.len()
@@ -1025,7 +1027,7 @@ fn bound_report(passed: &[&str], status: &str, digest: &str, implementation: &st
 }
 
 /// The gate: a report binds to the suite whose digest it names, to the status a passing run
-/// carries (`inconclusive`, or `failed` where only listed scenarios are unsupported), to each
+/// carries (`passed`, or `failed` where only listed scenarios are unsupported), to each
 /// scenario id once, and to the implementation the task names.
 #[test]
 fn the_gate_binds_a_report_to_its_suite_status_scenarios_and_implementation() {
@@ -1036,7 +1038,7 @@ fn the_gate_binds_a_report_to_its_suite_status_scenarios_and_implementation() {
             gate::read_binding(text).unwrap(),
         )
     };
-    let (report, binding) = read(&bound_report(&["a"], "inconclusive", &digest, "core"));
+    let (report, binding) = read(&bound_report(&["a"], "passed", &digest, "core"));
     assert!(gate::bound(&report, &binding, &digest).is_empty());
     assert_eq!(gate::bound(&report, &binding, "sha256:other").len(), 1);
     let (failed_report, failed) = read(&bound_report(&["a"], "failed", &digest, "core"));
@@ -1054,7 +1056,7 @@ fn the_gate_binds_a_report_to_its_suite_status_scenarios_and_implementation() {
     assert!(gate::accounts(&binding, &ids(&["a"])).is_empty());
     assert_eq!(gate::accounts(&binding, &ids(&["a", "b"])).len(), 1);
     assert_eq!(gate::accounts(&binding, &ids(&["b"])).len(), 2);
-    let (_, twice) = read(&bound_report(&["a", "a"], "inconclusive", &digest, "core"));
+    let (_, twice) = read(&bound_report(&["a", "a"], "passed", &digest, "core"));
     assert_eq!(gate::accounts(&twice, &ids(&["a"])).len(), 1);
 
     assert_eq!(gate::implemented(&binding, "core"), None);
@@ -1065,8 +1067,12 @@ fn the_gate_binds_a_report_to_its_suite_status_scenarios_and_implementation() {
 /// it (exit 1); the report of a run of that suite passes (exit 0).
 #[test]
 fn the_gate_binary_holds_the_report_to_the_suite_and_the_implementation() {
-    let suite_text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
-        "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": []}}}"#;
+    let suite_text = format!(
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {}, "events": [], "scenarios": {{"a": {{"purpose": "p", "source": [], "steps": []}}}}}}"#,
+        coverage_of(&["a"])
+    );
+    let suite_text = suite_text.as_str();
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("runner-gate-binding");
     std::fs::create_dir_all(&dir).unwrap();
     let suite_path = dir.join("suite.json");
@@ -1091,21 +1097,145 @@ fn the_gate_binary_holds_the_report_to_the_suite_and_the_implementation() {
         }
         command.output().unwrap().status.code()
     };
-    let own = || bound_report(&["a"], "inconclusive", &digest, "core");
+    let own = || bound_report(&["a"], "passed", &digest, "core");
     assert_eq!(gate("own", own(), Some("core")), Some(0));
     assert_eq!(gate("unnamed", own(), None), Some(0));
     assert_eq!(gate("other", own(), Some("interpreted 0.96.0")), Some(1));
-    let foreign = bound_report(&["a"], "inconclusive", "sha256:other", "core");
+    let foreign = bound_report(&["a"], "passed", "sha256:other", "core");
     assert_eq!(gate("foreign", foreign, Some("core")), Some(1));
+}
+
+// ---- the coverage suite: `ess-conformance/65` -----------------------------------------------
+
+/// The `coverage` block `ess verify conform synthesize --suite-format 5` writes, for a suite whose
+/// scenarios are `generated`, all of them generated, none refused.
+fn coverage_of(generated: &[&str]) -> String {
+    let ids = generated
+        .iter()
+        .map(|id| format!("{id:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        r#"{{"authored": [], "authored_sources": {{}},
+            "counts": {{"authored": 0, "generated": {n}, "outside": 0, "refused": 0}},
+            "generated": [{ids}], "knowledge": "complete_inventory", "outside": [], "refused": [],
+            "selection": {{"filter": {{"kind": "all"}}, "origins": "generated_and_authored", "scope": {{"kind": "system"}}}}}}"#,
+        n = generated.len()
+    )
+}
+
+/// A coverage suite of the scenario `probe` with these steps, and this `coverage` block.
+fn coverage_suite(steps: &str, coverage: &str) -> String {
+    format!(
+        r#"{{"coverage": {coverage},
+            "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
+            "provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
+    )
+}
+
+/// The suite `task coverage` writes: the runner reads its `coverage` block and runs its
+/// scenarios; a row claim with a dotted path names one nested member, compared as ESS 0.96.0
+/// compares it on the interpreted target (a path through an absent `Optional` holds a claimed
+/// `null` only).
+#[test]
+fn the_coverage_suite_is_read_and_a_dotted_row_path_names_a_nested_member() {
+    let claim = |field: &str, value: &str| {
+        format!(
+            r#"[{{"step": "query_view", "view": "inbox.messaging.Settled", "params": {{"sender": {{"kind": "literal", "value": "a"}}}}}},
+                {{"step": "expect_view", "view": "inbox.messaging.Settled", "expectation": {{"expect": "contains",
+                  "fields": {{"message_id": {{"kind": "literal", "value": "m"}}, "{field}": {{"kind": "literal", "value": {value}}}}}}}}}]"#
+        )
+    };
+    let row = r#"[{"message_id": "m", "signature": {"key_id": "key-1", "value": "c2ln"}}]"#;
+    for (field, value, expected) in [
+        ("signature.key_id", r#""key-1""#, Status::Passed),
+        ("signature.key_id", r#""key-9""#, Status::Failed),
+        ("signature.nope", r#""x""#, Status::Failed),
+        ("decision.question", "null", Status::Passed),
+        ("decision.question", r#""x""#, Status::Failed),
+    ] {
+        let text = coverage_suite(&claim(field, value), &coverage_of(&["probe"]));
+        let mut read = suite::read(&text).expect("the coverage suite reads");
+        let probe = read.scenarios.remove(0);
+        assert_eq!(probe.unsupported(), None, "{field}");
+        let mut target = Scripted {
+            reads: vec![Read::Rows(match parse(row) {
+                Value::Array(rows) => rows,
+                _ => unreachable!(),
+            })],
+            ..Scripted::default()
+        };
+        let result = run_scenario(&probe, &mut target);
+        assert_eq!(result.status, expected, "{field} = {value}: {result:?}");
+    }
+}
+
+/// ESS refuses a `coverage` block that does not account for the suite (measured on 0.96.0 with
+/// `ess verify conform run --target interpreted`); so does the runner, naming what is wrong.
+#[test]
+fn a_coverage_block_that_does_not_account_for_the_suite_refuses_it() {
+    let good = coverage_of(&["probe"]);
+    assert!(suite::read(&coverage_suite("[]", &good)).is_ok());
+    for (coverage, named) in [
+        (coverage_of(&[]), "probe"),
+        (coverage_of(&["probe", "other"]), "other"),
+        (coverage_of(&["probe", "probe"]), "probe"),
+        (
+            good.replace(r#""generated": 1"#, r#""generated": 2"#),
+            "counts",
+        ),
+        (
+            good.replace(r#""outside": []"#, r#""outside": [], "extra": 1"#),
+            "extra",
+        ),
+        (good.replace("complete_inventory", "partial"), "partial"),
+    ] {
+        let refused = suite::read(&coverage_suite("[]", &coverage)).unwrap_err();
+        assert!(refused.contains(named), "{named}: {refused}");
+    }
+    let without = coverage_suite("[]", &good).replace(&format!(r#""coverage": {good},"#), "");
+    assert!(suite::read(&without).unwrap_err().contains("`coverage`"));
+    let ordinary = coverage_suite("[]", &good).replace("ess-conformance/65", "ess-conformance/52");
+    assert!(
+        suite::read(&ordinary)
+            .unwrap_err()
+            .contains("`ess-conformance/52`")
+    );
+}
+
+/// The gate: a run of the coverage suite with no unsupported scenario carries `passed`, and a
+/// report that says `inconclusive` (a suite without declared coverage) fails it.
+#[test]
+fn the_gate_wants_passed_and_refuses_inconclusive() {
+    let digest = results::suite_digest(b"suite");
+    let read = |status: &str| {
+        let text = bound_report(&["a"], status, &digest, "core");
+        (
+            gate::read_report(&text).unwrap(),
+            gate::read_binding(&text).unwrap(),
+        )
+    };
+    let (report, passed) = read("passed");
+    assert_eq!(gate::passing_status(&report), "passed");
+    assert!(gate::bound(&report, &passed, &digest).is_empty());
+    let (report, inconclusive) = read("inconclusive");
+    assert_eq!(
+        gate::bound(&report, &inconclusive, &digest),
+        ["conformance_status is `inconclusive`; a passing run carries `passed`"]
+    );
 }
 
 /// The suite reader: an object stating a member twice is refused, as ESS's serde reader does.
 #[test]
 fn a_member_stated_twice_refuses_the_suite() {
-    let text = r#"{"provenance": {"suite_version": "ess-conformance/52", "scenario_initial_state": "empty"},
-        "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": [
-          {"step": "query_view", "view": "inbox.messaging.Due",
-           "params": {"inbox": {"kind": "literal", "value": "x", "value": "y"}}}]}}}"#;
-    let refused = suite::read(text).map(|_| ()).unwrap_err();
+    let text = format!(
+        r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
+            "coverage": {}, "events": [], "scenarios": {{"a": {{"purpose": "p", "source": [], "steps": [
+              {{"step": "query_view", "view": "inbox.messaging.Due",
+               "params": {{"inbox": {{"kind": "literal", "value": "x", "value": "y"}}}}}}]}}}}}}"#,
+        coverage_of(&["a"])
+    );
+    let refused = suite::read(&text).map(|_| ()).unwrap_err();
     assert!(refused.contains("`value` twice"), "{refused}");
 }

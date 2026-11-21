@@ -1,6 +1,10 @@
-//! `inbox-conformance run --suite <suite> --results <results>`: runs the suite against
-//! `inbox-core` and writes the `ess-conformance-results/1` document; exit 0 when it is written,
-//! whatever the scenarios answered.
+//! `inbox-conformance run --suite <suite> --results <results> [--target core|serve] [--inbox
+//! <binary>]`: runs the suite against a target and writes the `ess-conformance-results/1`
+//! document; exit 0 when it is written, whatever the scenarios answered. `core` (the default) is
+//! `inbox-core` in process. `serve` is `<binary> serve`, started afresh for each scenario and
+//! driven over HTTP (`--inbox` is then required): its key file and standard error are written
+//! into the directory `serve` beside the results, and a service that does not start makes each
+//! scenario it should have answered an error.
 //!
 //! `inbox-conformance gate --suite <suite> --report <report> --unsupported <unsupported.tsv>
 //! [--implementation <name>]`: prints the result line and the `conformance_status` of the
@@ -16,7 +20,7 @@
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use inbox_conformance::{CoreTarget, gate, results, run_suite, suite};
+use inbox_conformance::{CoreTarget, Target, WireTarget, gate, results, run_suite, suite};
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -35,7 +39,7 @@ fn main() -> ExitCode {
 }
 
 fn usage() -> String {
-    "usage: inbox-conformance run --suite <suite> --results <results> | gate --suite <suite> --report <report> --unsupported <unsupported.tsv> [--implementation <name>]".to_owned()
+    "usage: inbox-conformance run --suite <suite> --results <results> [--target core|serve] [--inbox <binary>] | gate --suite <suite> --report <report> --unsupported <unsupported.tsv> [--implementation <name>]".to_owned()
 }
 
 /// The value of each named option, in the order of `names`.
@@ -68,10 +72,35 @@ fn read(path: &str) -> Result<String, String> {
 }
 
 fn run(arguments: &[String]) -> Result<ExitCode, String> {
-    let [suite_path, results_path] = options(arguments, ["--suite", "--results"])?;
+    let (target, arguments) = optional(arguments, "--target")?;
+    let (binary, arguments) = optional(&arguments, "--inbox")?;
+    let [suite_path, results_path] = options(&arguments, ["--suite", "--results"])?;
+    let mut target: Box<dyn Target> = match (target.as_deref(), binary) {
+        (None | Some("core"), None) => Box::new(CoreTarget::new()),
+        (None | Some("core"), Some(_)) => {
+            return Err("`--inbox` names the binary of `--target serve`".to_owned());
+        }
+        (Some("serve"), Some(binary)) => {
+            let work = std::path::Path::new(&results_path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("serve");
+            Box::new(WireTarget::new(binary, work)?)
+        }
+        (Some("serve"), None) => {
+            return Err(format!(
+                "`--target serve` needs `--inbox <binary>`; {}",
+                usage()
+            ));
+        }
+        (Some(other), _) => {
+            return Err(format!("unknown target `{other}`; {}", usage()));
+        }
+    };
     let text = read(&suite_path)?;
     let suite = suite::read(&text).map_err(|reason| format!("{suite_path}: {reason}"))?;
-    let outcomes = run_suite(&suite, &mut CoreTarget::new());
+    let outcomes = run_suite(&suite, target.as_mut());
+    drop(target);
     for result in &outcomes {
         match &result.message {
             Some(message) => println!("  {} {}: {message}", result.status.name(), result.id),
@@ -91,25 +120,25 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Takes the optional `--implementation <name>` out of `arguments`: its value, and the rest.
-fn implementation(arguments: &[String]) -> Result<(Option<String>, Vec<String>), String> {
+/// Takes the optional `<option> <value>` out of `arguments`: its value, and the rest.
+fn optional(arguments: &[String], option: &str) -> Result<(Option<String>, Vec<String>), String> {
     let mut rest = arguments.to_vec();
-    let Some(at) = rest.iter().position(|name| name == "--implementation") else {
+    let Some(at) = rest.iter().position(|name| name == option) else {
         return Ok((None, rest));
     };
     if at + 1 >= rest.len() {
-        return Err("`--implementation` needs a value".to_owned());
+        return Err(format!("`{option}` needs a value"));
     }
-    let name = rest.remove(at + 1);
+    let value = rest.remove(at + 1);
     rest.remove(at);
-    if rest.iter().any(|other| other == "--implementation") {
-        return Err("`--implementation` is given twice".to_owned());
+    if rest.iter().any(|other| other == option) {
+        return Err(format!("`{option}` is given twice"));
     }
-    Ok((Some(name), rest))
+    Ok((Some(value), rest))
 }
 
 fn check(arguments: &[String]) -> Result<ExitCode, String> {
-    let (implementation, arguments) = implementation(arguments)?;
+    let (implementation, arguments) = optional(arguments, "--implementation")?;
     let [suite_path, report_path, listed_path] =
         options(&arguments, ["--suite", "--report", "--unsupported"])?;
     let suite = std::fs::read(&suite_path).map_err(|error| format!("{suite_path}: {error}"))?;
