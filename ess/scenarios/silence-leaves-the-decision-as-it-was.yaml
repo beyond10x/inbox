@@ -1,0 +1,97 @@
+type: ess-scenario/7
+domain: inbox.messaging
+scenario: silence-leaves-the-decision-as-it-was
+summary: A decision is answered by silence at `expires`. The row it leaves keeps the body, the thread,
+  the options, the option silence takes and the instant it was created.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    address: human:operator
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: human:operator
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0SF000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: human:operator
+    kind: decision
+    thread: 01JGT0SF000000000000000009
+    decision: &id001
+      options:
+      - letter: A
+        text: Ship the release today.
+      - letter: B
+        text: Hold the release until Monday.
+      recommended_option: B
+    default_on_silence: B
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-05T10:00:00Z'
+    dedup_key: 01JGT0SF000000000000000001
+    body: Ship release 4.2 today?
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0SF000000000000000001
+      to: human:operator
+      from: agent:ws/planner
+      thread: 01JGT0SF000000000000000009
+      kind: decision
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.Expire
+  actor: inbox.messaging.Sweeper
+  input:
+    message_id: 01JGT0SF000000000000000001
+    now: '2026-01-05T10:00:00Z'
+    keep_until: '2026-01-06T10:00:00Z'
+  outcome: decided-on-silence
+  events:
+  - event: inbox.messaging.DecisionTakenOnSilence
+    payload:
+      message_id: 01JGT0SF000000000000000001
+      to: agent:ws/planner
+      thread: 01JGT0SF000000000000000009
+assert:
+- view: inbox.messaging.Settled
+  params:
+    sender: agent:ws/planner
+  contains:
+    message_id: 01JGT0SF000000000000000001
+    thread: 01JGT0SF000000000000000009
+    state: Answered
+    answered_by: silence
+    decided_option: B
+    expires: '2026-01-06T10:00:00Z'
+    body: Ship release 4.2 today?
+    created: '2026-01-05T09:00:00Z'
+    decision: *id001
+    default_on_silence: B
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0SF000000000000000009
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0SF000000000000000001
+  counts:
+    at_most: 0
