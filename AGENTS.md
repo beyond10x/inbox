@@ -31,6 +31,11 @@ waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/plannin
 | `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.96.0 cannot express | authored |
 | `docs/plan/` | One wave plan page per stage: the waves in order, and per unit its branch, worktree id and stage | the wave's coordinator |
 | `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
+| `generated/docs/` | The specification pages `ess generate --kind docs` writes from `ess/`, with its `.ess-output/` record; the site reads them in place | `task projections` |
+| `website/` | The documentation site (Docusaurus on `@beyond10x/docs-system`): `product.json` is the landing page, `docs/` the hand-written pages, `sidebars.ts` and `sidebars-specification.ts` the two sidebars; the specification pages are a second docs instance over `../generated/docs/docs` | authored, `npm` (`package-lock.json`) |
+| `.github/workflows/pages.yml`, `.github/workflows/b10x-docs-site.yml` | Build the site on every push and pull request (job `Build documentation`); publish it from `main` through the organization's project-site workflow | authored |
+| `.github/workflows/release.yml` | Job `Version`: a version tag equals the workspace version, is annotated, and has a `CHANGELOG.md` section. Builds and publishes nothing | authored |
+| `CHANGELOG.md`, `docs/releasing.md` | What each release holds; how a release is cut | authored, the release's coordinator |
 
 ## Commands
 
@@ -38,7 +43,7 @@ waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/plannin
 |---|---|
 | `task check` | The gate: `task spec`, `task projections-drift`, `task drift`, `task conform-interpreted`, `task conform`, `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, `task build-generated`. Run it as `slot task check` on a shared host |
 | `task spec` | `ess specify validate --path ess --strict-requires` |
-| `task projections` | Rewrite `generated/{openapi,asyncapi,schema}` after a change to `ess/` |
+| `task projections` | Rewrite `generated/{openapi,asyncapi,schema,docs}` after a change to `ess/` |
 | `task generate` | Rewrite `generated/rust/inbox` after a change to `ess/` or to the `ess` version, then bring its `Cargo.lock` up to date with `cargo metadata`. The synthesis is staged in `target/inbox-xtask/generate`; the held crate moves to `target/inbox-xtask/previous` and is moved back if the staged one cannot take its place. If a run left the held crate only in `previous` (`generated/rust/inbox` absent), the next run moves it back first, `Cargo.lock` included; a `previous` beside a present crate is removed. Works where `generated/rust/` does not exist yet |
 | `task drift` | Fail with `generated/rust/inbox drifted from a fresh synthesis of ess/` and one `edited:`, `missing:` or `not generated:` line per path when the crate differs from a fresh synthesis. A symbolic link is never followed and counts as `edited:`. Of a file's mode only the executable bit is compared, the one bit git records (`edited:` when it differs); the other mode bits follow the umask of the checkout and are not compared. The crate's top-level `Cargo.lock`, `.ess-output/` and `target/` (git-ignored) are not compared. A tree without the crate reports one `missing:` line per file. `inbox-xtask` runs on the tree it is started in: two levels above the runtime `CARGO_MANIFEST_DIR` (a relative one is taken from the current directory), else the nearest directory upwards; the root must hold the directory `ess/` and the file `Cargo.toml` |
 | `task build-generated` | `cargo build --features server` of `generated/rust/inbox`, into the repository's own `target/` (`--target-dir`), never into a `target/` inside `generated/` |
@@ -47,6 +52,27 @@ waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/plannin
 | `task coverage` | Synthesize with declared coverage. Exits 1 on ESS 0.96.0: 50 of 97 refused generated scenarios are covered by nothing (all `ESS-SYNTH-013`). Not in `task check` |
 | `task scenarios` | Rewrite `ess/scenarios/` and `ess/ess-inputs.yaml` from `tools/scenarios.py`. Needs `python3` with PyYAML |
 | `task plan` | `aep plan artifact validate` |
+| `slot npm --prefix website ci`, then `slot npm --prefix website run build` | Build the site into `website/build`; fails on a broken link or anchor. `npm --prefix website start` serves it locally |
+
+## Publishing
+
+- The repository is public at `https://github.com/beyond10x/inbox`. What must never enter it is
+  in "Rules" below; the gates scan every push and refuse without printing the match.
+- `main` moves only by the organization bot's fast-forward push through `b10x-gates`, after
+  `task check` is green on the commit. The required checks on `main` are
+  `common / Security and privacy`, `inbox / task check` and `Build documentation`.
+- The site is the repository's own, at `https://beyond10x.github.io/inbox/` (route `/inbox/`).
+  `.github/workflows/pages.yml` builds it on every push and pull request and, on `main`, uploads
+  the build with `.well-known/b10x-site.json`; `.github/workflows/b10x-docs-site.yml` publishes
+  that build through the organization's project-site workflow (pinned by commit), only for a
+  push by `b10x-bot[bot]` to `main`. It is not part of the organization's shared documentation:
+  no `b10x.docs.yaml`.
+- Build it locally with the two `npm` commands under "Commands". The specification pages are
+  not copied: the site reads `generated/docs/docs` in place, `task projections` writes it, and
+  `task check` fails when it differs from `ess/`.
+- The release process is `docs/releasing.md`: an annotated version tag by the bot, then a
+  GitHub Release by the bot. A release holds no binary until `story:cli-client`.
+- No deployment exists.
 
 ## Rules
 
@@ -73,9 +99,9 @@ waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/plannin
 - Tokens, keys and secrets are never written to a file, a commit or a message.
 - Every commit and push is `b10x-bot[bot]` through `b10x-gates bot`. The repository is enrolled in
   the common Gates policy (`.github/workflows/shared-gates.yml`).
-- The repository is private. A change reaches `main` as a fast-forward bot push: `b10x-gates`
-  refuses a later push once `main` holds a merge commit GitHub created ("remote repository is not
-  public"), until the policy baseline is moved past it.
+- The repository is public (the operator's decision of 2026-11-21). A change reaches `main` only
+  as a fast-forward push by the organization bot through `b10x-gates`, after the gate; see
+  "Publishing".
 - Nothing from a customer or employer outside beyond10x enters this repository. No person's name
   and no host path either: write "the operator".
 - No release, tag or deployment without the operator's word.

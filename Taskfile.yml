@@ -44,15 +44,15 @@ tasks:
       - ess specify validate --path ess --strict-requires
 
   projections:
-    desc: Rewrite generated/openapi, generated/asyncapi and generated/schema from ess/.
+    desc: Rewrite generated/openapi, generated/asyncapi, generated/schema and generated/docs from ess/.
     cmds:
-      - for: [openapi, asyncapi, schema]
+      - for: [openapi, asyncapi, schema, docs]
         cmd: ess generate --path ess --kind {{.ITEM}} --out generated/{{.ITEM}}
 
   projections-drift:
-    desc: Fail when generated/openapi, generated/asyncapi or generated/schema differs from ess/.
+    desc: Fail when generated/openapi, generated/asyncapi, generated/schema or generated/docs differs from ess/.
     cmds:
-      - for: [openapi, asyncapi, schema]
+      - for: [openapi, asyncapi, schema, docs]
         cmd: ess generate --path ess --kind {{.ITEM}} --out generated/{{.ITEM}} --check
 
   conform-interpreted:
