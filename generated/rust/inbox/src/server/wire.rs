@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
+// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1763,6 +1763,20 @@ pub fn decode_command_inbox_messaging_answer(value: &json::Value, at: &str) -> R
 pub fn encode_outcome_inbox_messaging_answer(value: &crate::messaging::AnswerOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::messaging::AnswerOutcome::NotSender { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-sender");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.NotSender");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_not_sender(error, out);
+            out.push('}');
+        }
         crate::messaging::AnswerOutcome::NoAuthority { error } => {
             json::member(out, "outcome");
             json::push_text(out, "no-authority");
@@ -2581,6 +2595,20 @@ pub fn decode_command_inbox_messaging_post_message(value: &json::Value, at: &str
 pub fn encode_outcome_inbox_messaging_post_message(value: &crate::messaging::PostMessageOutcome, out: &mut String) {
     out.push('{');
     match value {
+        crate::messaging::PostMessageOutcome::NotSender { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "not-sender");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.NotSender");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_not_sender(error, out);
+            out.push('}');
+        }
         crate::messaging::PostMessageOutcome::NoAuthority { error } => {
             json::member(out, "outcome");
             json::push_text(out, "no-authority");

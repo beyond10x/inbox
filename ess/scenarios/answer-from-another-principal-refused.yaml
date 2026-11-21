@@ -1,0 +1,116 @@
+type: ess-scenario/7
+covers:
+- inbox.messaging.Answer/outcome/not-sender
+domain: inbox.messaging
+scenario: answer-from-another-principal-refused
+summary: A reply whose `from` is not the caller is refused, from another principal naming the owner and
+  from the owner naming another principal; the request stays unanswered.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0FA000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: request
+    thread: 01JGT0FA000000000000000001
+    reply_shape:
+      shape: lines
+      value: 3
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0FA000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0FA000000000000000001
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0FA000000000000000001
+      kind: request
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    in_reply_to: 01JGT0FA000000000000000001
+    reply_id: 01JGT0FA000000000000000002
+    from: agent:box/worker
+    on_behalf_of: agent:box/worker
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: It is in the delivery module.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: not-sender
+  error:
+    name: inbox.messaging.NotSender
+  no_events:
+  - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    in_reply_to: 01JGT0FA000000000000000001
+    reply_id: 01JGT0FA000000000000000003
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    body: It is in the delivery module.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: not-sender
+  error:
+    name: inbox.messaging.NotSender
+  no_events:
+  - inbox.messaging.MessageAnswered
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  contains:
+    message_id: 01JGT0FA000000000000000001
+    state: Sent
+    expires: '2026-01-06T09:00:00Z'
+- view: inbox.messaging.Settled
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_most: 0
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0FA000000000000000001
+  counts:
+    at_most: 0

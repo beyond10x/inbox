@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:e8091e4a202f15110291225050f3426fe5dfd78929230c471fa45f7cd8b25dc9
+# contract digest slice-sha256/2:c290173c98795b1062a1aa4ebcaba2ce42b1cd3fc691e40f73e8144d0544249e
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:e8091e4a202f15110291225050f3426fe5dfd78929230c471fa45f7cd8b25dc9
+    contract_digest: slice-sha256/2:c290173c98795b1062a1aa4ebcaba2ce42b1cd3fc691e40f73e8144d0544249e
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -34,6 +34,7 @@ paths:
       - inbox.messaging.Client
       x-ess-caller:
       - inbox
+      - principal
       requestBody:
         description: The input `inbox.messaging.Answer` declares.
         required: true
@@ -49,12 +50,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/inbox.messaging.Answer.answered.Response'
         '403':
-          description: 'Outcome `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `not-sender` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
-                - $ref: '#/components/schemas/inbox.messaging.Answer.not-recipient.Response'
+                - discriminator:
+                    mapping:
+                      not-recipient: '#/components/schemas/inbox.messaging.Answer.not-recipient.Response'
+                      not-sender: '#/components/schemas/inbox.messaging.Answer.not-sender.Response'
+                    propertyName: outcome
+                  oneOf:
+                  - $ref: '#/components/schemas/inbox.messaging.Answer.not-sender.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.Answer.not-recipient.Response'
                 - additionalProperties: false
                   properties:
                     actor:
@@ -532,6 +540,8 @@ paths:
       - messaging
       x-ess-may-invoke:
       - inbox.messaging.Client
+      x-ess-caller:
+      - principal
       requestBody:
         description: The input `inbox.messaging.PostMessage` declares.
         required: true
@@ -547,26 +557,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/inbox.messaging.PostMessage.posted.Response'
         '403':
-          description: 'No declared outcome: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcome `not-sender`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
-                additionalProperties: false
-                properties:
-                  actor:
-                    description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
-                    type:
-                    - string
-                    - 'null'
-                  refused:
-                    description: The standard refusal for an actor no grant admits.
-                    enum:
-                    - not granted
-                    type: string
-                required:
-                - refused
-                - actor
-                type: object
+                oneOf:
+                - $ref: '#/components/schemas/inbox.messaging.PostMessage.not-sender.Response'
+                - additionalProperties: false
+                  properties:
+                    actor:
+                      description: The qualified name of the actor the request was authenticated as, or null where it was authenticated as none.
+                      type:
+                      - string
+                      - 'null'
+                    refused:
+                      description: The standard refusal for an actor no grant admits.
+                      enum:
+                      - not granted
+                      type: string
+                  required:
+                  - refused
+                  - actor
+                  type: object
         '409':
           description: 'Outcomes `duplicate`, `duplicate-key`, `unknown-inbox` and `inbox-closed`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.'
           content:
@@ -1373,6 +1385,26 @@ components:
           type: string
         outcome:
           const: not-recipient
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.Answer.not-sender.Response:
+      additionalProperties: false
+      description: Taken when `from != caller.principal` holds of the input.
+      properties:
+        error:
+          const: inbox.messaging.NotSender
+          description: The caller did not send the message.
+          type: string
+        outcome:
+          const: not-sender
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -2705,6 +2737,8 @@ components:
           $ref: '#/components/schemas/inbox.messaging.MessageId'
         from:
           $ref: '#/components/schemas/inbox.messaging.Principal'
+          examples:
+          - principal-262144
         on_behalf_of:
           $ref: '#/components/schemas/inbox.messaging.Principal'
           description: The principal whose word this is; `from` itself when the sender speaks for nobody else.
@@ -2878,6 +2912,26 @@ components:
           type: string
         outcome:
           const: no-authority
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.PostMessage.not-sender.Response:
+      additionalProperties: false
+      description: Taken when `from != caller.principal` holds of the input.
+      properties:
+        error:
+          const: inbox.messaging.NotSender
+          description: The caller did not send the message.
+          type: string
+        outcome:
+          const: not-sender
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'

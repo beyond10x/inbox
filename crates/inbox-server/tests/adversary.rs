@@ -262,7 +262,6 @@ fn adv_a_post_on_behalf_of_another_under_its_delegation_is_posted() {
 // ---- the caller -------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "pre-existing, story:post-from-is-the-caller"]
 fn adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal() {
     let world = World::new();
     let server = world.start(|_| {});

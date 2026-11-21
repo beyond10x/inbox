@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
+// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -136,6 +136,10 @@ where
 {
     fn answer(&mut self, input: crate::messaging::Answer) -> Result<crate::messaging::AnswerOutcome, UnmetObligation> {
         let _ = &input;
+        // `not-sender`: an input-guarded refusal, before the addressed subject is loaded.
+        if decided(equal(Some(&input.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::NotSender { error: crate::messaging::NotSender });
+        }
         // `no-authority`: an input-guarded refusal, before the addressed subject is loaded.
         if decided(all(&[equal(Some(&input.on_behalf_of).map(|value| &value.0).map(|value| value.clone()), Some(&input.from).map(|value| &value.0).map(|value| value.clone())).map(|value| !value), (Some(Some(&input.authority).and_then(|value| value.as_ref()).map(|value| &value.0).is_some())).map(|value| !value)]), "inbox.messaging.Answer")? {
             return Ok(crate::messaging::AnswerOutcome::NoAuthority { error: crate::messaging::NoAuthority });

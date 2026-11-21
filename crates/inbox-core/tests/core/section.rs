@@ -122,8 +122,9 @@ impl TryContext for Panics {
         Ok(None)
     }
 
+    /// The `from` of `Post::note`, so the post passes `not-sender` and reaches `unknown_option`.
     fn try_caller_principal(&self) -> Result<Option<Principal>, UnmetObligation> {
-        Ok(None)
+        Ok(Some(Principal("agent:ws/planner".to_owned())))
     }
 
     fn try_external(

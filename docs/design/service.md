@@ -76,7 +76,12 @@ request may be sent again inside its 60 s window, and is answered again. Posts a
 The key id resolves to the principal of its key entry (`KeyRing::verify_request`). The caller is the
 actor `inbox.messaging.Client` with that principal as its `principal` and, as its `inbox`, the
 address with the same text: decision 5 of `docs/design/inbox.md` ("a caller carries a `principal`
-and an `inbox` address, the same text in version 1"). No request over HTTP is the
+and an `inbox` address, the same text in version 1"). The caller is the sender: a `post` or an
+`answer` whose envelope's `from` is not the caller's `principal` is the specification's
+`not-sender` (`403`, `NotSender`), answered before every other refusal of the command and
+storing nothing. The rule is the model's (`ess/domains/messaging.yaml`); the listener holds no
+copy of it. So a principal that sends another principal's signed envelope under its own request
+signature is refused, whether or not the first message is still held. No request over HTTP is the
 `inbox.messaging.Sweeper`: `Expire`, `Due` and `Messages` are answered `403` with the generated
 refusal `{"refused": "not granted", "actor": "inbox.messaging.Client"}`. Only the expiry task sends
 `Expire`.

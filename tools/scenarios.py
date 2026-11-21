@@ -155,6 +155,7 @@ COVERS = {
         out("Answer", "signature-invalid"), out("Answer", "authority-invalid"),
     ],
     "read-decision-waits-for-its-answer": envelope("Unanswered"),
+    "answer-from-another-principal-refused": [out("Answer", "not-sender")],
 }
 
 PLANNER = "agent:ws/planner"
@@ -223,7 +224,9 @@ class Scenario:
         )
 
     def post(self, message_id, to, kind="note", sender=PLANNER, outcome="posted", error=None,
-             body="Build 512 is green.", created=0, expires=24 * 60, **extra):
+             body="Build 512 is green.", created=0, expires=24 * 60, caller=None, **extra):
+        """`sender` is the envelope's `from`; `caller`, the principal that sends the request, is
+        the sender unless named."""
         input_ = {
             "message_id": message_id,
             "from": sender,
@@ -250,7 +253,7 @@ class Scenario:
                 "thread": input_["thread"], "kind": kind,
             })]
         return self.step(
-            "PostMessage", "Client", sender, input_, outcome, error=error, events=events,
+            "PostMessage", "Client", caller or sender, input_, outcome, error=error, events=events,
             no_events=["MessagePosted"] if error else None,
         )
 
@@ -276,12 +279,15 @@ class Scenario:
 
     def answer(self, message_id, reply_id, caller=WORKER, outcome="answered", error=None,
                body="It is in the delivery module.", sender=PLANNER, thread=None, created=5,
-               expires=24 * 60 + 5, **extra):
+               expires=24 * 60 + 5, from_=None, **extra):
+        """`caller` sends the request; the reply's `from` is the caller unless `from_` names
+        another principal."""
+        from_ = from_ or caller
         input_ = {
             "in_reply_to": message_id,
             "reply_id": reply_id,
-            "from": caller,
-            "on_behalf_of": extra.pop("on_behalf_of", caller),
+            "from": from_,
+            "on_behalf_of": extra.pop("on_behalf_of", from_),
         }
         if "authority" in extra:
             input_["authority"] = extra.pop("authority")
@@ -706,6 +712,28 @@ s.check("Unanswered", inbox(OPERATOR), contains={
     "decision": ASK, "default_on_silence": "B",
 })
 s.empty("Pending", inbox(OPERATOR))
+names.append(s.write())
+
+# 25
+m = mid("FC", 1)
+s = Scenario("post-from-another-principal-refused",
+             "The recipient of a note posts the sender's signed envelope again under its own request, while the note is live and after it is handled: refused both times, and nothing is stored.")
+s.open(WORKER).post(m, WORKER, "note")
+s.post(m, WORKER, "note", caller=WORKER, outcome="not-sender", error="NotSender")
+s.read(m, outcome="handled")
+s.post(m, WORKER, "note", caller=WORKER, outcome="not-sender", error="NotSender")
+s.empty("Pending", inbox(WORKER)).empty("Outbox", sender())
+names.append(s.write())
+
+# 26
+m = mid("FA", 1)
+s = Scenario("answer-from-another-principal-refused",
+             "A reply whose `from` is not the caller is refused, from another principal naming the owner and from the owner naming another principal; the request stays unanswered.")
+s.open(WORKER).post(m, WORKER, "request", reply_shape=LINES_3)
+s.answer(m, mid("FA", 2), caller=OTHER, from_=WORKER, outcome="not-sender", error="NotSender")
+s.answer(m, mid("FA", 3), caller=WORKER, from_=OTHER, outcome="not-sender", error="NotSender")
+s.check("Pending", inbox(WORKER), contains={"message_id": m, "state": "Sent", "expires": ts(24 * 60)})
+s.empty("Settled", sender()).empty("Replies", thread(m))
 names.append(s.write())
 
 for name in COVERS:

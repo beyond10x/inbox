@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
+// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -880,6 +880,11 @@ pub struct Answer {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AnswerOutcome {
+    /// `not-sender` — when `from != caller.principal`.
+    NotSender {
+        /// Why it was refused: `inbox.messaging.NotSender`.
+        error: NotSender,
+    },
     /// `no-authority` — when `(on_behalf_of != {fact: from} and not (defined(authority)))`.
     NoAuthority {
         /// Why it was refused: `inbox.messaging.NoAuthority`.
@@ -1219,6 +1224,11 @@ pub struct PostMessage {
 /// outcomes exist to prevent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PostMessageOutcome {
+    /// `not-sender` — when `from != caller.principal`.
+    NotSender {
+        /// Why it was refused: `inbox.messaging.NotSender`.
+        error: NotSender,
+    },
     /// `no-authority` — when `(on_behalf_of != {fact: from} and not (defined(authority)))`.
     ///
     /// The sender speaks for another principal and names no delegation.
@@ -1978,7 +1988,7 @@ pub mod obligations {
     ///
     /// Why it is not generated: kept an obligation by a guard over the rows a selector selects (`when_related: {entity, where, exists | count | forall}`), in `duplicate-key`.
     ///
-    /// Contract: given `inbox.messaging.PostMessage` input, decide and enact exactly one outcome. Selection precedence: on commands with `when_related:`, check `existing_instance` then `exists: false` before input-guarded refusals; choose the first declared input refusal whose guard holds; then check addressed-row existence (`unknown_instance`, and `existing_instance` on commands without `when_related:`); then the held state (`when_subject_state` and `when_subject`), with `wrong_state` only if the selected branch moves from a state the row does not hold; then choose the present `when_related:` predicate refusal whose predicate and optional input guard hold; then accepting and external branches in declaration order. An accepting branch that moves nothing answers in every state. Related-presence predicates do not precede input-guarded refusals. Declared outcomes (declaration order, not selection precedence): `no-authority` when `(on_behalf_of != {fact: from} and not (defined(authority)))`, error `inbox.messaging.NoAuthority`; `already-expired` when `expires <= {fact: created} as timestamp`, error `inbox.messaging.AlreadyExpired`; `request-without-shape` when `(kind == request and not (defined(reply_shape)))`, error `inbox.messaging.ShapeMismatch`; `decision-without-options` when `(kind == decision and not (defined(decision)))`, error `inbox.messaging.ShapeMismatch`; `unknown-option` externally decided (`recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter), error `inbox.messaging.ShapeMismatch`; `signature-invalid` externally decided (the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify), error `inbox.messaging.SignatureInvalid`; `authority-invalid` externally decided (the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`), error `inbox.messaging.NoAuthority`; `duplicate` for an identity a record already carries, error `inbox.messaging.Duplicate`; `duplicate-key` when, of the `inbox.messaging.Message` rows satisfying `dedup_key == input.dedup_key`, at least one row is selected, error `inbox.messaging.Duplicate`; `unknown-inbox` when no `inbox.messaging.Inbox` carries the identity `input.to` names, error `inbox.messaging.UnknownInbox`; `inbox-closed` when the `inbox.messaging.Inbox` that `input.to` names satisfies `state == Closed`, error `inbox.messaging.UnknownInbox`; `posted` otherwise, creates `inbox.messaging.Message`, emits `inbox.messaging.MessagePosted`.
+    /// Contract: given `inbox.messaging.PostMessage` input, decide and enact exactly one outcome. Selection precedence: on commands with `when_related:`, check `existing_instance` then `exists: false` before input-guarded refusals; choose the first declared input refusal whose guard holds; then check addressed-row existence (`unknown_instance`, and `existing_instance` on commands without `when_related:`); then the held state (`when_subject_state` and `when_subject`), with `wrong_state` only if the selected branch moves from a state the row does not hold; then choose the present `when_related:` predicate refusal whose predicate and optional input guard hold; then accepting and external branches in declaration order. An accepting branch that moves nothing answers in every state. Related-presence predicates do not precede input-guarded refusals. Declared outcomes (declaration order, not selection precedence): `not-sender` when `from != caller.principal`, error `inbox.messaging.NotSender`; `no-authority` when `(on_behalf_of != {fact: from} and not (defined(authority)))`, error `inbox.messaging.NoAuthority`; `already-expired` when `expires <= {fact: created} as timestamp`, error `inbox.messaging.AlreadyExpired`; `request-without-shape` when `(kind == request and not (defined(reply_shape)))`, error `inbox.messaging.ShapeMismatch`; `decision-without-options` when `(kind == decision and not (defined(decision)))`, error `inbox.messaging.ShapeMismatch`; `unknown-option` externally decided (`recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter), error `inbox.messaging.ShapeMismatch`; `signature-invalid` externally decided (the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify), error `inbox.messaging.SignatureInvalid`; `authority-invalid` externally decided (the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`), error `inbox.messaging.NoAuthority`; `duplicate` for an identity a record already carries, error `inbox.messaging.Duplicate`; `duplicate-key` when, of the `inbox.messaging.Message` rows satisfying `dedup_key == input.dedup_key`, at least one row is selected, error `inbox.messaging.Duplicate`; `unknown-inbox` when no `inbox.messaging.Inbox` carries the identity `input.to` names, error `inbox.messaging.UnknownInbox`; `inbox-closed` when the `inbox.messaging.Inbox` that `input.to` names satisfies `state == Closed`, error `inbox.messaging.UnknownInbox`; `posted` otherwise, creates `inbox.messaging.Message`, emits `inbox.messaging.MessagePosted`.
     pub trait PostMessageBehavior {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.PostMessage`.
         ///

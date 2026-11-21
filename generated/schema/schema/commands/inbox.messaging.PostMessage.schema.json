@@ -10,7 +10,10 @@
       "$ref": "#/$defs/inbox.messaging.MessageId"
     },
     "from": {
-      "$ref": "#/$defs/inbox.messaging.Principal"
+      "$ref": "#/$defs/inbox.messaging.Principal",
+      "examples": [
+        "principal-262144"
+      ]
     },
     "on_behalf_of": {
       "$ref": "#/$defs/inbox.messaging.Principal",
@@ -73,7 +76,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:510e447e46934edb61c9b623b8517f2120628a8c397bdd5bf2c7601c715d30ef",
+    "contract_digest": "slice-sha256/2:82482e5ca31b3fc660b1fc92d577154f86a42b2026d82566c595452a79f596f8",
     "regenerate": "ess generate"
   },
   "$defs": {

@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
+// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Semantic types synthesised from the `inbox` specification, v1.

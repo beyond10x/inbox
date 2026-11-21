@@ -5,8 +5,9 @@ use inbox::messaging::obligations::{ExpireBehavior, PostMessageBehavior};
 use inbox::messaging::{
     Address, AlreadyExpired, AnsweredBy, AnyMessage, DecisionTakenOnSilence, Duplicate, Expire,
     ExpireOutcome, InboxSnapshot, InboxState, Kind, Message, MessageData, MessageExpired,
-    MessageId, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue, PostMessage,
-    PostMessageOutcome, Principal, ShapeMismatch, SignatureInvalid, UnknownInbox, UnknownMessage,
+    MessageId, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue, NotSender,
+    PostMessage, PostMessageOutcome, Principal, ShapeMismatch, SignatureInvalid, UnknownInbox,
+    UnknownMessage,
 };
 use inbox::obligation::UnmetObligation;
 use inbox::primitives::Timestamp;
@@ -122,8 +123,9 @@ const EXPIRE: &str = "inbox.messaging.Expire";
 /// `inbox.messaging.PostMessage`, in the order the ESS 0.96.0 interpreter and synthesizer select
 /// its outcomes:
 ///
-/// 1. the input-guarded refusals in declaration order: `no-authority`, `already-expired`,
-///    `request-without-shape`, `decision-without-options`;
+/// 1. the input-guarded refusals in declaration order: `not-sender` (`from` is not the caller's
+///    `principal`; a caller without one is no declared outcome), `no-authority`,
+///    `already-expired`, `request-without-shape`, `decision-without-options`;
 /// 2. the external branches in declaration order, each asked of [`PostExternals`] before any row
 ///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `unknown-option`,
 ///    `signature-invalid`, `authority-invalid`;
@@ -141,8 +143,15 @@ const EXPIRE: &str = "inbox.messaging.Expire";
 /// Read-then-write, like every generated behaviour: two posts over one store at once are told
 /// apart only where the backend's [`crate::Exclusive`] section runs them one at a time, which
 /// [`crate::handle`] does.
-impl<B: InboxStorage + MessageStorage, C: PostExternals> PostMessageBehavior for Core<B, C> {
+impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessageBehavior
+    for Core<B, C>
+{
     fn post_message(&mut self, input: PostMessage) -> Result<PostMessageOutcome, UnmetObligation> {
+        match self.try_caller_principal()? {
+            Some(principal) if principal == input.from => {}
+            Some(_) => return Ok(PostMessageOutcome::NotSender { error: NotSender }),
+            None => return Err(undeclared(POST_MESSAGE)),
+        }
         if input.on_behalf_of != input.from && input.authority.is_none() {
             return Ok(PostMessageOutcome::NoAuthority { error: NoAuthority });
         }

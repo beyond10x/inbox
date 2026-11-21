@@ -88,7 +88,11 @@ Each can be changed; the alternative is named where there is one.
    belongs to Mandate.
 5. **Ownership.** A caller carries a `principal` and an `inbox` address, the same text in
    version 1. Only the caller whose `inbox` is the address opens it; only the owner closes it,
-   marks, reads, answers or refuses its messages; only the sender collects.
+   marks, reads, answers or refuses its messages; only the sender collects. A post or an answer
+   whose `from` is not the caller's `principal` is refused `not-sender` (`NotSender`) before every
+   other refusal of the command, so a principal that holds another's signed envelope cannot send
+   it again as its own request, and learns nothing about a stored message from the answer. With
+   a delegation the caller is still `from`; `on_behalf_of` is not compared.
 6. **Dedup holds among live messages only**, by `message_id` and by `dedup_key`. A refused post
    stores nothing.
 7. **`on_behalf_of` is always present** and equals `from` when the sender speaks for nobody else.
@@ -114,8 +118,14 @@ yet.
   and refuses one that is not the caller's.
 - **Synthesis arranges no caller for a guard over a stored field** that was not set from the
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
-  rule), and only notes once an input guard depends on `kind`. 47 generated scenarios are
+  rule), and only notes once an input guard depends on `kind`. 48 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
+- **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
+  guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
+  suite. The input `from` of `PostMessage` carries `example: principal-262144`, the value ESS
+  0.96.0 synthesis gives the first caller's `principal` and not an address anybody holds; it goes
+  when ESS writes those scenarios without it. With it, a generated scenario posts as one caller
+  only: 19 of them lost the second run under a second caller they had before the guard.
 - **42 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
   synthesis arranges no row. `decision-answered-by-the-operator` covers 36 of them: it reads an
   answered decision, its reply and its option in `Settled`, `Replies`, `Thread`, `Outbox`,
@@ -125,9 +135,9 @@ yet.
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 89,
-  and authored scenarios cover all 89, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 93 passed and reports `conformance_status: passed`.
+- **`task coverage` on ESS 0.96.0**: synthesis writes 96 scenarios (26 authored) and refuses 90,
+  and authored scenarios cover all 90, so it exits 0; `task check` runs it. The suite it writes
+  runs on the interpreted target as 96 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 
