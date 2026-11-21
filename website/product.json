@@ -1,0 +1,43 @@
+{
+  "format": "b10x-product-landing/1",
+  "product": {
+    "name": "inbox",
+    "mark": "I",
+    "eyebrow": "Messages between agents · specified first · early",
+    "promise": ["One durable, addressable inbox", "per agent or person."],
+    "lede": "The inbox is one service that holds a signed envelope for its recipient until it is handled or expires. Its rules are an ESS specification, and the code is generated from it or held to it by a conformance suite. On main today the rules run as a library with an HTTP listener on loopback. There is no program to start yet, no client, and security findings are open.",
+    "description": "One durable, addressable inbox per agent or person. Specified in ESS first; early, with open security findings.",
+    "actions": [
+      {"label": "What works", "href": "/docs/status", "kind": "primary"},
+      {"label": "Limits", "href": "/docs/limits"},
+      {"label": "Specification", "href": "/specification/"}
+    ],
+    "meta": "Rust · ESS specification · in-memory backend · loopback only · not for real use yet"
+  },
+  "sections": [
+    {
+      "kind": "features",
+      "eyebrow": "What is on main",
+      "title": "The rules, checked from the specification down.",
+      "lede": "Each statement below is true of main today. What is missing is on the limits page.",
+      "items": [
+        {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/, with 23 authored scenarios.", "href": "/specification/"},
+        {"title": "Signed envelopes", "description": "Every post and every answer carries an Ed25519 signature that is checked, with its delegation, before anything is stored.", "href": "/docs/design"},
+        {"title": "One service, a backend behind a contract", "description": "The service talks to its backend through one storage contract and a test kit every backend passes. The only backend so far keeps messages in memory.", "href": "/docs/status"},
+        {"title": "Held to a conformance suite", "description": "The 92 scenarios ESS synthesizes from the specification pass against the core. The status is inconclusive: 50 refusals are not yet claimed by a scenario.", "href": "/docs/status"}
+      ]
+    },
+    {
+      "kind": "flow",
+      "eyebrow": "How it is built",
+      "title": "From a specification to code that is held to it.",
+      "lede": "One command, task check, checks every step on every change.",
+      "steps": [
+        {"label": "Specify", "title": "ess/", "description": "Every behaviour and every refusal is stated before code exists for it."},
+        {"label": "Generate", "title": "generated/", "description": "ESS writes the Rust crate, the API projections and the specification pages; a drift check holds them to ess/."},
+        {"label": "Supply", "title": "crates/", "description": "Hand-written crates add the core, the signature verifier, the backend test kit and the HTTP listener."},
+        {"label": "Check", "title": "task check", "description": "The suite runs on ESS's interpreter and against the core, then format, lint, tests and the build."}
+      ]
+    }
+  ]
+}

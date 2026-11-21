@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags: ['[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check the tag against the workspace version and the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::the workspace version in Cargo.toml is '$version', not a version of the form 1.2.3" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if [ "$GITHUB_REF_NAME" != "$version" ]; then
+              echo "::error::the tag is $GITHUB_REF_NAME, but the workspace version in Cargo.toml is $version" >&2
+              exit 1
+            fi
+            kind=$(gh api "repos/$GH_REPO/git/ref/tags/$GITHUB_REF_NAME" --jq .object.type)
+            if [ "$kind" != tag ]; then
+              echo "::error::$GITHUB_REF_NAME is not an annotated tag" >&2
+              exit 1
+            fi
+          fi
+          heading="## [$version]"
+          if ! awk -v h="$heading" '$0 == h || index($0, h " - ") == 1 { found = 1 } END { exit !found }' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section $heading" >&2
+            exit 1
+          fi
+          echo "inbox $version"
