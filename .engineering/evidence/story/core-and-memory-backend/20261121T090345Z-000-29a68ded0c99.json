@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T09:03:45Z",
+  "actor": "agent:inbox",
+  "artifact": "story:core-and-memory-backend",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "on the base f13624f the generated inbox-service-server exits 1 naming the command behaviour of PostMessage as unmet and cargo test -p inbox-core exits 101 (no such package); on the unit cargo test -p inbox-core --locked exits 0 with 33 passed; a copy whose posted branch stores nothing exits 101 with 18 failed, the acceptance case among them; a copy that never asks for signature-invalid exits 101 with 3 failed",
+    "reference": "docs/plan/stage-2.md#wave-2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T09:31:16Z",
+  "actor": "agent:inbox",
+  "artifact": "story:core-and-memory-backend",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F2 (the section cases share one backend value): each thread of tests/core/section.rs has its own clone; tests/core 37 passed, 2 red on the per-clone mutant",
+    "review": "review-result:adversary-core-and-memory-backend-pass-2",
+    "outcome": "fixed"
+  }
+}
