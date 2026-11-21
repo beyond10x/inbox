@@ -610,12 +610,12 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
 /// posted: one recorded at another epoch, one without an epoch, and every one when the service
 /// names no epoch (an older service). `posted` and `Duplicate` count as arrived; the epoch of
 /// the answer is recorded for an accepted post and for the outcome `duplicate` (the service
-/// holds the message), not for `duplicate-key` (it stored nothing), once after every envelope
-/// was posted. A final refusal ([`final_refusal`]) drops the envelope; the other refusals keep
-/// it. Exits as a refusal, naming the first, when any envelope did not arrive, and with an
-/// unreadable entry, naming each line of the outbox file that does not read as an envelope; a
-/// transport failure ends the run, after recording the epochs of the posts that arrived before
-/// it. A local failure (the outbox file or the epochs file cannot be changed) ends no post:
+/// holds the message), not for `duplicate-key` (it stored nothing), right after that answer, so
+/// a run ended between two posts keeps the epochs of the posts that arrived. A final refusal
+/// ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a refusal,
+/// naming the first, when any envelope did not arrive, and with an unreadable entry, naming each
+/// line of the outbox file that does not read as an envelope; a transport failure ends the run.
+/// A local failure (the outbox file or the epochs file cannot be changed) ends no post:
 /// every envelope is posted, the report is printed, and the first local failure decides the
 /// exit (4).
 ///
@@ -632,7 +632,6 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
     let mut entries = Vec::new();
     let mut lines = Vec::new();
     let mut first_refusal: Option<(String, u16)> = None;
-    let mut stored = Vec::new();
     let mut local: Option<Failure> = None;
     for entry in kept {
         if current.is_some() && entry.epoch == current {
@@ -661,15 +660,12 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
                     (false, answer, said)
                 }
             }
-            Err(other) => {
-                // The transport failure is what the run reports; an epoch that cannot be
-                // recorded leaves its envelope to the next repost.
-                let _ = client.outbox.record_epochs(&stored, now());
-                return Err(other);
-            }
+            Err(other) => return Err(other),
         };
-        if let (true, Some(epoch)) = (arrived && holds(&answer), epoch) {
-            stored.push((message_id.clone(), epoch));
+        if let (true, Some(epoch)) = (arrived && holds(&answer), &epoch)
+            && let Err(cause) = client.outbox.record_epoch(&message_id, epoch, now())
+        {
+            local.get_or_insert(cause);
         }
         lines.push(format!("{message_id} to {to}: {said}"));
         entries.push(Value::Object(vec![
@@ -691,9 +687,6 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
         for line in &lines {
             warn(&format!("inbox repost: {line}"));
         }
-    }
-    if let Err(cause) = client.outbox.record_epochs(&stored, now()) {
-        local.get_or_insert(cause);
     }
     if let Some(cause) = local {
         return Err(Failure::After {
