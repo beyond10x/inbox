@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T09:35:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:core-and-memory-backend",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "CARGO_INCREMENTAL=0 slot task check on wave/s2-2 at 7baec2f: exit 0; 92 scenarios: 92 passed, 0 failed, 0 error, 0 unsupported; cargo test -p inbox-core 48 passed (37, 7, 4)",
+    "reference": "docs/plan/stage-2.md#wave-2"
+  }
+}

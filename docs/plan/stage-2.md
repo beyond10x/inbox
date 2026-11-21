@@ -10,7 +10,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | Wave | Stories | Serves | State |
 |---|---|---|---|
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
-| 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | running |
+| 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | planned |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | planned |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
@@ -119,10 +119,59 @@ records the gate run as `test_result` and each claim check as `verification`.
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-2` | `inbox-s2-w2` | `w2/` | open |
-| story:core-and-memory-backend | `impl/core-and-memory-backend` | `inbox-s2-w2-core` | `w2/core-and-memory-backend/` | dispatched |
-| story:signature-verifier | `impl/signature-verifier` | `inbox-s2-w2-verify` | `w2/signature-verifier/` | dispatched |
+| integration | `wave/s2-2` | `inbox-s2-w2` | `w2/` | closed |
+| story:core-and-memory-backend | `impl/core-and-memory-backend` | `inbox-s2-w2-core` | `w2/core-and-memory-backend/` | merged, `implemented` |
+| story:signature-verifier | `impl/signature-verifier` | `inbox-s2-w2-verify` | `w2/signature-verifier/` | merged, `implemented` |
+
+Result:
+
+- Gate on `wave/s2-2` after both merges (`7baec2f`), `CARGO_INCREMENTAL=0 slot task check`:
+  exit 0, "92 scenarios: 92 passed, 0 failed, 0 error, 0 unsupported", 146 cargo test cases
+  passed: 48 of `inbox-core` (37, 7 and 4 in its 3 targets), 63 of `inbox-verify` (13 unit,
+  1 acceptance, 5 and 3 in the two adversary files, 34 in `tests/cases.rs`, 7 in `tests/jcs.rs`),
+  35 of `inbox-xtask`. The run took 28 s in the pool; `target/` of the integration tree was
+  335 MB afterwards.
+- Claim checks by the coordinator, each on the base, on the unit and on mutated copies: recorded
+  as `verification` evidence on both stories.
+- story:core-and-memory-backend: 3 unit commits (`ff76d83`, `32b954f`, `9eba82c`). Adversary
+  pass 1: 3 findings (two posts at once over clones of one store were both accepted; 2 mutants
+  the cases did not catch). Pass 2: 2 notes on the first correction. All 5 introduced by the
+  unit, all fixed.
+- story:signature-verifier: 3 unit commits (`4125267`, `746046b`, `4de8174`). Adversary pass 1:
+  6 findings, 5 introduced and fixed, 1 there before the unit (a backlog draft). Pass 2: 3
+  findings on the first correction, 1 of them a regression (the duplicate check held about
+  160 MiB for a key file of 32 801 bytes), all fixed.
+- Differs from the plan:
+  - The coordinator's brief told the core's implementor to follow the order of refusals in the
+    contract text of `PostMessage` (`generated/rust/inbox/PLAN.md`). The ESS interpreted target
+    answers another order, and the 92 scenarios pass both. The coordinator measured it with 12
+    scenarios and 3 controls in a scratch copy of `ess/` and sent the unit back before its
+    first commit. The story's Context states the measured order.
+  - `inbox-core` has a third trait a backend implements, `Exclusive`, and an entry `handle` that
+    runs one command at a time per store (finding 1 of pass 1). The backend contract for
+    story:backend-test-kit and a later backend is the 2 storage ports and `Exclusive`.
+  - `AGENTS.md` and the lock: the 3 Layout rows are in the closing commit; `Cargo.lock` was
+    resolved inside the second merge (the wave branch's side, then `cargo metadata`).
+- Decisions the coordinator took in the wave, each written into the story or the design note:
+  an id of the key file is never reused, and an id two operator-signed entries carry is ignored
+  in both; a key file with a member name carried twice is refused whole; a command's context
+  that calls the entry again over the same store gets a panic naming the rule; `getrandom` 0.4,
+  which the lock already held, in place of a third version.
+- Not shown by this wave: a `schema` reply shape is only checked for a body that parses as JSON;
+  no code path decodes an envelope from a request yet (story:http-service).
+- Sub-agents, all on Opus. Counted from the transcripts, where each tool call appears twice: the
+  core's implementor 171 tool uses in 4 runs, the verifier's implementor 140 in 3 runs; the
+  adversaries 57 and 42 (core, pass 1 and 2) and 54 and 39 (verifier).
 
 ## Backlog
 
-Drafts filed from findings wait here until every wave of this plan is delivered. None yet.
+Drafts filed from findings wait here until every wave of this plan is delivered. Accepting one
+is the operator's act.
+
+- story:post-refusal-order-scenarios (wave 2): authored scenarios hold the order in which
+  `PostMessage` refuses when two refusals apply. The suite of 92 scenarios passes an
+  implementation that reads a row before it has checked the signature.
+- story:refuse-duplicate-members (wave 2): the listener refuses a request whose JSON carries a
+  member name twice. The generated reader keeps the first of two members, so one signature
+  covers two texts. `crates/inbox-verify` holds the check (`duplicate_member`); the call in the
+  listener is not part of story:http-service as accepted.

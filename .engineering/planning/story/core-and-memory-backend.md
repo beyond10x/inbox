@@ -2,19 +2,20 @@
 format: aep.planning-md/3
 id: story:core-and-memory-backend
 kind: story
-status: active
+status: implemented
 title: 'The core: the 2 obligations, the context port and the in-memory backend'
 summary: 'What the synthesized crate leaves open, supplied once: `PostMessage`, `Expire`, the context port and a non-persistent backend behind the generated storage ports.'
 relations:
 - decomposes: epic:service-in-memory
 - depends_on: story:rust-workspace-and-model
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/inbox-core
-revision: 11
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-11-21T09:36:08Z", actor: "agent:inbox", revision: 14, decided_on: {"recorded":{"test_result":1,"review_outcome":8,"verification":1}}}
 ---
 ## Outcome
 
@@ -72,6 +73,36 @@ The tests use a verifier double that accepts or refuses by key id. The real veri
 story:signature-verifier, a crate that does not depend on this one; story:http-service adapts it
 to the trait declared here.
 
+Added while the wave ran (stage 2, wave 2), each after a finding; the crate and the wave order
+are as planned:
+
+- One command at a time per store. Every command reads, decides and then writes through
+  separate storage calls, so two requests at once over clones of one backend could both be
+  accepted. The crate declares a third trait a backend implements, `Exclusive` (run a command
+  while no other command runs over this store), and the entry `handle` / `handle_with_events`:
+  it takes the section, builds the generated system over a clone of the backend and the
+  request's context, and runs the generated `handle`. An embedding with another caller per
+  request calls this entry; `system` alone serializes nothing. A context, verifier or
+  `PostExternals` must not call the entry over the same store; `MemoryBackend` answers such a
+  call with a panic that names the rule. For a later backend the contract is the 2 storage ports
+  and `Exclusive`.
+- The order in which `PostMessage` refuses is the one the ESS interpreted target answers, measured
+  with scenarios in a scratch copy of `ess/`: the input-guarded refusals in declaration order
+  (`no-authority`, `already-expired`, `request-without-shape`, `decision-without-options`), then
+  the 3 external branches (`unknown-option`, `signature-invalid`, `authority-invalid`), then the
+  row refusals (`duplicate`, `unknown-inbox`, `duplicate-key`, `inbox-closed`), then `posted`. So
+  the obligation reads no row before the signature is checked. The contract text of `PostMessage`
+  in `generated/rust/inbox/PLAN.md` states another order (row refusals first, external branches
+  last); the suite of 92 scenarios holds one pair of this order, and a backlog draft asks for
+  the rest.
+- Choices the specification leaves open and this crate takes: `authority-invalid` is asked only
+  when the envelope names a delegation; `unknown-option` is taken for a letter carried twice and
+  for a `recommended_option` or `default_on_silence` that names no option; a `lines(n)` reply
+  shape fits a body of at most `n` lines; a `schema` reply shape is only checked for a body that
+  parses as JSON.
+
 ## Scope
 
-- `crates/inbox-core/` (new)
+- `crates/inbox-core/` (new): `src/{lib,backend,context,obligations}.rs`, `tests/core/`,
+  `tests/adversary.rs`, `tests/adversary2.rs`
+- `Cargo.lock` (the crate and its dependencies)
