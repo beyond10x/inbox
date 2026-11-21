@@ -29,10 +29,13 @@ fresh generation from `ess/`. The generated crate leaves two obligations (`PostM
 ## The conformance suite
 
 ESS synthesizes a conformance suite from `ess/`: 93 scenarios on ESS 0.96.0. `task check` runs
-it twice, on ESS's interpreted target and against the core in process, and fails on any failed
-or errored scenario. It also fails when a refusal of the specification is claimed by no
-authored scenario (`task coverage`). The report against the core still says `inconclusive`
-(see [what works](status.md)).
+it three times: on ESS's interpreted target, against the core in process, and against a
+running `inbox serve` over HTTP. It fails on any failed or errored scenario. Against the core
+all 93 pass and ESS reports `passed`. Over HTTP 20 pass and 73 cannot be witnessed; they are
+listed with their reasons, and the gate fails when the list and the run differ (see
+[what works](status.md)). `task check` also fails when a refusal of the specification is
+claimed by no authored scenario (`task coverage`), and it runs 3 acceptance checks against
+the built binary (`task acceptance`).
 
 ## Each unit is attacked after it is written
 
@@ -46,7 +49,8 @@ its story lands.
 ## One gate
 
 `task check` is the gate, for every change: validate `ess/`, check every generated output for
-drift, run the conformance suite on both targets, then `cargo fmt --check`, `cargo clippy` with
+drift, run the conformance suite on the 3 targets and the 3 acceptance checks, then
+`cargo fmt --check`, `cargo clippy` with
 warnings denied, `cargo test`, and a build of the generated crate. The same command runs on
 every pull request and on every push to `main` (`.github/workflows/check.yml`). `unsafe` code is
 forbidden in every crate of the workspace.

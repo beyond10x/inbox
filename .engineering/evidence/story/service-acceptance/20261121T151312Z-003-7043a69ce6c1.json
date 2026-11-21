@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T15:13:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the coordinator's gate on 82b55fd after correction round 2: task check exit 0, the core lane 93 of 93 passed with conformance_status passed, the serve lane 20 passed and 73 unsupported held to the list, task acceptance 3 checks passed, cargo test 343 passed and 9 ignored"
+  }
+}

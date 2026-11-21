@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F3 (8 of 12 changed services green in the core lane, the serve lane and the 3 checks): not changed in the unit; the tests of the crate that owns each rule fail on each of the 8, measured by the adversary, so task check fails; written as a limit into website/docs/limits.md and CHANGELOG.md at the close",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "no-op"
+  }
+}

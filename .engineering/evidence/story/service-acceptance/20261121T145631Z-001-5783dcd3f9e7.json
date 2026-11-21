@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (acceptance check 3 could not fail): b919136 asserts the 2 reposts answered posted then duplicate; the adversary measured the check red on the service without the duplicate check in pass 2; the coordinator's gate on b919136: task check exit 0, 338 cases passed, 9 ignored",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "fixed"
+  }
+}

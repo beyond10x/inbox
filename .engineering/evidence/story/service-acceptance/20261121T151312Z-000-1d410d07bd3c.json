@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T15:13:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "P1 (a refused entry without covered_by was refused, and ESS reads it): 82b55fd reads an absent covered_by as null; the adversary's case is green; the coordinator's gate on 82b55fd: task check exit 0, 343 cases passed, 9 ignored",
+    "review": "review-result:adversary-service-acceptance-pass-2",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F4 (the gate compared only the ids of the unsupported list): b919136 holds each listed reason to the reason the run gave, read from the results document (gate --results); the adversary's case is green; the coordinator's gate on b919136: task check exit 0, 338 cases passed, 9 ignored",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "fixed"
+  }
+}

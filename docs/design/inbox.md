@@ -128,7 +128,8 @@ yet.
 - **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 89,
   and authored scenarios cover all 89, so it exits 0; `task check` runs it. The suite it writes
   runs on the interpreted target as 93 passed and reports `conformance_status: passed`.
-  `task conform` synthesizes without declared coverage, so its report stays `inconclusive`.
+  Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
+  says `passed`.
 
 ## Stage 1 result
 

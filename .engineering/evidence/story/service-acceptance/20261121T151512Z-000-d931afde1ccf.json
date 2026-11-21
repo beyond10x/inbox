@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T15:15:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "the gate on wave/s2-5 after the merge (0c9a15a): CARGO_INCREMENTAL=0 slot task check exit 0, the core lane 93 of 93 passed with conformance_status passed, the serve lane 20 passed and 73 unsupported, task acceptance 3 checks passed, cargo test --workspace 343 passed and 9 ignored; the same with the CI variables set",
+    "reference": "docs/plan/stage-2.md#wave-5"
+  }
+}

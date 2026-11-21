@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F5 (a row path with an empty member made the scenario unsupported where ESS holds null): b919136 reads it as the ESS 0.96.0 interpreted target does; the adversary's case is green; the coordinator's gate on b919136: task check exit 0, 338 cases passed, 9 ignored",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "fixed"
+  }
+}

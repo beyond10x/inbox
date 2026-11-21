@@ -89,12 +89,21 @@ Source: [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/
 
 ## What the checks do not cover
 
-- **The conformance status against the core is `inconclusive`.** All 93 scenarios pass, on
-  ESS's interpreted target and against the core, and every refusal of the specification is
-  claimed by an authored scenario (`task coverage`: 89 of 89; its suite reports `passed` on
-  the interpreted target). `task conform` runs a suite synthesized without declared
-  coverage, for which ESS reports `inconclusive`; the runner does not read the coverage
-  suite yet (`story:service-acceptance`, wave 5).
+- **The run over HTTP witnesses 20 of the 93 scenarios.** All 93 pass against the core in
+  process. Against a running `inbox serve`, 73 are unsupported and listed with their
+  reasons in
+  [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv)
+  ([what works](status.md) names the reasons). ESS reports that run as `failed`, and the
+  gate holds it to the list.
+- **The run over HTTP and the 3 acceptance checks do not exercise every rule of the
+  listener.** Every request they send is validly signed, with keys and delegations that
+  do not lapse, and the run reads a view as every key and joins the rows. A service
+  without the read rule, without the check of the request signature or its 60 s window,
+  without the lapse of a key or a delegation, without the binding of a key to `from` or
+  of a delegation to its pair, or one that serves `Messages` and `Due` to a client,
+  passes both (8 of the 12 changed services the adversary built). The tests of
+  `crates/inbox-server` and `crates/inbox-verify` fail on each of the 8, and
+  `task check` runs them.
 - Rules the specification cannot state on ESS 0.96.0 (who may read which rows, the blocking
   read, and others listed in
   [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md))

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:service-acceptance
 kind: story
-status: active
+status: implemented
 title: The suite and the stage's acceptance checks against a running service
 summary: The conformance suite over HTTP, two sessions exchanging a signed request and reply, and the removal and restart checks.
 relations:
@@ -23,10 +23,11 @@ scope:
   path: crates/inbox-conformance
 - confidence: inferred
   path: tests/acceptance
-revision: 8
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-11-21T15:17:22Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":12,"verification":1}}}
 ---
 ## Outcome
 
@@ -92,10 +93,57 @@ unsupported scenario. ESS reports `failed` for a run with an unsupported scenari
 the run over HTTP to its list of unsupported scenarios, and the unit reports the status ESS
 gives that run.
 
+As built in wave 5 of stage 2 (2026-11-21). The runner reads `ess-conformance/65` only, and one
+suite file (`.out/coverage/suite.json`, synthesized once per `task` run) serves `task coverage`,
+`task conform-interpreted` and `task conform`. Against the core: 93 of 93 scenarios passed, and
+the report says `conformance_status: passed`; the gate refuses `inconclusive`. Against
+`inbox serve` (`inbox-conformance run --target serve --inbox <binary>`, implementation name
+`inbox-serve`, a fresh service per scenario): 20 passed, 0 failed, 0 errored, 73 unsupported,
+and ESS reports `conformance_status: failed` for that run. The gate holds it to
+`crates/inbox-conformance/unsupported.tsv`, ids and reasons, and holds the results document to
+the report (`gate --results`). The core's list is `unsupported-core.tsv`, empty. The reasons (a
+scenario can have several): a caller whose principal and inbox differ (64; over HTTP both are
+the principal of the caller's key, decision 5 of `docs/design/inbox.md`), a step as the Sweeper
+(35), a step as no actor (9), a row claim on the stored `signature` (7). `cargo test
+--workspace` has 343 passing cases and 9 ignored.
+
+Differs from the Outcome above:
+
+- Events are witnessed over HTTP. Each answer of the service carries its `published` list, and
+  the wire target reads the events from it; an event step does not make a scenario unsupported.
+- A step that expects `unknown-option` or `shape-mismatch` is sent as the suite states it, and
+  the service decides. The target does not test whether the envelope carries the mismatch: that
+  would write a rule of the specification a second time. The 3 such scenarios of the suite carry
+  the mismatch and pass; one without it would fail, never pass.
+- Each answer is held to the HTTP status the generated OpenAPI document gives its outcome, a
+  view's rows or the refusal as not granted.
+- A view is read once as each key of the run and the rows are joined: the suite names no caller
+  for a read, and the listener answers a message row only to its sender and its recipient.
+
+The 3 checks are the package `inbox-acceptance` (`tests/acceptance`, a workspace member), ignored
+under `cargo test --workspace` and run by `task acceptance` with `INBOX_BIN` naming the built
+binary. Check 3 asserts that the 2 reposts are answered `posted`, then `duplicate`: "`Pending`
+holds the message once" alone is true of a store keyed by message id.
+`tests/acceptance/tests/adversary.rs` holds 1 ignored case no task runs; it asserts what check 3
+asserts about the reposts. The implementor's removal of it was refused by a permission check,
+and the coordinator did not remove it in its place.
+
+Not held by this story's runs. The adversary built 12 changed services; 8 stay green in the core
+lane, the serve lane and the 3 checks: the read rule dropped, the request signature unchecked,
+its window widened, the lapse of a key and of a delegation unchecked, the binding of a key to
+`from` unchecked, the delegation pair unchecked, `Messages` and `Due` served to a client. Every
+request these runs send is validly signed with entries that do not lapse. The tests of
+`crates/inbox-server` and `crates/inbox-verify` fail on each of the 8, and `task check` runs
+them. Declined: counting the `401` an unsigned request gets as "not granted to no actor" (1 more
+scenario; the model states no such mapping). The adversary's 2 passes are
+review-result:adversary-service-acceptance-pass-1 and
+review-result:adversary-service-acceptance-pass-2.
+
 ## Scope
 
 - `crates/inbox-conformance/`: the wire target
-- `crates/inbox-conformance/unsupported.tsv`
+- `crates/inbox-conformance/unsupported.tsv` (the service's list) and `unsupported-core.tsv`
+  (the core's, empty)
 - `tests/acceptance/` (new)
 - `Taskfile.yml`: `conform` runs the coverage suite against both targets; task `acceptance`;
   `check` gains it

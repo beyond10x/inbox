@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F7 (a step expecting unknown-option or shape-mismatch is sent as stated, where the story said unsupported without the mismatch): the code is unchanged, because testing for the mismatch would write a rule of the specification a second time; the story's text says so now (As built)",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "no-op"
+  }
+}

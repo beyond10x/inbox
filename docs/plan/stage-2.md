@@ -13,10 +13,11 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | delivered 2026-11-21 |
-| 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | running |
+| 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | delivered 2026-11-21 |
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
-(50 uncovered refusals at the start of stage 2; story:declared-coverage owns them).
+(50 uncovered refusals at the start of stage 2; story:declared-coverage owns them). Since wave 5
+the report of the run against the core says `passed` (the result of wave 5, below).
 
 Before wave 2, three critics read the revision that answered the 4 findings of critic round 2
 (review-result:acceptance-round-3, scope-round-3, design-round-3). Acceptance and scope approve.
@@ -482,8 +483,65 @@ Pre-flight (2026-11-21): the primary checkout is clean on `main` at `e8229fd`; t
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-5` | `inbox-s2-w5` | `w5/` | open |
-| story:service-acceptance | `impl/service-acceptance` | `inbox-s2-w5-acc` | `w5/service-acceptance/` | dispatched |
+| integration | `wave/s2-5` | `inbox-s2-w5` | `w5/` | closed |
+| story:service-acceptance | `impl/service-acceptance` | `inbox-s2-w5-acc` | `w5/service-acceptance/` | merged, `implemented` |
+
+Result:
+
+- Gate on `wave/s2-5` after the merge (`0c9a15a`), `CARGO_INCREMENTAL=0 slot task check`: exit 0.
+  `task conform`, the core lane: "93 scenarios: 93 passed, 0 failed, 0 error, 0 unsupported",
+  `conformance_status: passed`. The serve lane: "93 scenarios: 20 passed, 0 failed, 0 error, 73
+  unsupported", `conformance_status: failed`, held to the 73 lines of
+  `crates/inbox-conformance/unsupported.tsv`. `task acceptance`: "3 checks passed".
+  `cargo test --workspace`: 343 cases passed and 9 ignored (319 and 5 after wave 4; 24 new
+  cases in `crates/inbox-conformance`; the 4 new ignored ones are the 3 acceptance checks and the
+  adversary's acceptance case, which `task acceptance` runs or duplicates). The run took
+  79 s in the pool. A second run with `CI=true` and `GITHUB_ACTIONS=true` set gave the same
+  result. The documentation site builds (`npm --prefix website run build`, exit 0).
+- The condition of the stage 2 approval is met: the report of the run against the core says
+  `conformance_status: passed`, and the gate refuses `inconclusive`.
+- story:service-acceptance: 3 unit commits (`5e5058c`, `b919136`, `82b55fd`). Adversary pass 1,
+  on `5e5058c`: 7 findings, 2 warnings and 5 notes, 4 red cases, all introduced by the unit. 5
+  are fixed in `b919136`: the wire target ignored the HTTP status of an answer; acceptance check
+  3 could not fail; the gate compared only the ids of the unsupported list; a row path with an
+  empty member; the coverage block read more loosely than its documentation said. 2 are answered
+  without a code change (below). Pass 2, on `b919136`: 3 notes, 2 red cases, all fixed in
+  `82b55fd`: a `refused` entry without `covered_by` was refused where ESS reads it; the runner
+  required the `events` catalog in every suite; `gate --results` did not hold the results to the
+  report. No third pass ran: the coordinator ran the gate on `82b55fd`.
+- Differs from the plan:
+  - 20 of the 93 scenarios run over HTTP. 73 are unsupported there, each for one or more of 4
+    reasons: a caller whose principal and inbox differ (64; over HTTP both are the principal of
+    the caller's key, decision 5 of `docs/design/inbox.md`), a step as the Sweeper (35), a step
+    as no actor (9), a row claim on the stored `signature` (7). The story expected unsupported
+    scenarios and did not give a number.
+  - Events are witnessed over HTTP: each answer carries its `published` list. The story's
+    Outcome and the coordinator's brief assumed they were not.
+  - A step that expects `unknown-option` or `shape-mismatch` is sent as the suite states it and
+    the service decides, where the story said such a step is unsupported when the envelope
+    carries no mismatch. Testing for the mismatch would write a rule of the specification a
+    second time. The 3 such scenarios carry the mismatch and pass. The story's text says so now.
+  - 8 of the 12 changed services the adversary built stay green in the core lane, the serve lane
+    and the 3 checks (the read rule, the request signature and its window, the lapse of a key and
+    of a delegation, the binding of a key to `from`, the delegation pair, `Messages` and `Due`
+    served to a client). The tests of `crates/inbox-server` and `crates/inbox-verify` fail on
+    each, so `task check` fails. Not changed in the unit; `website/docs/limits.md` and
+    `CHANGELOG.md` say it.
+  - The finding of pass 2 on the `events` catalog was in the runner before the unit. It is fixed
+    in the unit and not filed as a draft: the unit's claim is that the runner reads the suite
+    `task coverage` writes.
+  - Declined by the coordinator: counting the `401` an unsigned request gets as "not granted to
+    no actor" (1 more scenario over HTTP). The model states no such mapping.
+  - `tests/acceptance/tests/adversary.rs` holds 1 ignored case that asserts what check 3 now
+    asserts. The implementor's removal of it was refused by a permission check, and the
+    coordinator did not remove it in its place. It stays; no task runs it.
+  - The implementor's first report counted 312 passing cases; the gate log held 330. The numbers
+    in `AGENTS.md` are the coordinator's sums over the gate log.
+- Sub-agent runs: the implementor 391 tool uses in 3 runs; the adversary 101 and 54.
+- Open after stage 2: the 3 security drafts of the Backlog below are the first work, before a
+  listener outside loopback, a NATS backend wave, a deployment or use by a real session. Until
+  story:post-from-is-the-caller lands, a caller with a valid key can post an envelope whose
+  `from` is another principal (the replay named in the result of wave 3).
 
 ## Backlog
 

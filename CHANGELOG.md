@@ -25,6 +25,16 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   interpreted target. 1 scenario is new (24 authored, 93 in the suite).
 - `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
   `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
+- `task conform` also runs the conformance suite against a running `inbox serve` over
+  HTTP (`crates/inbox-conformance`, `run --target serve`): a fresh service per scenario,
+  every request and envelope signed with keys made for the run, each answer held to the
+  HTTP status of the generated contract. 20 of the 93 scenarios pass there; 73 cannot be
+  witnessed over HTTP and are listed with their reasons in
+  `crates/inbox-conformance/unsupported.tsv`.
+- `task acceptance`, in `task check`: 3 checks against the built binary
+  (`tests/acceptance`): a signed request and its reply between 2 keys; a read note and an
+  expired request in no view; after a restart, 2 reposts answered `posted` then
+  `duplicate`.
 
 ### Changed
 
@@ -39,12 +49,22 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `inbox.messaging.Replies.Row`. `Settled`, `Thread`, `Outbox`, `Due` and `Messages` still
   carry all 4; `Replies` still carries `reply`, `decided_option` and `answered_by`.
 
+- `task conform` runs the suite `task coverage` writes, and its report against the core
+  says `conformance_status: passed`, where 0.1.0 reports `inconclusive`. The gate refuses
+  `inconclusive`.
+
 ### Known limits
 
 - `inbox repost` delivers a note again that its recipient already read
   (`story:repost-does-not-redeliver-a-handled-note`).
-- `task conform` still reports `inconclusive` against the core: it synthesizes the suite
-  without declared coverage until `story:service-acceptance`.
+- Over HTTP 73 of the 93 scenarios are unsupported: a caller whose principal and
+  inbox differ (64), a step as the Sweeper (35), a step as no actor (9), a claim on the
+  stored `signature` (7); a scenario can have several. ESS reports that run as `failed`,
+  and the gate holds it to the list.
+- The run over HTTP and the acceptance checks send valid signatures only and read a view
+  as every key. The read rule, the request signature and its window, the lapse of a key
+  or a delegation, and the binding of a key to `from` are held by the tests of
+  `crates/inbox-server` and `crates/inbox-verify`, not by those runs.
 - No release holds the binary.
 
 ## [0.1.0] - 2026-11-21

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T14:56:31Z",
+  "actor": "agent:inbox",
+  "artifact": "story:service-acceptance",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F6 (the coverage block was documented as read as ESS reads it, and 8 suites ESS refuses were read): b919136 refuses 7 more shapes and the documentation lists what the runner checks; the adversary's case is green; the coordinator's gate on b919136: task check exit 0, 338 cases passed, 9 ignored",
+    "review": "review-result:adversary-service-acceptance-pass-1",
+    "outcome": "fixed"
+  }
+}

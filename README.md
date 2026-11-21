@@ -7,8 +7,7 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. Stage 2 of 6 is in progress: waves 1 to 4 of its 5 are on `main`. Release 0.1.0
-holds waves 1 to 3.
+Early. The 5 waves of stage 2 of 6 are on `main`. Release 0.1.0 holds waves 1 to 3.
 
 What works on `main`:
 
@@ -22,10 +21,15 @@ What works on `main`:
   from source; no release holds it.
 - The conformance suite: 93 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
-  (`task coverage`: 89 of 89). The report of the run against the core still says
-  `inconclusive`: that run synthesizes the suite without declared coverage until wave 5.
+  (`task coverage`: 89 of 89). ESS reports the run against the core as `passed`.
+- The same suite against a running `inbox serve` over HTTP: 20 scenarios pass, and 73
+  cannot be witnessed over HTTP and are listed with their reasons
+  (`crates/inbox-conformance/unsupported.tsv`).
+- 3 acceptance checks against the built binary (`task acceptance`): a signed request and
+  its reply between 2 keys, removal after a read and after expiry, a repost after a
+  restart.
 
-What does not exist yet: the suite run over HTTP against a running service, a persistent
+What does not exist yet: a persistent
 backend, a second host, wake-up of an idle session, TLS, and any deployment. No release
 holds a binary.
 
@@ -77,7 +81,7 @@ Open security findings, each a draft story in `.engineering/planning/story/`:
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
 loses every message; no release holds the binary; `inbox repost` delivers a note again that
-its recipient already read; the conformance report against the core says `inconclusive`;
+its recipient already read; the run of the suite over HTTP witnesses 20 of the 93 scenarios;
 gaps in the suite filed as draft stories; two ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
@@ -105,7 +109,8 @@ its evidence are in `.engineering/`.
 | `crates/inbox-backend-testkit/` | The checks every backend passes |
 | `crates/inbox-server/` | The HTTP listener |
 | `crates/inbox-cli/` | The binary `inbox`: `inbox serve` and the command-line client |
-| `crates/inbox-conformance/` | The conformance gate: the suite run against the core |
+| `crates/inbox-conformance/` | The conformance gate: the suite run against the core and against a running `inbox serve` |
+| `tests/acceptance/` | The 3 acceptance checks against the built binary |
 | `crates/inbox-xtask/` | Repository tasks: the drift check of the generated crate |
 | `docs/design/` | The design notes: the inbox, signing, the HTTP service |
 | `docs/plan/` | The wave plan of each stage and its results |
@@ -175,7 +180,8 @@ task check
 
 validates the specification, fails when the scenario files differ from the script that writes
 them or anything under `generated/` has drifted from the specification, runs
-the conformance suite on ESS's interpreted target and against the core, then formats, lints,
+the conformance suite on ESS's interpreted target, against the core and against a running
+`inbox serve`, runs the 3 acceptance checks, then formats, lints,
 tests and builds the Rust workspace and the generated crate. It needs
 [go-task](https://taskfile.dev), `ess` 0.96.0 and Rust 1.99.1 (`rust-toolchain.toml`).
 
