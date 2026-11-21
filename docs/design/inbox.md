@@ -128,6 +128,33 @@ Each can be changed; the alternative is named where there is one.
    `GET /messaging/views/<wire>` (`generated/openapi`). There is no `ess-http/1` binding file.
    Ids and addresses travel in bodies and query parameters, never in a path segment.
 
+## The order of the refusals of `PostMessage`
+
+Where several refusals of a post hold, the post is answered with the first of: the input-guarded
+refusals in declaration order (`not-sender`, `no-authority`, `already-expired`,
+`request-without-shape`, `decision-without-options`); then the 3 external refusals
+(`unknown-option`, `signature-invalid`, `authority-invalid`), decided before any row is read; then
+the row refusals in the order measured on the ESS 0.97.1 interpreted target: `unknown-inbox`,
+`duplicate`, `duplicate-key`, `inbox-closed`, `id-taken` (`unknown-inbox` and `inbox-closed` never
+hold together, and `id-taken` holds with every `duplicate`). The suite holds the pairs: each
+external refusal and `request-without-shape` against each of the 5 row refusals, and each pair of
+row refusals one post can make hold, in the authored scenarios
+`a-bad-signature-is-refused-before-any-row-is-read`,
+`an-unknown-option-is-refused-before-any-row-is-read`,
+`a-refused-delegation-is-answered-before-any-row-is-read`,
+`a-request-without-shape-is-refused-before-any-row-is-read` and
+`row-refusals-of-a-post-answer-in-one-order`; `post-from-another-principal-refused` holds
+`not-sender` before `duplicate`, and synthesis refuses a scenario that expects a row refusal where
+an input guard holds (`ESS-AUTHOR-041`). A conformance step forces one external outcome, so the
+order among the 3 external refusals is held by the cases of the core
+(`crates/inbox-core/tests/core/precedence.rs`, `crates/inbox-core/tests/adversary_w8_order.rs`),
+not by the suite. The contract text of `PostMessage` in `generated/rust/inbox/PLAN.md` (line 117)
+states another order: "Selection precedence: on commands with `when_related:`, check
+`existing_instance` then `exists: false` before input-guarded refusals; … then accepting and
+external branches in declaration order", which puts `unknown-inbox` before the input-guarded
+refusals and the external refusals after every row refusal. The core and the service follow the
+interpreter, which the suite runs against.
+
 ## What the specification cannot say (ESS 0.97.1)
 
 Each item is a rule of the service that stage 2 implements and tests outside the suite, or a

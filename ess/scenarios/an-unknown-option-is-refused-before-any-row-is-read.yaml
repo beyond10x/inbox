@@ -1,0 +1,278 @@
+type: ess-scenario/7
+domain: inbox.messaging
+scenario: an-unknown-option-is-refused-before-any-row-is-read
+summary: A decision whose silence option it does not offer is answered unknown-option while unknown-inbox,
+  duplicate, duplicate-key, inbox-closed or id-taken also holds; nothing is stored.
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    address: agent:box/other
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/other
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0XN000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0XN000000000000000001
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0XN000000000000000001
+      kind: note
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    message_id: 01JGT0XN000000000000000002
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    to: agent:box/other
+    kind: note
+    thread: 01JGT0XN000000000000000002
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000002
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0XN000000000000000002
+      to: agent:box/other
+      from: agent:box/other
+      thread: 01JGT0XN000000000000000002
+      kind: note
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.CloseInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    address: agent:box/other
+  outcome: closed
+  events:
+  - event: inbox.messaging.InboxClosed
+    payload:
+      address: agent:box/other
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000003
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/nobody
+    kind: decision
+    thread: 01JGT0XN000000000000000003
+    decision: &id001
+      options:
+      - letter: A
+        text: Ship the release today.
+      - letter: B
+        text: Hold the release until Monday.
+      recommended_option: B
+    default_on_silence: C
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000003
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:06:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: decision
+    thread: 01JGT0XN000000000000000001
+    decision: *id001
+    default_on_silence: C
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000009
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:07:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000004
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: decision
+    thread: 01JGT0XN000000000000000004
+    decision: *id001
+    default_on_silence: C
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000001
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:08:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000005
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/other
+    kind: decision
+    thread: 01JGT0XN000000000000000005
+    decision: *id001
+    default_on_silence: C
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000005
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:09:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0XN000000000000000002
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: decision
+    thread: 01JGT0XN000000000000000002
+    decision: *id001
+    default_on_silence: C
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0XN000000000000000002
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  contains:
+    message_id: 01JGT0XN000000000000000001
+    from: agent:ws/planner
+    body: Build 512 is green.
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:box/other
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:box/other
+  contains:
+    message_id: 01JGT0XN000000000000000002
+    body: Build 512 is green.
