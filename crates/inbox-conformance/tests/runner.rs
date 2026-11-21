@@ -652,6 +652,9 @@ fn the_results_document_is_one_terminal_status_per_scenario() {
     assert_eq!(names, ["passed", "failed", "error", "unsupported"]);
 }
 
+/// The reason the runs of these cases give every unsupported scenario.
+const DELIVER_EVENT: &str = "the step kind `deliver_event`";
+
 fn report(failed: &[&str], error: &[&str], unsupported: &[&str], passed: u64) -> gate::Report {
     let ids = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>();
     gate::Report {
@@ -661,7 +664,51 @@ fn report(failed: &[&str], error: &[&str], unsupported: &[&str], passed: u64) ->
         error: ids(error),
         skipped: Vec::new(),
         unsupported: ids(unsupported),
+        reasons: unsupported
+            .iter()
+            .map(|id| ((*id).to_owned(), DELIVER_EVENT.to_owned()))
+            .collect(),
     }
+}
+
+/// Each listed reason is held to the reason the run gave: one problem per scenario whose reason
+/// differs, and one per scenario the run gave no reason for. The reasons are read from the
+/// results document of the same suite.
+#[test]
+fn the_gate_holds_each_listed_reason_to_the_reason_of_the_run() {
+    let listed =
+        gate::read_listed(&format!("x/one\t{DELIVER_EVENT}\nx/two\t{DELIVER_EVENT}\n")).unwrap();
+    let mut run = report(&[], &[], &["x/one", "x/two"], 90);
+    assert!(gate::verdict(&run, &listed).passes());
+    run.reasons
+        .insert("x/two".to_owned(), "the step kind `fork`".to_owned());
+    run.reasons.remove("x/one");
+    assert_eq!(
+        gate::verdict(&run, &listed).problems,
+        [
+            "the run gave no reason for x/one, which unsupported.tsv lists with `the step kind `deliver_event`` (`gate --results` names the run's results)",
+            "the reason unsupported.tsv lists for x/two is not the reason of the run: listed `the step kind `deliver_event``, the run gave `the step kind `fork``",
+        ]
+    );
+
+    let digest = results::suite_digest(b"suite");
+    let outcomes = [
+        inbox_conformance::ScenarioResult {
+            id: "x/one".to_owned(),
+            status: Status::Unsupported,
+            message: Some(DELIVER_EVENT.to_owned()),
+        },
+        inbox_conformance::ScenarioResult {
+            id: "x/ok".to_owned(),
+            status: Status::Passed,
+            message: None,
+        },
+    ];
+    let document = results::document(&digest, 1, &outcomes);
+    let reasons = gate::read_reasons(&document, &digest).unwrap();
+    assert_eq!(reasons.len(), 1);
+    assert_eq!(reasons["x/one"], DELIVER_EVENT);
+    assert!(gate::read_reasons(&document, "sha256:other").is_err());
 }
 
 #[test]
@@ -709,7 +756,14 @@ fn the_report_is_read_and_its_counts_must_agree_with_its_lists() {
         "counts": {"total": 3, "passed": 1, "failed": 1, "error": 0, "skipped": 0, "unsupported": 1},
         "outcomes": {"passed": ["a"], "failed": ["b"], "error": [], "skipped": [], "unsupported": ["c"]}}"#;
     let read = gate::read_report(text).unwrap();
-    assert_eq!(read, report(&["b"], &[], &["c"], 1));
+    assert_eq!(
+        read,
+        gate::Report {
+            reasons: std::collections::BTreeMap::new(),
+            ..report(&["b"], &[], &["c"], 1)
+        },
+        "a report/2 carries no reasons; they come from the results document"
+    );
     let disagreeing = text.replace(r#""failed": 1"#, r#""failed": 0"#);
     assert!(gate::read_report(&disagreeing).is_err());
     assert!(gate::read_report(&text.replace("report/2", "report/1")).is_err());
@@ -1223,6 +1277,92 @@ fn the_gate_wants_passed_and_refuses_inconclusive() {
     assert_eq!(
         gate::bound(&report, &inconclusive, &digest),
         ["conformance_status is `inconclusive`; a passing run carries `passed`"]
+    );
+}
+
+/// A `coverage` block whose one scenario, `probe`, is authored, with one refusal it covers.
+const AUTHORED_COVERAGE: &str = r#"{"authored": ["probe"],
+    "authored_sources": {"scenarios/probe.yaml": {"digest": "sha256:00", "disposition": "accepted", "scenario": "probe"}},
+    "counts": {"authored": 1, "generated": 0, "outside": 0, "refused": 1},
+    "generated": [], "knowledge": "complete_inventory", "outside": [],
+    "refused": [{"code": "ESS-SYNTH-004", "covered_by": "probe", "effect": "candidate_not_emitted",
+                 "message": "m", "needs": [], "origin": "generated", "retained": null,
+                 "scenario": "x/refused", "scope": "in_scope", "source": null, "subject": {}}],
+    "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}}"#;
+
+/// Each alteration of the `coverage` block that ESS 0.96.0 refuses (measured: `ess verify conform
+/// run --target interpreted` on the suite `task coverage` writes, altered the same way, exits 1
+/// with the message quoted) is refused by the runner too; a `covered_by` of `null`, which ESS
+/// reads, is read.
+#[test]
+fn the_coverage_block_is_refused_where_ess_refuses_it() {
+    assert!(suite::read(&coverage_suite("[]", AUTHORED_COVERAGE)).is_ok());
+    let null = AUTHORED_COVERAGE.replace(r#""covered_by": "probe""#, r#""covered_by": null"#);
+    assert!(suite::read(&coverage_suite("[]", &null)).is_ok());
+    for (altered, named) in [
+        (
+            // "covered_by must name an authored scenario of this inventory"
+            AUTHORED_COVERAGE.replace(r#""covered_by": "probe""#, r#""covered_by": "x/other""#),
+            "covered_by",
+        ),
+        (
+            // "$suite.coverage.refused[0].subject: MissingField"
+            AUTHORED_COVERAGE.replace(r#", "subject": {}"#, ""),
+            "`subject`",
+        ),
+        (
+            // "authored survivor lacks accepted source"
+            AUTHORED_COVERAGE.replace(
+                r#""scenarios/probe.yaml": {"digest": "sha256:00", "disposition": "accepted", "scenario": "probe"}"#,
+                "",
+            ),
+            "authored_sources",
+        ),
+        (
+            // "$suite.coverage.selection.scope: MissingField"
+            AUTHORED_COVERAGE.replace(r#", "scope": {"kind": "system"}"#, ""),
+            "`scope`",
+        ),
+        (
+            // "UnsignedIntegerRequired: expected an unsigned decimal integer token, found 24.0"
+            AUTHORED_COVERAGE.replace(r#""authored": 1,"#, r#""authored": 1.0,"#),
+            "1.0",
+        ),
+    ] {
+        let refused = suite::read(&coverage_suite("[]", &altered)).unwrap_err();
+        assert!(refused.contains(named), "{named}: {refused}");
+    }
+
+    // "selected origin lists must be sorted and distinct"
+    let two = coverage_of(&["a-probe", "probe"]);
+    let suite_of_two = |coverage: &str| {
+        coverage_suite("[]", coverage).replace(
+            r#""probe": {"purpose""#,
+            r#""a-probe": {"purpose": "p", "source": [], "steps": []}, "probe": {"purpose""#,
+        )
+    };
+    assert!(suite::read(&suite_of_two(&two)).is_ok());
+    let unsorted = two.replace(r#"["a-probe", "probe"]"#, r#"["probe", "a-probe"]"#);
+    assert!(
+        suite::read(&suite_of_two(&unsorted))
+            .unwrap_err()
+            .contains("sorted and distinct")
+    );
+
+    // "an absent-event run leaves out catalog events in catalog order and keeps one"
+    let absent = coverage_suite(
+        r#"[], "absent_events": [{"before": 0, "except": []}]"#,
+        &coverage_of(&["probe"]),
+    );
+    assert!(suite::read(&absent).is_ok());
+    let emptied = absent.replace(
+        r#""events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"]"#,
+        r#""events": []"#,
+    );
+    assert!(
+        suite::read(&emptied)
+            .unwrap_err()
+            .contains("`events` catalog is empty")
     );
 }
 

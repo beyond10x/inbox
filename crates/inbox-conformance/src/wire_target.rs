@@ -122,8 +122,14 @@ impl Drop for Starting {
 ///   is the outcome and error the body names, and the events of its `published` list: the
 ///   generated answer of a command writes every event its outcome carries, the generated port
 ///   publishes exactly those, and no binding reacts to any (the generated `System::pump`), so the
-///   list is every event the command published. A `403` naming an actor is a refusal as not
-///   granted.
+///   list is every event the command published. The body `{"refused": "not granted", "actor"}`
+///   is a refusal as not granted.
+/// - **Statuses.** Each answer is held to the status the generated contract gives it (the
+///   `responses` of the operation in `inbox::server::inbox_service::OPENAPI`): a declared outcome
+///   under the status whose schema names that outcome, a refusal as not granted under the status
+///   whose schema holds it, a view's rows under the status whose schema names the view's
+///   response. An answer under any other status is a refusal the step does not expect, so the
+///   step fails.
 /// - **A read** is sent as `GET` with the parameters as the query, once as each principal of the
 ///   key file, and the rows are the union of what the reads answered. The service answers a
 ///   message row only to its sender and its recipient (`docs/design/service.md`, the read rule),
@@ -143,7 +149,7 @@ pub struct WireTarget {
     launch: Launch,
     work: PathBuf,
     operator: SecretKey,
-    routes: BTreeMap<String, (&'static str, &'static str)>,
+    routes: BTreeMap<String, Route>,
     members: Vec<Member>,
     delegations: Vec<Delegation>,
     service: Option<Service>,
@@ -413,13 +419,16 @@ impl WireTarget {
         Ok(out)
     }
 
-    /// One read of `target` as `member`.
-    fn read_as(&self, member: &Member, target: &str) -> Read {
-        match self.send(member, "GET", target, b"") {
+    /// One read of `target` of `route` as `member`: rows under the status the contract gives a
+    /// view's rows, a refusal as not granted under the status it gives that refusal.
+    fn read_as(&self, route: &Route, member: &Member, target: &str) -> Read {
+        match self.send(member, route.method, target, b"") {
             Err(reason) => Read::Broken(reason),
-            Ok((status, Ok(body))) => match (status, body.member("rows"), refusal(&body)) {
-                (200, Some(Value::Array(rows)), _) => Read::Rows(rows.clone()),
-                (403, _, Some(actor)) => Read::NotGranted(actor),
+            Ok((status, Ok(body))) => match (body.member("rows"), refusal(&body)) {
+                (Some(Value::Array(rows)), _) if route.rows.contains(&status) => {
+                    Read::Rows(rows.clone())
+                }
+                (_, Some(actor)) if route.not_granted.contains(&status) => Read::NotGranted(actor),
                 _ => Read::Refused(format!("{status} {}", render(&body))),
             },
             Ok((status, Err(text))) => Read::Refused(format!("{status} {text}")),
@@ -427,9 +436,67 @@ impl WireTarget {
     }
 }
 
+/// One command or view of the generated contract: where it is served, and the statuses the
+/// contract gives its answers.
+#[derive(Debug, Clone)]
+struct Route {
+    method: &'static str,
+    path: &'static str,
+    /// Each declared outcome of a command, with the statuses the contract gives it.
+    outcomes: BTreeMap<String, Vec<u16>>,
+    /// The status of the refusal as not granted.
+    not_granted: Vec<u16>,
+    /// The status of a view's rows.
+    rows: Vec<u16>,
+}
+
+impl Route {
+    /// Whether the contract gives `outcome` the status `status`.
+    fn admits(&self, outcome: &str, status: u16) -> bool {
+        self.outcomes
+            .get(outcome)
+            .is_some_and(|statuses| statuses.contains(&status))
+    }
+}
+
+/// Every `$ref` text inside `value`.
+fn references<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
+    match value {
+        Value::Object(members) => {
+            for (name, member) in members {
+                match (name.as_str(), member) {
+                    ("$ref", Value::Text(reference)) => out.push(reference),
+                    _ => references(member, out),
+                }
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|item| references(item, out)),
+        _ => {}
+    }
+}
+
+/// Whether `value` holds the schema of the refusal as not granted: a member whose `enum` is
+/// exactly `["not granted"]`.
+fn holds_not_granted(value: &Value) -> bool {
+    match value {
+        Value::Object(members) => members.iter().any(|(name, member)| {
+            (name == "enum"
+                && matches!(member, Value::Array(items)
+                    if matches!(items.as_slice(), [Value::Text(text)] if text == "not granted")))
+                || holds_not_granted(member)
+        }),
+        Value::Array(items) => items.iter().any(holds_not_granted),
+        _ => false,
+    }
+}
+
 /// The route of each command and view, by its qualified name, from the generated contract
-/// (`operationId`), each held to the generated route table.
-fn routes() -> Result<BTreeMap<String, (&'static str, &'static str)>, String> {
+/// (`operationId` in `inbox::server::inbox_service::OPENAPI`, the document `generated/openapi`
+/// projects), each held to the generated route table, with the statuses of its `responses`: a
+/// declared outcome is the status whose schema names `<name>.<outcome>.Response`, a view's rows
+/// the status whose schema names `<name>.Response`, the refusal as not granted the status whose
+/// schema holds `"enum": ["not granted"]`.
+fn routes() -> Result<BTreeMap<String, Route>, String> {
     let contract =
         json::parse(OPENAPI).map_err(|error| format!("the generated contract: {error}"))?;
     let Some(Value::Object(paths)) = contract.member("paths") else {
@@ -445,13 +512,51 @@ fn routes() -> Result<BTreeMap<String, (&'static str, &'static str)>, String> {
                 continue;
             };
             let method = method.to_uppercase();
-            let route = ROUTES
+            let (method, path) = *ROUTES
                 .iter()
                 .find(|(held, held_path)| *held == method && held_path == path)
                 .ok_or_else(|| {
                     format!("the generated route table holds no `{method} {path}` for `{name}`")
                 })?;
-            routes.insert(name.clone(), *route);
+            let mut route = Route {
+                method,
+                path,
+                outcomes: BTreeMap::new(),
+                not_granted: Vec::new(),
+                rows: Vec::new(),
+            };
+            let Some(Value::Object(responses)) = operation.member("responses") else {
+                return Err(format!(
+                    "the generated contract gives `{name}` no `responses`"
+                ));
+            };
+            let schemas = format!("#/components/schemas/{name}.");
+            for (status, response) in responses {
+                let Ok(status) = status.parse::<u16>() else {
+                    continue;
+                };
+                let mut named = Vec::new();
+                references(response, &mut named);
+                for reference in named {
+                    match reference.strip_prefix(&schemas) {
+                        Some("Response") => route.rows.push(status),
+                        Some(rest) => {
+                            if let Some(outcome) = rest.strip_suffix(".Response") {
+                                let statuses =
+                                    route.outcomes.entry(outcome.to_owned()).or_default();
+                                if !statuses.contains(&status) {
+                                    statuses.push(status);
+                                }
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                if holds_not_granted(response) {
+                    route.not_granted.push(status);
+                }
+            }
+            routes.insert(name.clone(), route);
         }
     }
     Ok(routes)
@@ -468,13 +573,25 @@ fn refusal(body: &Value) -> Option<Option<String>> {
     }
 }
 
-/// The answer to a command, as the body says it.
-fn executed(status: u16, body: &Value) -> Executed {
+/// The answer to a command, as the body says it, under a status the contract gives it: an
+/// outcome under another status than the contract gives that outcome of `route`, or a refusal as
+/// not granted under another than the contract's, is a refusal the step does not expect.
+fn executed(route: &Route, status: u16, body: &Value) -> Executed {
     let refused = |why: String| Executed {
         answer: Answer::Refused(why),
         events: Vec::new(),
     };
     if let Some(Value::Text(outcome)) = body.member("outcome") {
+        if !route.admits(outcome, status) {
+            return refused(format!(
+                "{status} {}: the contract gives the outcome `{outcome}` the status {}",
+                render(body),
+                route.outcomes.get(outcome).map_or_else(
+                    || "of no declared outcome".to_owned(),
+                    |statuses| format!("{statuses:?}")
+                )
+            ));
+        }
         let error = match body.member("error") {
             Some(Value::Text(error)) => Some(error.clone()),
             _ => None,
@@ -508,7 +625,7 @@ fn executed(status: u16, body: &Value) -> Executed {
             events,
         };
     }
-    if status == 403
+    if route.not_granted.contains(&status)
         && let Some(actor) = refusal(body)
     {
         return Executed {
@@ -745,7 +862,7 @@ impl Target for WireTarget {
             answer: Answer::Broken(reason),
             events: Vec::new(),
         };
-        let Some((method, path)) = self.routes.get(command.name).copied() else {
+        let Some(route) = self.routes.get(command.name).cloned() else {
             return broken(format!(
                 "the generated contract has no route for `{}`",
                 command.name
@@ -770,9 +887,9 @@ impl Target for WireTarget {
             Ok(body) => body,
             Err(reason) => return broken(reason),
         };
-        match self.send(member, method, path, body.as_bytes()) {
+        match self.send(member, route.method, route.path, body.as_bytes()) {
             Err(reason) => broken(reason),
-            Ok((status, Ok(answer))) => executed(status, &answer),
+            Ok((status, Ok(answer))) => executed(&route, status, &answer),
             Ok((status, Err(text))) => Executed {
                 answer: Answer::Refused(format!("{status} {text}")),
                 events: Vec::new(),
@@ -790,7 +907,7 @@ impl Target for WireTarget {
                 ));
             }
         }
-        let Some((_, path)) = self.routes.get(view).copied() else {
+        let Some(route) = self.routes.get(view).cloned() else {
             return Read::Broken(format!("the generated contract has no route for `{view}`"));
         };
         let Value::Object(params) = params else {
@@ -804,13 +921,13 @@ impl Target for WireTarget {
             query.push(format!("{}={}", query_value(name), query_value(text)));
         }
         let target = if query.is_empty() {
-            path.to_owned()
+            route.path.to_owned()
         } else {
-            format!("{path}?{}", query.join("&"))
+            format!("{}?{}", route.path, query.join("&"))
         };
         let mut union: Option<Vec<Value>> = None;
         for member in &self.members {
-            match (self.read_as(member, &target), &mut union) {
+            match (self.read_as(&route, member, &target), &mut union) {
                 (Read::Rows(rows), Some(kept)) => {
                     for row in rows {
                         if !kept.iter().any(|held| exact_equal(held, &row)) {
@@ -832,5 +949,33 @@ impl Target for WireTarget {
             Some(rows) => Read::Rows(rows),
             None => Read::Broken("the key file holds no key to read with".to_owned()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::routes;
+
+    #[test]
+    fn the_statuses_are_read_from_the_generated_contract() {
+        let routes = routes().expect("the contract reads");
+        let open = &routes["inbox.messaging.OpenInbox"];
+        assert_eq!(
+            (open.method, open.path),
+            ("POST", "/messaging/commands/open-inbox")
+        );
+        assert_eq!(open.outcomes["opened"], [202]);
+        assert_eq!(open.outcomes["already-open"], [202]);
+        assert_eq!(open.outcomes["not-owner"], [403]);
+        assert_eq!(open.not_granted, [403]);
+        assert!(open.rows.is_empty());
+        let post = &routes["inbox.messaging.PostMessage"];
+        assert_eq!(post.outcomes["duplicate"], [409]);
+        assert_eq!(post.outcomes["signature-invalid"], [502]);
+        assert_eq!(post.outcomes["already-expired"], [422]);
+        let pending = &routes["inbox.messaging.Pending"];
+        assert_eq!(pending.rows, [200]);
+        assert_eq!(pending.not_granted, [403]);
+        assert!(pending.outcomes.is_empty());
     }
 }

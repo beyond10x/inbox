@@ -7,12 +7,15 @@
 //! scenario it should have answered an error.
 //!
 //! `inbox-conformance gate --suite <suite> --report <report> --unsupported <unsupported.tsv>
-//! [--implementation <name>]`: prints the result line and the `conformance_status` of the
-//! report/2 ESS wrote from those results, and exits 1 unless the report is for that suite (its
-//! `suite.digest`, and each of its scenario ids named once in the outcome lists, no other), for
-//! that implementation where `--implementation` is given, its counts add up, 0 scenarios failed,
-//! 0 errored, 0 were skipped, the unsupported ones are exactly those the file lists, and its
-//! `conformance_status` is the one such a run carries.
+//! [--results <results>] [--implementation <name>]`: prints the result line and the
+//! `conformance_status` of the report/2 ESS wrote from those results, and exits 1 unless the
+//! report is for that suite (its `suite.digest`, and each of its scenario ids named once in the
+//! outcome lists, no other), for that implementation where `--implementation` is given, its
+//! counts add up, 0 scenarios failed, 0 errored, 0 were skipped, the unsupported ones are exactly
+//! those the file lists, each with the reason the run gave it, and its `conformance_status` is the
+//! one such a run carries. A report/2 carries no reasons: they are read from `--results`, the
+//! results document of the same suite the report was written from; without it, a listed
+//! scenario has no reason of the run and fails the gate.
 //!
 //! Exit 2: an argument, a file or a document this command cannot read, among them a suite with a
 //! top-level or `provenance` key the runner does not know or a member stated twice.
@@ -39,7 +42,7 @@ fn main() -> ExitCode {
 }
 
 fn usage() -> String {
-    "usage: inbox-conformance run --suite <suite> --results <results> [--target core|serve] [--inbox <binary>] | gate --suite <suite> --report <report> --unsupported <unsupported.tsv> [--implementation <name>]".to_owned()
+    "usage: inbox-conformance run --suite <suite> --results <results> [--target core|serve] [--inbox <binary>] | gate --suite <suite> --report <report> --unsupported <unsupported.tsv> [--results <results>] [--implementation <name>]".to_owned()
 }
 
 /// The value of each named option, in the order of `names`.
@@ -139,6 +142,7 @@ fn optional(arguments: &[String], option: &str) -> Result<(Option<String>, Vec<S
 
 fn check(arguments: &[String]) -> Result<ExitCode, String> {
     let (implementation, arguments) = optional(arguments, "--implementation")?;
+    let (results_path, arguments) = optional(&arguments, "--results")?;
     let [suite_path, report_path, listed_path] =
         options(&arguments, ["--suite", "--report", "--unsupported"])?;
     let suite = std::fs::read(&suite_path).map_err(|error| format!("{suite_path}: {error}"))?;
@@ -151,7 +155,12 @@ fn check(arguments: &[String]) -> Result<ExitCode, String> {
         .map(|scenario| scenario.id)
         .collect();
     let text = read(&report_path)?;
-    let report = gate::read_report(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
+    let mut report =
+        gate::read_report(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
+    if let Some(results_path) = &results_path {
+        report.reasons = gate::read_reasons(&read(results_path)?, &results::suite_digest(&suite))
+            .map_err(|reason| format!("{results_path}: {reason}"))?;
+    }
     let binding = gate::read_binding(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
     let listed = gate::read_listed(&read(&listed_path)?)
         .map_err(|reason| format!("{listed_path}: {reason}"))?;

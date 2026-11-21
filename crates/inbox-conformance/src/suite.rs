@@ -35,24 +35,32 @@ pub struct Suite {
 /// The suite's `coverage` block: which of its scenarios are authored and which generated, and
 /// what synthesis refused to write.
 ///
-/// The runner reads it as ESS's own reader does on 0.96.0 (measured with `ess verify conform run
-/// --target interpreted` on altered copies of the suite `task coverage` writes), and refuses the
-/// suite where:
+/// The runner refuses the suite where:
 ///
 /// - `coverage` is absent, or carries a member other than the 8 of the format (`authored`,
 ///   `authored_sources`, `counts`, `generated`, `knowledge`, `outside`, `refused`, `selection`),
 ///   or lacks one;
 /// - `authored` and `generated` together do not name each scenario of the suite exactly once, or
-///   name one the suite does not hold (ESS: "selected origin union differs from scenarios");
-/// - a count in `counts` differs from the length of its list (ESS: "inventory counts differ from
-///   array lengths");
-/// - `knowledge` is neither `complete_inventory` nor `unknown`.
+///   name one the suite does not hold;
+/// - `authored` or `generated` is not sorted and distinct (byte order);
+/// - `counts` has a member other than `authored`, `generated`, `outside`, `refused`, lacks one,
+///   writes one other than as digits (`24.0`), or states another number than the length of its
+///   list;
+/// - `knowledge` is neither `complete_inventory` nor `unknown`;
+/// - an entry of `refused` is no object, lacks one of the 11 members ESS 0.96.0 writes there
+///   (`code`, `covered_by`, `effect`, `message`, `needs`, `origin`, `retained`, `scenario`,
+///   `scope`, `source`, `subject`), or has a `covered_by` that is neither `null` nor the id of an
+///   authored scenario of the suite;
+/// - `authored_sources` is no object, or names no source (an entry whose `scenario` is the id)
+///   for an authored scenario;
+/// - `selection` is no object or lacks `filter`, `origins` or `scope`.
 ///
-/// `refused` (each an object), `outside`, `authored_sources` and `selection` are read for their
-/// shape only. They speak of scenarios synthesis did not write, or of where the written ones came
-/// from, so no target can run anything of them; `ess verify conform report` reads them from the
-/// suite itself when it decides `conformance_status`. ESS additionally checks that each
-/// `covered_by` of `refused` is spelled as a scenario id; the runner does not.
+/// Each of these is held by a test of the crate. ESS 0.96.0 refuses each of the altered suites
+/// those tests stand for (measured with `ess verify conform run --target interpreted`); the
+/// runner does not claim to refuse every suite ESS refuses. What else ESS holds of the block
+/// (the members inside an entry of `refused`, `authored_sources` and `selection`, `outside`)
+/// is not read here, so no target runs anything of it; `ess verify conform report` reads the
+/// suite itself and refuses a block it does not accept before it writes a report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Coverage {
     /// The authored scenarios, by id.
@@ -363,7 +371,19 @@ pub fn read(text: &str) -> Result<Suite, String> {
         .iter()
         .map(|event| as_text(event, "an event of the catalog").map(str::to_owned))
         .collect::<Result<Vec<_>, _>>()?;
-    let scenarios: Vec<Scenario> = object(member(root, "scenarios", "the suite")?, "scenarios")?
+    let bodies = object(member(root, "scenarios", "the suite")?, "scenarios")?;
+    if catalog.is_empty() {
+        for (id, body) in bodies {
+            for key in ["absent_events", "unpublished_events"] {
+                if matches!(body.member(key), Some(Value::Array(runs)) if !runs.is_empty()) {
+                    return Err(format!(
+                        "the `events` catalog is empty, and the scenario `{id}` claims `{key}` over it: the claim would check no event"
+                    ));
+                }
+            }
+        }
+    }
+    let scenarios: Vec<Scenario> = bodies
         .iter()
         .map(|(id, body)| Scenario {
             id: id.clone(),
@@ -393,6 +413,21 @@ const COVERAGE: [&str; 8] = [
     "selection",
 ];
 
+/// The members every entry of coverage `refused` carries, as ESS 0.96.0 writes them.
+const REFUSED: [&str; 11] = [
+    "code",
+    "covered_by",
+    "effect",
+    "message",
+    "needs",
+    "origin",
+    "retained",
+    "scenario",
+    "scope",
+    "source",
+    "subject",
+];
+
 /// Reads the `coverage` block and holds it to the scenario ids of the suite ([`Coverage`]).
 fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
     let fields = object(value, "coverage")?;
@@ -417,16 +452,42 @@ fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
     let outside = list("outside")?.len();
     let refused = list("refused")?;
     for entry in refused {
-        object(entry, "an entry of coverage `refused`")?;
+        let entry = object(entry, "an entry of coverage `refused`")?;
+        for name in REFUSED {
+            member(entry, name, "an entry of coverage `refused`")?;
+        }
+        match member(entry, "covered_by", "an entry of coverage `refused`")? {
+            Value::Null => {}
+            Value::Text(id) if authored.contains(id) => {}
+            other => {
+                return Err(format!(
+                    "a `covered_by` of coverage `refused` is {}, which names no authored scenario of the suite",
+                    crate::value::render(other)
+                ));
+            }
+        }
     }
-    object(
+    let sources = object(
         member(fields, "authored_sources", "coverage")?,
         "coverage `authored_sources`",
     )?;
-    object(
+    for id in &authored {
+        let sourced = sources.iter().any(|(_, source)| {
+            matches!(source.member("scenario"), Some(Value::Text(named)) if named == id)
+        });
+        if !sourced {
+            return Err(format!(
+                "coverage `authored_sources` names no source of the authored scenario `{id}`"
+            ));
+        }
+    }
+    let selection = object(
         member(fields, "selection", "coverage")?,
         "coverage `selection`",
     )?;
+    for name in ["filter", "origins", "scope"] {
+        member(selection, name, "coverage `selection`")?;
+    }
     let counts = object(member(fields, "counts", "coverage")?, "coverage `counts`")?;
     let lengths = [
         ("authored", authored.len()),
@@ -436,10 +497,21 @@ fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
     ];
     only(counts, &lengths.map(|(name, _)| name), "coverage `counts`")?;
     for (name, length) in lengths {
-        let stated = count(
-            member(counts, name, "coverage `counts`")?,
-            &format!("coverage `counts.{name}`"),
-        )?;
+        let stated = match member(counts, name, "coverage `counts`")? {
+            Value::Number(spelling)
+                if !spelling.is_empty() && spelling.bytes().all(|byte| byte.is_ascii_digit()) =>
+            {
+                spelling.parse::<u64>().map_err(|_| {
+                    format!("coverage `counts.{name}` is {spelling}, past any count")
+                })?
+            }
+            other => {
+                return Err(format!(
+                    "coverage `counts.{name}` is {}, not a count written as digits",
+                    crate::value::render(other)
+                ));
+            }
+        };
         if stated != length as u64 {
             return Err(format!(
                 "coverage `counts.{name}` is {stated}, and coverage `{name}` lists {length}"
@@ -473,6 +545,14 @@ fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
         return Err(format!(
             "coverage names `{stray}`, which is no scenario of the suite"
         ));
+    }
+    for (name, list) in [("authored", &authored), ("generated", &generated)] {
+        if let Some(pair) = list.windows(2).find(|pair| pair[0] >= pair[1]) {
+            return Err(format!(
+                "coverage `{name}` is not sorted and distinct: `{}` comes before `{}`",
+                pair[0], pair[1]
+            ));
+        }
     }
     Ok(Coverage {
         authored,
@@ -721,14 +801,6 @@ fn expectation(value: &Value) -> Result<Expectation, String> {
         "contains" | "excludes" => {
             keys(&["fields"])?;
             let claimed = refs(member(fields, "fields", &what)?, "fields")?;
-            if let Some((name, _)) = claimed
-                .iter()
-                .find(|(name, _)| name.split('.').any(str::is_empty))
-            {
-                return Err(format!(
-                    "the row path `{name}` names an empty member, which no row carries"
-                ));
-            }
             if kind == "contains" {
                 Expectation::Contains(claimed)
             } else {

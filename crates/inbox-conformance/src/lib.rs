@@ -9,13 +9,14 @@
 //!   no single scenario, so the whole suite is refused, naming the key (`run` exits 2), as is a
 //!   suite of another format, one not starting from an empty system, or one with an object that
 //!   states a member name twice at any depth (ESS's own reader refuses that too);
-//! - `coverage` is held to the suite as ESS's reader holds it ([`suite::Coverage`]: each scenario
-//!   named authored or generated exactly once, counts equal to their lists, the 8 members of the
-//!   format and no other), else the suite is refused; it names no step, so nothing of it runs,
-//!   and `ess verify conform report` reads it from the suite to give `conformance_status`;
+//! - `coverage` is held to the suite by the rules [`suite::Coverage`] lists (each held by a test,
+//!   each a refusal of ESS 0.96.0 too, measured), else the suite is refused; it names no step, so
+//!   nothing of it runs, and `ess verify conform report` reads it from the suite to give
+//!   `conformance_status`, refusing what the runner does not check;
 //! - a row claim of `contains` or `excludes` with a dotted path names one nested member, compared
-//!   as the ESS 0.96.0 interpreted target compares it ([`value::field_matches`]); a dotted path
-//!   in a snapshot's subject makes the scenario unsupported;
+//!   as the ESS 0.96.0 interpreted target compared it in the cases [`value::field_matches`] lists
+//!   (a path through an empty member included); a dotted path in a snapshot's subject makes the
+//!   scenario unsupported;
 //! - a step kind, key, value reference, predicate, shape or declaration the runner does not
 //!   interpret inside a scenario makes that scenario unsupported, with the reason, and none of its
 //!   steps runs; the target's list must name it for the gate to pass.
@@ -30,7 +31,8 @@
 //!   branches as the step's expected outcome says;
 //! - [`WireTarget`], the implementation `inbox-serve`, list `unsupported.tsv`: a running `inbox
 //!   serve`, started afresh for each scenario and driven over HTTP with the generated route
-//!   table and wire codec, every request and envelope signed with keys made at run time. A
+//!   table and wire codec, every request and envelope signed with keys made at run time, each
+//!   answer held to the status the generated contract gives it. A
 //!   scenario with a step the wire cannot witness (a step as the `Sweeper` or as no actor, a
 //!   caller whose `principal` and `inbox` differ, a row claim on the stored `signature`) is
 //!   unsupported with that reason, before anything is sent ([`wire_target::reason`]).
@@ -38,7 +40,8 @@
 //! [`results::document`] writes the `ess-conformance-results/1` document `ess verify conform
 //! report` turns into a report/2, and [`gate::verdict`] and [`gate::bound`] hold that report to
 //! the suite it was made for (its digest and its scenario ids, each once), to the implementation
-//! it names where `gate --implementation` is given, and to the target's list. `task conform`
+//! it names where `gate --implementation` is given, and to the target's list: the same ids, each
+//! with the reason the run gave it (`gate --results`, [`gate::read_reasons`]). `task conform`
 //! runs the three for each target, with one name for the implementation the report is written
 //! for and the gate holds.
 //!

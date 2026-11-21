@@ -8,7 +8,8 @@
 
 use std::time::{Duration, SystemTime};
 
-use inbox_acceptance::{ALICE, BOB, World, ids, rows, text};
+use inbox::server::json::Value;
+use inbox_acceptance::{ALICE, BOB, World, ids, member, rows, text};
 use inbox_server::format_instant;
 use inbox_verify::Instant;
 
@@ -17,7 +18,7 @@ fn root() -> &'static std::path::Path {
     std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
 }
 
-fn outcome(posted: &inbox::server::json::Value) -> String {
+fn outcome(posted: &Value) -> String {
     text(posted, &["answer", "outcome"])
 }
 
@@ -204,9 +205,24 @@ fn after_a_restart_two_reposts_put_the_unread_message_in_pending_once() {
     assert!(ids(&lost).is_empty(), "the restart lost the message");
 
     world.client("bob", &["open"]).ok();
-    for _ in 0..2 {
-        world.client("alice", &["repost"]).ok();
-    }
+    // The first repost delivers the message again; the second is the same envelope, which the
+    // service already holds: `duplicate`, changing nothing.
+    let outcomes: Vec<String> = (0..2)
+        .map(|_| {
+            let reposted = world.client("alice", &["repost", "--json"]).ok().json();
+            let Value::Array(entries) = member(&reposted, &["reposted"]) else {
+                panic!("`reposted` is no list: {reposted:?}");
+            };
+            assert_eq!(entries.len(), 1, "{reposted:?}");
+            assert_eq!(text(&entries[0], &["message_id"]), message);
+            text(&entries[0], &["answer", "outcome"])
+        })
+        .collect();
+    assert_eq!(
+        outcomes,
+        ["posted", "duplicate"],
+        "what the 2 reposts after the restart were answered"
+    );
     let pending = world.client("bob", &["pending", "--json"]).ok().json();
     assert_eq!(
         ids(&pending),

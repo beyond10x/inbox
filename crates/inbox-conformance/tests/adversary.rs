@@ -208,6 +208,10 @@ fn report(passed: u64, skipped: &[&str], unsupported: &[&str]) -> gate::Report {
         error: Vec::new(),
         skipped: ids(skipped),
         unsupported: ids(unsupported),
+        reasons: unsupported
+            .iter()
+            .map(|id| ((*id).to_owned(), "the step kind `deliver_event`".to_owned()))
+            .collect(),
     }
 }
 

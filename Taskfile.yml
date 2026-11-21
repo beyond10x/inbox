@@ -66,7 +66,7 @@ tasks:
       - ess verify conform run --path ess --target interpreted --suite {{.OUT}}/coverage/suite.json --report-format 2 --report-out {{.OUT}}/conform/report.json
 
   conform:
-    desc: Run the suite task coverage writes against inbox-core in process and against a running inbox serve over HTTP, write each report with ess, and fail unless each report is that suite's (digest, each scenario id once) and its implementation's, its counts add up, its conformance_status is a passing run's, no scenario failed, errored or was skipped, and the unsupported ones are exactly those its list names (crates/inbox-conformance/unsupported-core.tsv, crates/inbox-conformance/unsupported.tsv).
+    desc: Run the suite task coverage writes against inbox-core in process and against a running inbox serve over HTTP, write each report with ess, and fail unless each report is that suite's (digest, each scenario id once) and its implementation's, its counts add up, its conformance_status is a passing run's, no scenario failed, errored or was skipped, and the unsupported ones are exactly those its list names, each with the reason the run gave it in its results (crates/inbox-conformance/unsupported-core.tsv, crates/inbox-conformance/unsupported.tsv).
     vars:
       SUITE: '{{.OUT}}/coverage/suite.json'
       CORE: inbox-core
@@ -78,10 +78,10 @@ tasks:
       - cargo build -q --locked -p inbox-cli -p inbox-conformance
       - '{{.ROOT_DIR}}/target/debug/inbox-conformance run --suite {{.SUITE}} --results {{.OUT}}/conform/core-results.json'
       - ess verify conform report --suite {{.SUITE}} --results {{.OUT}}/conform/core-results.json --implementation {{.CORE}} --runner {{.RUNNER}} --report-out {{.OUT}}/conform/core-report.json
-      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported-core.tsv --implementation {{.CORE}}'
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/core-report.json --results {{.OUT}}/conform/core-results.json --unsupported crates/inbox-conformance/unsupported-core.tsv --implementation {{.CORE}}'
       - '{{.ROOT_DIR}}/target/debug/inbox-conformance run --target serve --inbox {{.ROOT_DIR}}/target/debug/inbox --suite {{.SUITE}} --results {{.OUT}}/conform/serve-results.json'
       - ess verify conform report --suite {{.SUITE}} --results {{.OUT}}/conform/serve-results.json --implementation {{.SERVE}} --runner {{.RUNNER}} --report-out {{.OUT}}/conform/serve-report.json
-      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/serve-report.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.SERVE}}'
+      - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/serve-report.json --results {{.OUT}}/conform/serve-results.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.SERVE}}'
 
   acceptance:
     desc: Build the inbox binary and run the 3 checks of tests/acceptance against it (cargo test --ignored with INBOX_BIN naming the binary); fails when a check fails or fewer than 3 passed. Log in .out/acceptance/test.log.

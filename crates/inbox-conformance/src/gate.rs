@@ -51,6 +51,62 @@ pub struct Report {
     pub skipped: Vec<String>,
     /// `outcomes.unsupported`.
     pub unsupported: Vec<String>,
+    /// The reason the run gave each unsupported scenario, by id. A report/2 carries none: they
+    /// are read from the results document the report was written from ([`read_reasons`]).
+    pub reasons: BTreeMap<String, String>,
+}
+
+/// The reason the run gave each unsupported scenario, by id, read from the
+/// `ess-conformance-results/1` document `inbox-conformance run` wrote (the `message` of each
+/// result whose `status` is `unsupported`), held to the suite whose bytes have `suite_digest`.
+///
+/// # Errors
+///
+/// A document that is not JSON, not a results/1, for another suite, or with an unsupported
+/// result without its id or its message.
+pub fn read_reasons(text: &str, suite_digest: &str) -> Result<BTreeMap<String, String>, String> {
+    let document = json::parse_written(text).map_err(|error| format!("the results: {error}"))?;
+    match document.member("format") {
+        Some(Value::Text(format)) if format == crate::results::RESULTS_FORMAT => {}
+        _ => {
+            return Err(format!(
+                "the results are not an `{}`",
+                crate::results::RESULTS_FORMAT
+            ));
+        }
+    }
+    match document.member("suite_digest") {
+        Some(Value::Text(digest)) if digest == suite_digest => {}
+        _ => {
+            return Err(format!(
+                "the results are not those of the suite {suite_digest}"
+            ));
+        }
+    }
+    let Some(Value::Array(results)) = document.member("results") else {
+        return Err("the results have no `results` list".to_owned());
+    };
+    let mut reasons = BTreeMap::new();
+    for result in results {
+        if !matches!(result.member("status"), Some(Value::Text(status)) if status == "unsupported")
+        {
+            continue;
+        }
+        match (result.member("scenario_id"), result.member("message")) {
+            (Some(Value::Text(id)), Some(Value::Text(message))) => {
+                if reasons.insert(id.clone(), message.clone()).is_some() {
+                    return Err(format!("the results name `{id}` twice"));
+                }
+            }
+            _ => {
+                return Err(
+                    "the results hold an unsupported scenario without its id and its message"
+                        .to_owned(),
+                );
+            }
+        }
+    }
+    Ok(reasons)
 }
 
 /// Reads an `ess-conformance-report/2`.
@@ -108,6 +164,7 @@ pub fn read_report(text: &str) -> Result<Report, String> {
         error: ids("error")?,
         skipped: ids("skipped")?,
         unsupported: ids("unsupported")?,
+        reasons: BTreeMap::new(),
     };
     if report.total != accounted(&report) {
         return Err(format!(
@@ -282,7 +339,9 @@ impl Verdict {
 }
 
 /// Holds `report` to `listed`: no scenario failed, errored or skipped, something ran and passed,
-/// and the unsupported scenarios are exactly the listed ones.
+/// the unsupported scenarios are exactly the listed ones, and each listed reason is the reason
+/// the run gave that scenario ([`Report::reasons`]); one problem per scenario whose reason
+/// differs or is unknown.
 pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
     let line = format!(
         "{} scenarios: {} passed, {} failed, {} error, {} unsupported",
@@ -319,5 +378,19 @@ pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
             .filter(|id| !report.unsupported.contains(id))
             .map(|id| format!("listed in unsupported.tsv and not unsupported in the run: {id}")),
     );
+    for id in &report.unsupported {
+        let Some(listed_reason) = listed.get(id) else {
+            continue;
+        };
+        match report.reasons.get(id) {
+            Some(reason) if reason == listed_reason => {}
+            Some(reason) => problems.push(format!(
+                "the reason unsupported.tsv lists for {id} is not the reason of the run: listed `{listed_reason}`, the run gave `{reason}`"
+            )),
+            None => problems.push(format!(
+                "the run gave no reason for {id}, which unsupported.tsv lists with `{listed_reason}` (`gate --results` names the run's results)"
+            )),
+        }
+    }
     Verdict { line, problems }
 }

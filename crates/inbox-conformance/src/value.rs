@@ -78,7 +78,12 @@ fn same_number(left: &str, right: &str) -> bool {
 /// `null` or not an object reaches nothing, which holds a claimed `null` only. Measured against
 /// the ESS 0.96.0 interpreted target on a coverage suite with such claims: a wrong nested value
 /// fails, a path naming no member fails a claimed value, a path through an absent `Optional`
-/// holds a claimed `null` and fails a claimed value.
+/// holds a claimed `null` and fails a claimed value. An empty member is a name no row carries, so
+/// a path through one reaches nothing: measured there, `signature..key_id`, `signature.` and
+/// `.message_id` each hold a claimed `null` in `contains` and fail a claimed value, and an
+/// `excludes` of `signature..key_id` passes a value and fails `null`. The empty path alone is a
+/// plain top-level field: ESS fails a claimed `null` there (exact comparison), this runner holds
+/// it, the departure above.
 pub fn field_matches(row: &Value, field: &str, wanted: &Value) -> bool {
     let mut path = field.split('.');
     let mut reached = path.next().and_then(|first| row.member(first));
@@ -161,6 +166,22 @@ mod tests {
                 .map(|(name, value)| ((*name).to_owned(), value.clone()))
                 .collect(),
         )
+    }
+
+    /// As measured on the ESS 0.96.0 interpreted target: a path through an empty member reaches
+    /// nothing, which holds `null` and no value.
+    #[test]
+    fn a_path_through_an_empty_member_reaches_nothing() {
+        let row = object(&[
+            ("message_id", text("m")),
+            ("signature", object(&[("key_id", text("k"))])),
+        ]);
+        for path in ["signature..key_id", "signature.", ".message_id"] {
+            assert!(field_matches(&row, path, &Value::Null), "{path}");
+            assert!(!field_matches(&row, path, &text("k")), "{path}");
+            assert!(!field_matches(&row, path, &text("m")), "{path}");
+        }
+        assert!(field_matches(&row, "signature.key_id", &text("k")));
     }
 
     #[test]
