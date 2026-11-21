@@ -184,9 +184,27 @@ fn a_held_crate_that_is_itself_a_symbolic_link_is_refused() {
 fn repository_layout(name: &str) -> PathBuf {
     let root = scratch(name);
     fs::create_dir_all(root.join("ess")).unwrap();
-    fs::create_dir_all(root.join("generated/rust")).unwrap();
+    write(&root.join("Cargo.toml"), "[workspace]\n");
     fs::create_dir_all(root.join("crates/inbox-xtask/src")).unwrap();
     root
+}
+
+#[test]
+fn a_relative_manifest_directory_is_taken_from_the_current_directory() {
+    let root = repository_layout("root-relative");
+    assert_eq!(
+        repository_root(Some(Path::new("crates/inbox-xtask")), &root).unwrap(),
+        root
+    );
+}
+
+#[test]
+fn a_directory_holding_ess_but_a_cargo_toml_directory_is_no_root() {
+    let root = scratch("root-manifest-directory");
+    fs::create_dir_all(root.join("ess")).unwrap();
+    fs::create_dir_all(root.join("Cargo.toml")).unwrap();
+    let error = repository_root(Some(&root.join("crates/inbox-xtask")), &root).unwrap_err();
+    assert!(error.ends_with("it holds no `Cargo.toml`"), "{error}");
 }
 
 #[test]
@@ -211,13 +229,19 @@ fn the_root_is_two_levels_above_the_runtime_manifest_directory() {
 fn no_root_found_names_what_is_missing() {
     let error = repository_root(None, Path::new("/")).unwrap_err();
     assert!(
-        error.contains("holds both `ess/` and `generated/rust/`"),
+        error.contains("holds both `ess/` and `Cargo.toml`"),
         "{error}"
     );
     let lone = scratch("root-none");
     fs::create_dir_all(lone.join("ess")).unwrap();
     let error = repository_root(Some(&lone.join("crates/inbox-xtask")), &lone).unwrap_err();
-    assert!(error.ends_with("it holds no `generated/rust/`"), "{error}");
+    assert!(error.ends_with("it holds no `Cargo.toml`"), "{error}");
+    let empty = scratch("root-empty");
+    let error = repository_root(Some(&empty.join("crates/inbox-xtask")), &empty).unwrap_err();
+    assert!(
+        error.ends_with("it holds no `ess/` and no `Cargo.toml`"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -231,7 +255,7 @@ fn the_binary_outside_any_repository_exits_nonzero_and_says_why() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("holds both `ess/` and `generated/rust/`"),
+        stderr.contains("holds both `ess/` and `Cargo.toml`"),
         "{stderr}"
     );
 }
@@ -323,5 +347,50 @@ fn a_failed_synthesis_leaves_the_held_crate_alone() {
     assert_eq!(
         fs::read(root.join(GENERATED).join("src/lib.rs")).unwrap(),
         before
+    );
+}
+
+#[test]
+fn generate_moves_a_crate_left_aside_back_and_keeps_its_lock() {
+    let root = scratch("recover-aside");
+    copy_tree(&repository().join("ess"), &root.join("ess"));
+    let previous = root.join("target/inbox-xtask/previous");
+    copy_tree(&repository().join(GENERATED), &previous);
+    write(&previous.join("Cargo.lock"), "held lock\n");
+    generate(&root).unwrap();
+    assert_eq!(
+        fs::read_to_string(root.join(GENERATED).join("Cargo.lock")).unwrap(),
+        "held lock\n"
+    );
+    assert!(!previous.exists());
+    assert!(drift(&root).is_ok());
+}
+
+#[test]
+fn a_leftover_aside_beside_a_present_crate_is_removed() {
+    let root = synthesized_root("stale-aside");
+    let previous = root.join("target/inbox-xtask/previous");
+    write(&previous.join("stale.rs"), "pub struct Stale;\n");
+    generate(&root).unwrap();
+    assert!(!previous.exists());
+    assert_eq!(
+        fs::read_to_string(root.join(GENERATED).join("Cargo.lock")).unwrap(),
+        "held lock\n"
+    );
+    assert!(!root.join(GENERATED).join("stale.rs").exists());
+}
+
+#[test]
+fn drift_on_a_tree_without_the_crate_reports_every_file_missing() {
+    let root = scratch("no-crate");
+    copy_tree(&repository().join("ess"), &root.join("ess"));
+    let error = drift(&root).unwrap_err();
+    assert!(error.starts_with("generated/rust/inbox drifted"), "{error}");
+    for line in ["  missing: Cargo.toml", "  missing: src/lib.rs"] {
+        assert!(error.lines().any(|l| l == line), "{line:?} not in {error}");
+    }
+    assert!(
+        !error.lines().any(|l| l.starts_with("  edited:")),
+        "{error}"
     );
 }

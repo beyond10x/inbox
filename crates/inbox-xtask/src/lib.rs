@@ -13,8 +13,8 @@ use std::process::Command;
 pub const SPECIFICATION: &str = "ess";
 /// The synthesized crate, relative to the repository root.
 pub const GENERATED: &str = "generated/rust/inbox";
-/// The directories a repository root holds, by which it is found.
-const MARKERS: [&str; 2] = [SPECIFICATION, "generated/rust"];
+/// The workspace manifest, a file the repository root holds beside `ess/`.
+const MANIFEST: &str = "Cargo.toml";
 /// Written by every synthesis with a per-run anchor; never checked in.
 const STATE: &str = ".ess-output";
 /// The generated crate's own lock file: held by `cargo --locked`, not by synthesis.
@@ -46,8 +46,10 @@ impl fmt::Display for Difference {
 }
 
 /// The repository root the tasks run on. With `manifest_dir` (the runtime `CARGO_MANIFEST_DIR`
-/// that `cargo run` sets), the directory two levels above it; without, the nearest directory from
-/// `current` upwards. Either way the root must hold `ess/` and `generated/rust/`.
+/// that `cargo run` sets; a relative one is taken from `current`), the directory two levels above
+/// it; without, the nearest directory from `current` upwards. Either way the root must hold the
+/// directory `ess/` and the file `Cargo.toml`. `generated/rust/` is not required: `generate`
+/// creates it.
 pub fn repository_root(manifest_dir: Option<&Path>, current: &Path) -> Result<PathBuf, String> {
     let Some(manifest_dir) = manifest_dir else {
         return current
@@ -56,13 +58,12 @@ pub fn repository_root(manifest_dir: Option<&Path>, current: &Path) -> Result<Pa
             .map(Path::to_path_buf)
             .ok_or_else(|| {
                 format!(
-                    "no directory from {} upwards holds both `{}/` and `{}/`; run inbox-xtask inside the repository",
-                    current.display(),
-                    MARKERS[0],
-                    MARKERS[1]
+                    "no directory from {} upwards holds both `{SPECIFICATION}/` and `{MANIFEST}`; run inbox-xtask inside the repository",
+                    current.display()
                 )
             });
     };
+    let manifest_dir = current.join(manifest_dir);
     let root = manifest_dir.ancestors().nth(2).ok_or_else(|| {
         format!(
             "CARGO_MANIFEST_DIR {} has no directory two levels above it",
@@ -76,21 +77,21 @@ pub fn repository_root(manifest_dir: Option<&Path>, current: &Path) -> Result<Pa
         Err(format!(
             "{} (two levels above CARGO_MANIFEST_DIR) is no repository root: it holds no {}",
             root.display(),
-            absent
-                .iter()
-                .map(|name| format!("`{name}/`"))
-                .collect::<Vec<_>>()
-                .join(" and no ")
+            absent.join(" and no ")
         ))
     }
 }
 
-fn missing(dir: &Path) -> Vec<&'static str> {
-    MARKERS
-        .iter()
-        .copied()
-        .filter(|name| !dir.join(name).is_dir())
-        .collect()
+/// What `dir` lacks of a repository root, each named as the messages name it.
+fn missing(dir: &Path) -> Vec<String> {
+    let mut absent = Vec::new();
+    if !dir.join(SPECIFICATION).is_dir() {
+        absent.push(format!("`{SPECIFICATION}/`"));
+    }
+    if !dir.join(MANIFEST).is_file() {
+        absent.push(format!("`{MANIFEST}`"));
+    }
+    absent
 }
 
 /// The scratch directory under the repository's own `target/`.
@@ -120,21 +121,40 @@ pub fn synthesize(root: &Path, out: &Path) -> Result<(), String> {
 
 /// Rewrite `generated/rust/inbox` from a fresh synthesis. The crate's `Cargo.lock` is kept and the
 /// synthesis state is dropped. On a failed synthesis, or a failed move into place, the checked-in
-/// crate is left as it was.
+/// crate is left as it was. A held crate an earlier run left only in `target/inbox-xtask/previous`
+/// is moved back first.
 pub fn generate(root: &Path) -> Result<(), String> {
+    let target = root.join(GENERATED);
+    let aside = scratch(root, "previous");
+    recover(&target, &aside)?;
     let staged = scratch(root, "generate");
     synthesize(root, &staged)?;
     let state = staged.join(STATE);
     if state.exists() {
         fs::remove_dir_all(&state).map_err(|e| format!("remove {}: {e}", state.display()))?;
     }
-    let target = root.join(GENERATED);
     let lock = target.join(LOCK);
     if lock.exists() {
         fs::copy(&lock, staged.join(LOCK)).map_err(|e| format!("copy {}: {e}", lock.display()))?;
     }
-    replace(&staged, &target, &scratch(root, "previous"), |from, to| {
-        fs::rename(from, to)
+    replace(&staged, &target, &aside, |from, to| fs::rename(from, to))
+}
+
+/// When `target` is absent and `aside` exists, an earlier run moved the held crate aside and could
+/// not move it back: put it back before anything reads `target` or removes `aside`.
+fn recover(target: &Path, aside: &Path) -> Result<(), String> {
+    if target.symlink_metadata().is_ok() || aside.symlink_metadata().is_err() {
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("create {}: {e}", parent.display()))?;
+    }
+    fs::rename(aside, target).map_err(|e| {
+        format!(
+            "move the held crate back from {} to {}: {e}; nothing else was changed",
+            aside.display(),
+            target.display()
+        )
     })
 }
 
@@ -172,7 +192,7 @@ fn replace(
         return match rename(aside, target) {
             Ok(()) => Err(format!("{failed}; {} is restored", target.display())),
             Err(back) => Err(format!(
-                "{failed}; moving the held crate back from {} failed too: {back}",
+                "{failed}; moving the held crate back from {} failed too: {back}; the next `task generate` moves it back first",
                 aside.display()
             )),
         };

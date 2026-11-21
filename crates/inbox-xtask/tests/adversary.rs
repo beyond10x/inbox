@@ -59,6 +59,7 @@ fn drifted_copy(name: &str) -> PathBuf {
     let root = scratch(name);
     copy_tree(&repository().join("ess"), &root.join("ess"));
     copy_tree(&repository().join(GENERATED), &root.join(GENERATED));
+    write(&root.join("Cargo.toml"), "[workspace]\n");
     fs::create_dir_all(root.join("crates/inbox-xtask")).unwrap();
     write(
         &root.join(GENERATED).join("src/lib.rs"),
