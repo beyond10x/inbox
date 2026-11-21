@@ -224,11 +224,18 @@ pub fn sign_envelope<E: Envelope + ?Sized>(
 }
 
 /// Signs a key entry with the operator key: sets `operator_signature`.
+///
+/// An id is never reused: a renewal or a new key takes a new `key_id`, and the operator removes
+/// the entry it replaces or lets it lapse (`docs/design/signing.md`, the key file).
 pub fn sign_key_entry(entry: &mut KeyEntry, operator: &SecretKey) {
     entry.operator_signature = encode(&operator.sign(&key_entry_bytes(entry)));
 }
 
 /// Signs a delegation entry with the operator key: sets `operator_signature`.
+///
+/// An id is never reused: a renewal or a changed delegation takes a new `delegation_id`, and the
+/// operator removes the entry it replaces or lets it lapse (`docs/design/signing.md`, the key
+/// file).
 pub fn sign_delegation_entry(entry: &mut DelegationEntry, operator: &SecretKey) {
     entry.operator_signature = encode(&operator.sign(&delegation_entry_bytes(entry)));
 }

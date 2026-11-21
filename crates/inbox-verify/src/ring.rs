@@ -186,8 +186,10 @@ fn verifies(key: &PublicKey, bytes: &[u8], text: &str) -> Result<(), IgnoreReaso
 /// verifies are kept. Of those, every entry whose id more than one of them carries is ignored,
 /// whatever the later checks say about each, so a malformed re-signing of an id cannot leave the
 /// other entry live. Of the rest, an entry is held when `read` accepts it. An entry the operator
-/// did not sign never counts towards an ambiguous id, so nobody without the operator key can
-/// knock an id out.
+/// did not sign never counts towards an ambiguous id: nobody without the operator key adds an
+/// entry or changes what an id means. Whoever can write the key file can remove an id, by
+/// deleting its entry or by putting back another entry the operator signed for it (both are then
+/// ignored); the verifier fails closed in both cases. An id is never reused.
 fn admit<E, T>(
     entries: &[E],
     kind: EntryKind,
@@ -239,6 +241,11 @@ fn valid_until(timestamp: &inbox::primitives::Timestamp) -> Result<Instant, Igno
 impl KeyRing {
     /// Holds the entries of `file` that `operator` signed and whose id no other signed entry
     /// carries; every other entry is ignored and listed in [`KeyRing::ignored`].
+    ///
+    /// `file` is already decoded, so this cannot see a member name carried twice in its text. A
+    /// caller that decodes the key file text itself owes that check: run
+    /// [`duplicate_member`](crate::duplicate_member) on the parsed value and refuse the file before
+    /// decoding it. [`KeyRing::parse`] does both.
     #[must_use]
     pub fn new(file: &KeyFile, operator: &PublicKey) -> Self {
         let mut ignored = Vec::new();

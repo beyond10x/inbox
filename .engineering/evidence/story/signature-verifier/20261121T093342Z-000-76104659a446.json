@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T09:33:42Z",
+  "actor": "agent:inbox",
+  "artifact": "story:signature-verifier",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F1 (duplicate_member holds every child path): the path is joined only on a hit and names go through a hash set; tests/adversary2.rs 3 passed, unit tests 13 passed",
+    "review": "review-result:adversary-signature-verifier-pass-2",
+    "outcome": "fixed"
+  }
+}

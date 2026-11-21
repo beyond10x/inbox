@@ -142,9 +142,17 @@ The caller is then the key entry's principal.
 
 ### The key file
 
-The key file is read through the generated codecs (`decode_inbox_messaging_key_file`). It is
-refused whole when it is not JSON, when any object in it, at any depth, carries a member name
-twice (`duplicate_member`, checked before decoding), or when it does not decode.
+The key file is read from its text by `KeyRing::parse`, through the generated codecs
+(`decode_inbox_messaging_key_file`). `KeyRing::parse` refuses the file whole when it is not JSON,
+when any object in it, at any depth, carries a member name twice (`duplicate_member`, checked
+before decoding), or when it does not decode. `KeyRing::new` takes a file already decoded and
+cannot see a duplicate member: a caller that decodes the text itself runs `duplicate_member` on
+the parsed value first.
+
+**An id is never reused.** A renewal, a new key and a changed delegation each take a new
+`key_id` or `delegation_id`. The operator removes the entry they replace from the file, or lets
+it lapse by its own `valid_until`. An earlier entry the operator signed stays validly signed, so
+an entry put back beside its successor under the same id would make the id ambiguous (step 2).
 
 Of a decoded file, each list (`keys`, `delegations`) is read in three steps, and an ignored entry
 is kept with its id and the reason for the operator:
@@ -152,7 +160,10 @@ is kept with its id and the reason for the operator:
 1. An entry whose `operator_signature` is not a canonical signature encoding, or does not verify
    under the pinned operator public key over the entry's signed bytes, is ignored. It counts for
    nothing after this step: an entry without the operator's signature cannot make the id of a
-   held entry ambiguous, so nobody without the operator key can knock an id out.
+   held entry ambiguous. What holds is that nobody without the operator key adds an entry or
+   changes what an id means. Whoever can write the key file can remove an id, by deleting its
+   entry or by putting back another entry the operator signed for that id (both are then
+   ignored, step 2); the verifier fails closed in both cases.
 2. An id carried by more than one entry left after step 1 is ambiguous, and every entry that
    carries it is ignored, whatever step 3 would say about each (one with a refused public key
    still makes the other ignored). It is never resolved by order.
@@ -181,7 +192,8 @@ stale, one more than 60 s ahead of the instant is refused as early.
 
 ## Left out of version 1
 
-- Revocation lists: a short `valid_until` and an edit of the key file replace them.
+- Revocation lists: a short `valid_until` and an edit of the key file replace them. The edit
+  removes the entry; a renewal is a new entry under a new id, never the old id signed again.
 - Delegation chains: a delegation is one entry, signed by the operator key.
 - A delegation scope narrower than the pair (`agent`, `on_behalf_of`).
 - Hardware-backed keys.
