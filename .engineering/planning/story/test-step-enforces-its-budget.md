@@ -7,7 +7,7 @@ title: The test step kills a test at 60 s and fails over 120 s
 summary: 'cargo test in task check has no bound per test: a case that waits on a silent peer stood 38 minutes in a changed copy and held a build slot.'
 tags:
 - budget
-revision: 1
+revision: 2
 ---
 ## Outcome
 
@@ -43,6 +43,20 @@ Known ways, not decided here: `cargo-nextest` with `slow-timeout` and `terminate
 bound in the harness of the cases themselves. `cargo nextest` does not run doc tests; the
 workspace has none that the gate counts, which the unit checks.
 
+2 more rules of the folder, added the same day, belong to this story:
+
+- Under `cargo-nextest` each test runs in its own process, so a `OnceLock` or another
+  in-process global builds a fixture once per test, not once per binary. A fixture shared by
+  the tests of a run is a cache on disk keyed by the digest of its sources (under `target/`),
+  or a setup step before the tests. The unit lists every in-process global the cases of this
+  workspace share (a built binary, a started service, a synthesized suite) and moves each that
+  is costly to one of the 2 forms; the built `inbox` binary of `task acceptance` and of the
+  serve lane is already a setup step.
+- Test binaries are few: one integration-test binary per crate (`tests/main.rs` with modules),
+  and a test profile without full debug info (`[profile.dev] debug = false` or a profile of
+  its own). The workspace has one test binary per file under `crates/*/tests/` today; the unit
+  counts them before and after and gives the size of `target/debug/deps` for both.
+
 Also in scope: the stand-ins of `crates/inbox-cli/tests/support/mod.rs` and
 `crates/inbox-server/tests/support/mod.rs` bound their wait for a connection, so that a case
 whose client sends nothing fails with a message in seconds.
@@ -53,4 +67,6 @@ whose client sends nothing fails with a message in seconds.
 - `.config/nextest.toml` (new, if that way is taken)
 - `.github/workflows/check.yml` (the runner's install, the step's bound)
 - `crates/inbox-cli/tests/support/mod.rs`, `crates/inbox-server/tests/support/mod.rs`
-- `AGENTS.md` (the row of `task check`)
+- `crates/*/tests/` (one `main.rs` per crate, the case files as modules), `Cargo.toml` (the
+  profile)
+- `AGENTS.md` (the row of `task check`, the rows of the crates that name test files)
