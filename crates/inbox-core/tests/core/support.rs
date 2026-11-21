@@ -1,10 +1,9 @@
 //! What every case shares: a verifier double, envelope builders, and a driver that runs one command
-//! or view through the generated `handle` over a clone of one `MemoryBackend`.
+//! or view through `inbox_core::handle` over one `MemoryBackend`.
 
 use inbox::actor::{Actor, Caller};
 use inbox::messaging::{Address, DelegationId, Principal};
 use inbox::server::entry::Refused;
-use inbox::server::inbox_service::handle;
 use inbox::server::json::{self, Value};
 use inbox_core::{CallerAttributes, Envelope, MemoryBackend, ServiceContext, SignatureVerifier};
 
@@ -42,8 +41,8 @@ impl SignatureVerifier for KeyIdVerifier {
     }
 }
 
-/// One store, one verifier, and a fresh generated system per call, as an embedding with another
-/// caller per request builds it.
+/// One store, one verifier, and one request per call through `inbox_core::handle`, as an
+/// embedding with another caller per request runs it.
 pub struct World {
     pub backend: MemoryBackend,
     pub verifier: KeyIdVerifier,
@@ -65,9 +64,8 @@ impl World {
         input: &str,
     ) -> Result<Value, Refused> {
         let context = ServiceContext::new(caller, self.verifier.clone(), self.backend.clone());
-        let mut system = inbox_core::system(self.backend.clone(), context);
         let input = json::parse(input).expect("the case writes JSON");
-        handle(&mut system, Some(&Caller { actor }), name, input)
+        inbox_core::handle(&self.backend, context, Some(&Caller { actor }), name, input)
     }
 
     /// Runs `name` as a `Client` whose `principal` and `inbox` are both `who`.

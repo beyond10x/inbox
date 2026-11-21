@@ -8,6 +8,38 @@ use crate::support::{
 const FIRST: &str = "01JGT0DK000000000000000001";
 const SECOND: &str = "01JGT0DK000000000000000002";
 
+/// The fields `tests/adversary.rs` (`posted_stores_every_envelope_field_as_sent`) does not read
+/// back: the identity, the kind, and the letter and text of each option, in order.
+#[test]
+fn posted_stores_the_identity_the_kind_and_every_option() {
+    use inbox::behaviour::MessageStorage;
+    use inbox::messaging::{Kind, MessageId};
+
+    let world = world();
+    assert_eq!(
+        outcome(&post(&world, &Post::decision(FIRST, Some("B")))),
+        "posted"
+    );
+    let row = MessageStorage::get(&world.backend, &MessageId(FIRST.to_owned())).expect("stored");
+    assert_eq!(row.data.message_id.0, FIRST);
+    assert_eq!(row.data.kind, Kind::Decision);
+    let options: Vec<(String, String)> = row
+        .data
+        .decision
+        .expect("decision stored")
+        .options
+        .into_iter()
+        .map(|option| (option.letter.0, option.text))
+        .collect();
+    assert_eq!(
+        options,
+        vec![
+            ("A".to_owned(), "Ship the release today.".to_owned()),
+            ("B".to_owned(), "Hold the release until Monday.".to_owned()),
+        ]
+    );
+}
+
 fn world() -> World {
     let world = World::new(KeyIdVerifier::accepting());
     open_worker(&world);

@@ -133,9 +133,14 @@ const EXPIRE: &str = "inbox.messaging.Expire";
 ///
 /// Where the contract text in `PLAN.md` differs (it puts `duplicate` and `unknown-inbox` before
 /// the input-guarded refusals and the external branches after every row refusal), this follows
-/// the interpreter, which the conformance suite runs against. Inside step 3 the order is the
-/// contract's; the suite holds `duplicate` before `duplicate-key`
-/// (`ess/scenarios/repost-after-restart-arrives-once.yaml`).
+/// the interpreter, which the conformance suite runs against. The order inside step 3 is
+/// measured on the interpreted target too, pair by pair: `duplicate` before `unknown-inbox`,
+/// `unknown-inbox` before `duplicate-key`, `duplicate-key` before `inbox-closed`, `duplicate`
+/// before `inbox-closed` (`tests/adversary.rs` holds each pair).
+///
+/// Read-then-write, like every generated behaviour: two posts over one store at once are told
+/// apart only where the backend's [`crate::Exclusive`] section runs them one at a time, which
+/// [`crate::handle`] does.
 impl<B: InboxStorage + MessageStorage, C: PostExternals> PostMessageBehavior for Core<B, C> {
     fn post_message(&mut self, input: PostMessage) -> Result<PostMessageOutcome, UnmetObligation> {
         if input.on_behalf_of != input.from && input.authority.is_none() {

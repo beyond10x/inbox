@@ -8,9 +8,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use inbox::actor::{Actor, Caller};
 use inbox::behaviour::{InboxStorage, MessageStorage};
 use inbox::messaging::{Address, InboxSnapshot, MessageId, MessageSnapshot, Principal};
-use inbox::server::inbox_service::handle;
 use inbox::server::json;
-use inbox_core::{CallerAttributes, MemoryBackend, ServiceContext};
+use inbox_core::{CallerAttributes, Exclusive, MemoryBackend, ServiceContext};
 
 use crate::support::{KeyIdVerifier, Post, World, open_worker, outcome, post, quoted};
 
@@ -195,6 +194,12 @@ impl Counting {
     }
 }
 
+impl Exclusive for Counting {
+    fn exclusive<R>(&self, command: impl FnOnce() -> R) -> R {
+        self.inner.exclusive(command)
+    }
+}
+
 impl InboxStorage for Counting {
     fn get(&self, identity: &Address) -> Option<InboxSnapshot> {
         self.read();
@@ -233,10 +238,10 @@ impl MessageStorage for Counting {
 fn run(backend: &Counting, who: &str, name: &str, input: &str) -> String {
     let caller = CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned()));
     let context = ServiceContext::new(caller, verifier(), backend.clone());
-    let mut system = inbox_core::system(backend.clone(), context);
     let input = json::parse(input).expect("the case writes JSON");
-    let answer = handle(
-        &mut system,
+    let answer = inbox_core::handle(
+        backend,
+        context,
         Some(&Caller {
             actor: Actor::Client,
         }),

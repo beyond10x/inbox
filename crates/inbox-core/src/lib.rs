@@ -12,7 +12,9 @@
 //! - [`MemoryBackend`]: both generated storage ports, in memory. Its clones share one store, and it
 //!   is `Send` and `Sync`.
 //!
-//! [`system`] assembles the generated [`inbox::system::System`] over a backend and a context.
+//! [`handle`] runs one command or view for one caller, one command at a time per shared store
+//! ([`Exclusive`]); it is the entry for an embedding with another caller per request. [`system`]
+//! assembles the generated [`inbox::system::System`] and serializes nothing.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -21,13 +23,17 @@ mod backend;
 mod context;
 mod obligations;
 
-pub use backend::MemoryBackend;
+pub use backend::{Exclusive, MemoryBackend};
 pub use context::{CallerAttributes, Envelope, PostExternals, ServiceContext, SignatureVerifier};
 pub use obligations::Core;
 
-use inbox::behaviour::Generated;
+use inbox::actor::Caller;
+use inbox::behaviour::{Generated, InboxStorage, MessageStorage, TryContext};
 use inbox::ports::inbox_service::InboxService;
-use inbox::system::System;
+use inbox::server::entry::Refused;
+use inbox::server::inbox_service;
+use inbox::server::json::Value;
+use inbox::system::{System, SystemEvent};
 
 /// The generated system over the behaviours of [`Core`]: what the generated `handle` and
 /// `dispatch` run.
@@ -37,12 +43,64 @@ pub type Service<B, C> = System<Generated<Core<B, C>>>;
 /// obligations of [`Core`], over `backend` and `context`.
 ///
 /// The generated `InboxService` gives no access to its behaviours after construction, so the
-/// context is fixed for the life of the system. An embedding with another caller per request
-/// builds one per request over a clone of the backend.
+/// context is fixed for the life of the system.
+///
+/// `system` alone serializes nothing: two systems over clones of one backend, run at once, each
+/// read before the other writes, and both decide on the same rows. An embedding with another
+/// caller per request goes through [`handle`], which runs each request inside the backend's
+/// [`Exclusive`] section.
 pub fn system<B, C>(backend: B, context: C) -> Service<B, C> {
     System::new(InboxService::new(Generated::new(Core::new(
         backend, context,
     ))))
+}
+
+/// Runs one command or view by its qualified name for one request, as the generated
+/// [`inbox_service::handle`] does, inside the backend's [`Exclusive`] section.
+///
+/// The section is taken before the system is assembled over a clone of `backend` and `context`,
+/// and released after the generated `handle` answered, so no other request reads or writes the
+/// store in between. `caller` is the actor the request was authenticated as, `context` the
+/// request's own (a [`ServiceContext`] over the request's caller, the verifier and a clone of the
+/// backend). A refusal releases the section like an answer does; a panic inside the command
+/// unwinds through it and the backend's section does not stay locked ([`Exclusive`] says what
+/// the store holds then).
+///
+/// # Errors
+///
+/// What the generated `handle` refuses ([`Refused`]): an unknown name, an input that is not the
+/// declared one, an actor the specification does not grant, an unmet obligation.
+pub fn handle<B, C>(
+    backend: &B,
+    context: C,
+    caller: Option<&Caller>,
+    name: &str,
+    input: Value,
+) -> Result<Value, Refused>
+where
+    B: Exclusive + InboxStorage + MessageStorage + Clone,
+    C: TryContext + PostExternals,
+{
+    handle_with_events(backend, context, caller, name, input).0
+}
+
+/// [`handle`], and every event the request published, in log order, as the generated
+/// [`inbox_service::handle_with_events`] hands them back.
+pub fn handle_with_events<B, C>(
+    backend: &B,
+    context: C,
+    caller: Option<&Caller>,
+    name: &str,
+    input: Value,
+) -> (Result<Value, Refused>, Vec<SystemEvent>)
+where
+    B: Exclusive + InboxStorage + MessageStorage + Clone,
+    C: TryContext + PostExternals,
+{
+    backend.exclusive(|| {
+        let mut service = system(backend.clone(), context);
+        inbox_service::handle_with_events(&mut service, caller, name, input)
+    })
 }
 
 const _: fn() = || {
