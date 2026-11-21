@@ -15,8 +15,10 @@
 //!
 //! Each function takes a factory that answers a backend over a new, empty store on every call,
 //! and makes its clones itself. The two storage checks refuse, with a panic naming the factory,
-//! any backend the factory answers that holds a snapshot already. A check that fails panics with
-//! one line, `backend contract broken: <part>: <rule> (<what was seen>)`.
+//! any backend the factory answers that already holds a snapshot of the port under check (the
+//! inbox check reads inboxes only, the message check messages only); the section check gives
+//! every backend the factory answers one command that must run within 2 s. A check that fails
+//! panics with one line, `backend contract broken: <part>: <rule> (<what was seen>)`.
 //!
 //! A check that waits fails after a bound of 2 s instead of hanging. The section check holds a
 //! command for 500 ms while others try to get in, so a section that lets a second command in
@@ -57,13 +59,15 @@ const HOLD: Duration = Duration::from_millis(500);
 /// every stored snapshot once, in the same order on two calls with no write between them; two
 /// clones of one backend read one store. Each handle reads before the other handle writes and
 /// again after its `put`, its replacing `put` and its `delete`, with `get` and with `list`, in
-/// both directions (original to clone, clone to original), so a handle that answers what it read
-/// earlier fails.
+/// both directions (original to clone, clone to original). Before the replacing `put` and before
+/// the `delete`, the reading handle writes the row itself, so a handle that answers what it read
+/// or wrote earlier fails.
 ///
 /// # Panics
 ///
 /// With a line naming the rule the backend broke, or when a backend `fresh` answers, on any call,
-/// holds a snapshot already.
+/// already holds an inbox. The check reads inboxes only, so it does not see messages a backend
+/// holds.
 pub fn check_inbox_storage<B, F>(fresh: F)
 where
     B: InboxStorage + Clone,
@@ -78,7 +82,8 @@ where
 /// # Panics
 ///
 /// With a line naming the rule the backend broke, or when a backend `fresh` answers, on any call,
-/// holds a snapshot already.
+/// already holds a message. The check reads messages only, so it does not see inboxes a backend
+/// holds.
 pub fn check_message_storage<B, F>(fresh: F)
 where
     B: MessageStorage + Clone,
@@ -91,15 +96,17 @@ where
 ///
 /// A second command over one backend waits while one runs; clones of one backend share the
 /// section; the section is free again after a command that panics, and a second command still
-/// waits while one runs after it. The kit holds a command inside the section for 500 ms while a
-/// command over the same backend and one over a clone try to get in; a section that admits a
-/// second command only after a hold longer than 500 ms is not seen by the kit. Every other wait,
-/// the command that panics included, fails after a bound of 2 s instead of hanging; a passing
-/// call takes about 1 s. A thread left waiting on a broken section is not joined.
+/// waits while one runs after it, over the same backend, over a clone made before the panic and
+/// over a clone made after it. The kit holds a command inside the section for 500 ms while the
+/// other commands try to get in; a section that admits a second command only after a hold longer
+/// than 500 ms is not seen by the kit. Every other wait, the command that panics included, fails
+/// after a bound of 2 s instead of hanging; a passing call takes about 1 s. A thread left waiting
+/// on a broken section is not joined.
 ///
 /// The factory's backends have no storage port here, so the kit cannot see whether one holds
-/// rows; what it needs of each is that its section is free, and a section that does not let the
-/// first command in within 2 s fails `a second command waits while one runs`.
+/// rows; what it needs of each is that its section is free. Every backend the factory answers,
+/// on any call, first gets one command, and a section that does not let it in within 2 s fails
+/// `a second command waits while one runs`.
 ///
 /// # Panics
 ///
@@ -113,7 +120,31 @@ where
     const SHARED: &str = "clones of one backend share the section";
     const FREED: &str = "the section is free again after a command that panics";
 
-    let one = Arc::new(fresh());
+    let mut calls = 0;
+    let mut fresh = || {
+        calls += 1;
+        let backend = Arc::new(fresh());
+        let (ran, done) = mpsc::channel();
+        let first = Arc::clone(&backend);
+        std::thread::spawn(move || {
+            first.exclusive(|| {
+                let _ = ran.send(());
+            });
+        });
+        if done.recv_timeout(BOUND).is_err() {
+            broken(
+                "Exclusive",
+                WAITS,
+                format_args!(
+                    "the first command over the backend of factory call {calls} did not run \
+                     within {BOUND:?}"
+                ),
+            );
+        }
+        backend
+    };
+
+    let one = fresh();
     let clone = Arc::new(one.as_ref().clone());
     excludes(
         Arc::clone(&one),
@@ -121,7 +152,8 @@ where
         "",
     );
 
-    let panicking = Arc::new(fresh());
+    let panicking = fresh();
+    let before = Arc::new(panicking.as_ref().clone());
     let (left, unwound) = mpsc::channel();
     let inside = Arc::clone(&panicking);
     std::thread::spawn(move || {
@@ -151,8 +183,12 @@ where
         ),
     }
     let same = Arc::clone(&panicking);
-    let clone = Arc::new(panicking.as_ref().clone());
-    for (backend, which) in [(same, "the same backend"), (clone, "a clone")] {
+    let after = Arc::new(panicking.as_ref().clone());
+    for (backend, which) in [
+        (same, "the same backend"),
+        (Arc::clone(&before), "a clone made before the panic"),
+        (Arc::clone(&after), "a clone made after the panic"),
+    ] {
         let (ran, done) = mpsc::channel();
         std::thread::spawn(move || {
             backend.exclusive(|| {
@@ -170,12 +206,12 @@ where
             );
         }
     }
-    let clone = Arc::new(panicking.as_ref().clone());
     excludes(
         Arc::clone(&panicking),
         vec![
             (panicking, "the same backend", WAITS),
-            (clone, "a clone", WAITS),
+            (before, "a clone made before the panic", SHARED),
+            (after, "a clone made after the panic", SHARED),
         ],
         " after a command panicked inside the section",
     );
@@ -379,8 +415,10 @@ where
 }
 
 /// Writes row `n` through `writer` and reads it through `reader` before the first write and
-/// after each: its `put`, a replacing `put`, its `delete`, with `get` and with `list`. `w` and `r`
-/// name the two handles in the line a failure prints.
+/// after each: its `put`, a replacing `put`, its `delete`, with `get` and with `list`. Before the
+/// replacing `put` and before the `delete`, `reader` puts the row it last read itself, so its
+/// read afterwards answers the other handle's write, not its own earlier one. `w` and `r` name the
+/// two handles in the line a failure prints.
 fn one_store<P: Port<B>, B>(writer: &mut B, reader: &mut B, n: u8, w: &str, r: &str) {
     let row = P::row(n);
     let id = P::id(&row);
@@ -390,6 +428,7 @@ fn one_store<P: Port<B>, B>(writer: &mut B, reader: &mut B, n: u8, w: &str, r: &
     P::put(writer, row.clone());
     reads::<P, B>(reader, &id, Some(&row), r, &format!("after {w} put it"));
 
+    P::put(reader, row.clone());
     let replacement = P::replacement(n);
     P::put(writer, replacement.clone());
     reads::<P, B>(
@@ -397,11 +436,18 @@ fn one_store<P: Port<B>, B>(writer: &mut B, reader: &mut B, n: u8, w: &str, r: &
         &id,
         Some(&replacement),
         r,
-        &format!("after {w} replaced it"),
+        &format!("after {w} replaced the row {r} had put"),
     );
 
+    P::put(reader, replacement.clone());
     P::delete(writer, &id);
-    reads::<P, B>(reader, &id, None, r, &format!("after {w} deleted it"));
+    reads::<P, B>(
+        reader,
+        &id,
+        None,
+        r,
+        &format!("after {w} deleted the row {r} had put"),
+    );
 }
 
 /// `reader` answers `expected` under `id` through `get`, and through `list` exactly that row, or
