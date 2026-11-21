@@ -2,13 +2,15 @@
 format: aep.planning-md/3
 id: dependency-blocker:ess-805-second-run-witness
 kind: dependency-blocker
-status: open
+status: cleared
 title: story:dedup-key-scope waits for an ESS release that fixes beyond10x/ess#805
 relations:
 - blocks: story:dedup-key-scope
 - blocks: story:post-does-not-tell-a-message-id-exists
 withholds: test_result
-revision: 2
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-11-21T20:08:05Z", actor: "agent:inbox", revision: 3, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## What is blocked
 

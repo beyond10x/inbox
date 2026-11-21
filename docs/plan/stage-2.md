@@ -727,6 +727,75 @@ Backlog below. That wave starts without asking when the release is out, with a r
 close. No release, no listener outside loopback and no deployment come before the gate
 stories are implemented.
 
+## Wave 7
+
+2 units, one after another: story:dedup-key-scope, then
+story:post-does-not-tell-a-message-id-exists. Both were accepted and held on beyond10x/ess#805
+(dependency-blocker:ess-805-second-run-witness); the host operator ordered on 2026-11-21 that
+one wave with both starts without asking when an ESS release fixes the defect, with a report at
+its close. No release, no listener outside loopback and no deployment come before both are
+implemented.
+
+ESS 0.97.1 fixes the defect (its changelog names beyond10x/ess#805; tag `0.97.1`). Probed by the
+coordinator on a copy of `ess/` of `a5b681f` with the 0.97.1 binary of the ESS release run, the
+manifest pinned to 0.97.1:
+
+- the model as it is: 97 scenarios, 27 authored, 95 refusals, 95 covered; the interpreted
+  target "97 scenarios: 97 passed, 0 failed, 0 error, 0 unsupported", `passed`;
+- with `where: {all: [dedup_key == input.dedup_key, from == input.from]}` in `duplicate-key`:
+  the same numbers and "97 scenarios: 97 passed, 0 failed, 0 error, 0 unsupported", `passed`.
+  On ESS 0.96.0 that rule gave 96 scenarios, 95 passed, 1 failed.
+
+The blocker is moved to `cleared` on that measurement. The binary came from the build artifact
+of the release run, because the GitHub release did not exist yet when the wave opened; the
+coordinator checks the archive's digest against the release's `SHA256SUMS` before `main` moves.
+
+Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0) at the opening:
+
+```
+wave 1
+  story:dedup-key-scope (inferred)
+unassessed: story:post-does-not-tell-a-message-id-exists
+1 wave(s), 0 collision(s), 1 unassessed
+```
+
+story:post-does-not-tell-a-message-id-exists has no Scope section yet. An `aep:story-scoper`
+run writes it while unit 1 is built, with a probe of the options its body leaves open (the
+order of the outcomes; a `duplicate` bound to the sender; a message id per sender); the
+coordinator settles the point in the story before unit 2 is dispatched. Both stories change
+`PostMessage` in `ess/domains/messaging.yaml` and regenerate `generated/`, so they cannot run at
+once: unit 2 is forked from the integration branch after unit 1 is merged.
+
+Unit 1 has 2 steps, each its own commit: the move of the repository to ESS 0.97.1 with no
+change of a rule (the manifest, the version the check workflow installs, the regeneration, the
+numbers the version moves), then the story.
+
+Files and who owns them: as in wave 6. A unit owns the model, `tools/scenarios.py` and what
+`task scenarios` writes, `generated/` (regenerated, never edited), the crates and their tests,
+`crates/inbox-conformance/unsupported.tsv` and `docs/design/`. `website/`, `README.md`,
+`CHANGELOG.md`, the count lines and the rules of `AGENTS.md` and this page are the
+coordinator's at the close, from the gate's numbers.
+
+Sub-agents: `aep:implementor` and `aep:adversary`, on Opus, one of each per unit, the adversary
+at most 2 passes; `aep:story-scoper` on Opus (aep plugin 0.26.0).
+
+Commits this wave makes: the opening commit (this section and the store), 2 commits for unit 1
+and 1 for unit 2, 1 per correction round, 2 merges, the closing commit, the fast-forward of
+`main` after the close.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `a5b681f`; the trees of wave
+6 are removed; one other tree of this repository exists (`inbox-pitch`, the landing page unit,
+not part of this wave, no file in common with a unit's surface except `AGENTS.md` and
+`Taskfile.yml`, which that unit has edited and not committed); 149 GB free on the root file
+system. The shared build pool was full at the opening: a job waited between 16 s and 224 s for
+a slot.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-7` | `inbox-s2-w7` | `w7/` | open |
+| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w7-key` | `w7/dedup-key-scope/` | dispatched |
+| story:post-does-not-tell-a-message-id-exists | `impl/post-id` | `inbox-s2-w7-id` | `w7/post-id/` | being scoped |
+
 ## Backlog
 
 Drafts filed from findings wait here until every wave of this plan is delivered. Accepting one
