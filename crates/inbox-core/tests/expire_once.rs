@@ -1,7 +1,10 @@
 //! story:expire-publishes-once: `Expire` through the entry `inbox_core::handle_with_events` hands
 //! back exactly the events the model declares for each outcome, and each once. No step of the
-//! conformance suite reads a field of the event `Expire` publishes or bounds the number of
-//! occurrences, so a core that publishes it twice is caught here, on the whole list.
+//! conformance suite bounds the number of occurrences of an event of `Expire` from above, so a
+//! core that publishes it twice is caught here, on the whole list. A step of the suite does
+//! compare the payload of the event (`expect_event`), in scenarios whose thread is the message
+//! id and whose sender speaks for itself; `adversary_w8_expire.rs` holds the count and the
+//! payload off those points.
 
 use inbox::actor::{Actor, Caller};
 use inbox::messaging::{
