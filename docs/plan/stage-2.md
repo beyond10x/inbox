@@ -13,7 +13,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | delivered 2026-11-21 |
-| 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
+| 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | running |
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
 (50 uncovered refusals at the start of stage 2; story:declared-coverage owns them).
@@ -446,6 +446,44 @@ Result:
 - Sub-agents, all on Opus, in tool uses as each run reported them: the client's implementor 224
   in 3 runs, the coverage implementor 203 in 3 runs; the adversaries 88 and 80 (client, pass 1
   and 2), 90 and 75 (coverage).
+
+## Wave 5
+
+One unit. Re-derived on `main` at `e8229fd` with
+`aep plan artifact waves --kind story --status active`: story:service-acceptance is the one
+story left (`1 wave(s), 0 collision(s), 0 unassessed`). Its scope entries are `inferred`:
+`crates/inbox-conformance`, `tests/acceptance`, `Taskfile.yml` and `AGENTS.md`. No story of the
+planned wave left it.
+
+Story text changed before dispatch, wave order unchanged:
+
+- One Context paragraph on what wave 4 settled: the binary and its flags, the fixtures that
+  start the service and make keys at run time, the exit statuses, and that the repost check
+  uses a message its recipient has not read.
+- One Context paragraph and one Acceptance sentence on the conformance status. The runner
+  reads the coverage suite (`ess-conformance/65`), `task conform` runs that suite against the
+  core and against the service, and the gate accepts `passed`; the run against the core reports
+  `conformance_status: passed`. The files are inside the story's scope
+  (`crates/inbox-conformance/`, `Taskfile.yml`). The reason is the host operator's condition of
+  the stage 2 approval: the stage is not done while the status is `inconclusive`. Reported to
+  the host operator with the wave 4 report.
+- The Scope gains the root `Cargo.toml` and `Cargo.lock`, for the case that `tests/acceptance`
+  is a workspace member: the members are the glob `crates/*` today.
+
+Files and who owns them in this wave: everything in the story's Scope is the unit's.
+`website/`, `README.md`, `CHANGELOG.md`, the Layout table and the numbers of `AGENTS.md` are the
+coordinator's at the close, from the gate's numbers.
+
+Commits this wave makes: the opening commit (this section and the store), 1 commit for the unit
+(more if a correction round runs), 1 merge, the closing commit, the fast-forward of `main`.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `e8229fd`; the trees of wave
+4 are removed; 130 GB free on the root file system.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-5` | `inbox-s2-w5` | `w5/` | open |
+| story:service-acceptance | `impl/service-acceptance` | `inbox-s2-w5-acc` | `w5/service-acceptance/` | dispatched |
 
 ## Backlog
 
