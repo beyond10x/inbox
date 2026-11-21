@@ -414,6 +414,14 @@ fn final_refusal(name: &str, answer: &Value) -> bool {
     declared_error(answer).is_some() && name != UNKNOWN_INBOX
 }
 
+/// Whether the answer to a post says the service holds the message, so the envelope records
+/// the epoch of that answer: an accepted post, or the refusal whose outcome is `duplicate` (the
+/// message id is there). `duplicate-key` says another message holds the key; the service stored
+/// nothing of this one.
+fn holds(answer: &Value) -> bool {
+    declared_error(answer).is_none() || output::text(answer, "outcome") == "duplicate"
+}
+
 /// The encoded envelope read back by the generated decoder, as the service reads it: what the
 /// decoder refuses (a body over the model's limit, an id of the wrong shape) is wrong usage, and
 /// never kept or sent. The decoder holds the model's rules; the client writes none of them.
@@ -598,13 +606,18 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
 /// was not said to arrive at the service's current start; for after a restart of the service.
 /// When the epochs file beside the outbox file records, for a kept envelope, the epoch of the
 /// start its post arrived at, the service is asked for its epoch first ([`Client::epoch`]); an
-/// envelope recorded at that epoch is left alone and not listed. Every other envelope is posted: one recorded at another epoch, one without an
-/// epoch, and every one when the service names no epoch (an older service). `posted` and
-/// `Duplicate` count as arrived, and the envelope records the epoch of that answer. A final
-/// refusal ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a
-/// refusal, naming the first, when any envelope did not arrive, and with an unreadable entry,
-/// naming each line of the outbox file that does not read as an envelope; a transport failure
-/// ends the run.
+/// envelope recorded at that epoch is left alone and not listed. Every other envelope is
+/// posted: one recorded at another epoch, one without an epoch, and every one when the service
+/// names no epoch (an older service). `posted` and `Duplicate` count as arrived; the epoch of
+/// the answer is recorded for an accepted post and for the outcome `duplicate` (the service
+/// holds the message), not for `duplicate-key` (it stored nothing), once after every envelope
+/// was posted. A final refusal ([`final_refusal`]) drops the envelope; the other refusals keep
+/// it. Exits as a refusal, naming the first, when any envelope did not arrive, and with an
+/// unreadable entry, naming each line of the outbox file that does not read as an envelope; a
+/// transport failure ends the run, after recording the epochs of the posts that arrived before
+/// it. A local failure (the outbox file or the epochs file cannot be changed) ends no post:
+/// every envelope is posted, the report is printed, and the first local failure decides the
+/// exit (4).
 ///
 /// A note its recipient read before a restart is delivered once more by the first `repost`
 /// after it: the service keeps no record of a handled note.
@@ -619,6 +632,8 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
     let mut entries = Vec::new();
     let mut lines = Vec::new();
     let mut first_refusal: Option<(String, u16)> = None;
+    let mut stored = Vec::new();
+    let mut local: Option<Failure> = None;
     for entry in kept {
         if current.is_some() && entry.epoch == current {
             continue;
@@ -636,18 +651,25 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
                 if declared_error(&answer).is_some() && name == DUPLICATE {
                     (true, answer, format!("arrived ({name})"))
                 } else {
-                    if final_refusal(&name, &answer) {
-                        client.outbox.remove(&message_id, now())?;
+                    if final_refusal(&name, &answer)
+                        && let Err(cause) = client.outbox.remove(&message_id, now())
+                    {
+                        local.get_or_insert(cause);
                     }
                     let said = format!("refused: {name} ({status})");
                     first_refusal.get_or_insert((name, status));
                     (false, answer, said)
                 }
             }
-            Err(other) => return Err(other),
+            Err(other) => {
+                // The transport failure is what the run reports; an epoch that cannot be
+                // recorded leaves its envelope to the next repost.
+                let _ = client.outbox.record_epochs(&stored, now());
+                return Err(other);
+            }
         };
-        if let (true, Some(epoch)) = (arrived, &epoch) {
-            client.outbox.record_epoch(&message_id, epoch, now())?;
+        if let (true, Some(epoch)) = (arrived && holds(&answer), epoch) {
+            stored.push((message_id.clone(), epoch));
         }
         lines.push(format!("{message_id} to {to}: {said}"));
         entries.push(Value::Object(vec![
@@ -669,6 +691,22 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
         for line in &lines {
             warn(&format!("inbox repost: {line}"));
         }
+    }
+    if let Err(cause) = client.outbox.record_epochs(&stored, now()) {
+        local.get_or_insert(cause);
+    }
+    if let Some(cause) = local {
+        return Err(Failure::After {
+            done: Done {
+                document: document(&report),
+                text: if lines.is_empty() {
+                    "nothing to repost".to_owned()
+                } else {
+                    lines.join("\n")
+                },
+            },
+            cause: Box::new(cause),
+        });
     }
     if let Some((name, status)) = first_refusal {
         return Err(Failure::Refused {

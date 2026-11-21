@@ -17,6 +17,7 @@
 //! the lines of a message id named twice give the envelopes concerned no epoch. Each time it is
 //! written it holds the entries of the envelopes the outbox file keeps and no other.
 
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -109,7 +110,7 @@ impl Outbox {
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn keep(&self, text: &str, now: Instant) -> Result<(), Failure> {
-        self.change(now, |lines, _| lines.push(text.to_owned()))
+        self.change(now, false, |lines, _| lines.push(text.to_owned()))
     }
 
     /// Drops the envelope with this message id, and what expired at `now`.
@@ -118,7 +119,7 @@ impl Outbox {
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn remove(&self, message_id: &str, now: Instant) -> Result<(), Failure> {
-        self.change(now, |lines, _| *lines = without(lines, message_id))
+        self.change(now, false, |lines, _| *lines = without(lines, message_id))
     }
 
     /// Records `epoch` in the epochs file for the envelope with this message id, in place of the
@@ -133,11 +134,25 @@ impl Outbox {
         epoch: &Epoch,
         now: Instant,
     ) -> Result<(), Failure> {
-        self.change(now, |lines, epochs| {
-            if lines.iter().any(|line| {
-                decode(line).is_some_and(|envelope| envelope.message_id.0 == message_id)
-            }) {
-                epochs.record(message_id, epoch);
+        self.record_epochs(&[(message_id.to_owned(), epoch.clone())], now)
+    }
+
+    /// [`Outbox::record_epoch`] for each `(message id, epoch)` of `arrived`, with one read and at
+    /// most one write of the epochs file.
+    ///
+    /// # Errors
+    ///
+    /// [`Failure::Local`] when a file cannot be read or written.
+    pub fn record_epochs(&self, arrived: &[(String, Epoch)], now: Instant) -> Result<(), Failure> {
+        if arrived.is_empty() {
+            return Ok(());
+        }
+        self.change(now, true, |lines, epochs| {
+            let kept = message_ids(lines);
+            for (message_id, epoch) in arrived {
+                if kept.contains(message_id.as_str()) {
+                    epochs.record(message_id, epoch);
+                }
             }
         })
     }
@@ -151,7 +166,7 @@ impl Outbox {
     /// [`Failure::Local`] when the file cannot be read or written.
     pub fn kept(&self, from: &str, now: Instant) -> Result<Contents, Failure> {
         let mut contents = Contents::default();
-        self.change(now, |lines, epochs| {
+        self.change(now, true, |lines, epochs| {
             let mut kept = of_sender(lines, from);
             for entry in &mut kept {
                 entry.epoch = epochs.of(&entry.envelope.message_id.0);
@@ -164,13 +179,15 @@ impl Outbox {
         Ok(contents)
     }
 
-    /// Runs `change` over the lines of the file and the epochs file under the lock, after
-    /// dropping every envelope whose `expires` is at or before `now`, and writes the file again
-    /// when its lines changed, then the epochs file when `change` recorded an epoch. A line that
+    /// Runs `change` over the lines of the file and, when `with_epochs`, what the epochs file
+    /// says, under the lock, after dropping every envelope whose `expires` is at or before `now`;
+    /// writes the file again when its lines changed, then the epochs file when `change` recorded
+    /// an epoch. Without `with_epochs` the epochs file is neither read nor written. A line that
     /// does not read as an envelope is kept as it is.
     fn change(
         &self,
         now: Instant,
+        with_epochs: bool,
         change: impl FnOnce(&mut Vec<String>, &mut Epochs),
     ) -> Result<(), Failure> {
         let shown = self.path.display();
@@ -202,7 +219,11 @@ impl Outbox {
         let before: Vec<String> = text.lines().map(str::to_owned).collect();
         let mut lines = unexpired(&before, now);
         let epochs_path = beside(&self.path, ".epochs");
-        let mut epochs = Epochs::parse(&fs::read_to_string(&epochs_path).unwrap_or_default());
+        let mut epochs = if with_epochs {
+            Epochs::parse(&fs::read_to_string(&epochs_path).unwrap_or_default())
+        } else {
+            Epochs::default()
+        };
         change(&mut lines, &mut epochs);
         if lines != before {
             replace(&self.path, &lines).map_err(local)?;
@@ -242,25 +263,29 @@ fn beside(path: &Path, suffix: &str) -> PathBuf {
 }
 
 /// What the epochs file says: the epoch of each message id one line of the form
-/// `<message id>\t<32 lower-case hex digits>` names, in the order of the file. A message id that
-/// two lines name, whatever their form, has none.
+/// `<message id>\t<32 lower-case hex digits>` names. A message id that two lines name, whatever
+/// their form, has none.
 #[derive(Debug, Default)]
 struct Epochs {
-    recorded: Vec<(String, Epoch)>,
+    recorded: HashMap<String, Epoch>,
     changed: bool,
 }
 
 impl Epochs {
+    /// Reads the file's text in one pass over its lines.
     fn parse(text: &str) -> Self {
-        let named: Vec<(&str, &str)> = text
-            .lines()
-            .map(|line| line.split_once('\t').unwrap_or((line, "")))
-            .collect();
+        let mut named: HashMap<&str, (usize, &str)> = HashMap::new();
+        for line in text.lines() {
+            let (id, digits) = line.split_once('\t').unwrap_or((line, ""));
+            let entry = named.entry(id).or_insert((0, digits));
+            entry.0 += 1;
+        }
         let recorded = named
-            .iter()
-            .filter(|(id, _)| !id.is_empty())
-            .filter(|(id, _)| named.iter().filter(|(other, _)| other == id).count() == 1)
-            .filter_map(|(id, digits)| Epoch::parse(digits).map(|epoch| ((*id).to_owned(), epoch)))
+            .into_iter()
+            .filter(|(id, (count, _))| !id.is_empty() && *count == 1)
+            .filter_map(|(id, (_, digits))| {
+                Epoch::parse(digits).map(|epoch| (id.to_owned(), epoch))
+            })
             .collect();
         Self {
             recorded,
@@ -269,30 +294,35 @@ impl Epochs {
     }
 
     fn of(&self, message_id: &str) -> Option<Epoch> {
-        self.recorded
-            .iter()
-            .find(|(id, _)| id == message_id)
-            .map(|(_, epoch)| epoch.clone())
+        self.recorded.get(message_id).cloned()
     }
 
     fn record(&mut self, message_id: &str, epoch: &Epoch) {
-        self.recorded.retain(|(id, _)| id != message_id);
-        self.recorded.push((message_id.to_owned(), epoch.clone()));
+        self.recorded.insert(message_id.to_owned(), epoch.clone());
         self.changed = true;
     }
 
-    /// The lines of the file, for the envelopes `kept` holds and no other.
+    /// The lines of the file, in the order of the envelopes `kept` holds, for those and no other.
     fn lines(&self, kept: &[String]) -> Vec<String> {
-        let ids: Vec<String> = kept
-            .iter()
+        let mut written = HashSet::new();
+        kept.iter()
             .filter_map(|line| decode(line).map(|envelope| envelope.message_id.0))
-            .collect();
-        self.recorded
-            .iter()
-            .filter(|(id, _)| ids.contains(id))
-            .map(|(id, epoch)| format!("{id}\t{}", epoch.as_str()))
+            .filter_map(|id| {
+                let epoch = self.recorded.get(&id)?;
+                written
+                    .insert(id.clone())
+                    .then(|| format!("{id}\t{}", epoch.as_str()))
+            })
             .collect()
     }
+}
+
+/// The message ids of the envelopes `lines` holds.
+fn message_ids(lines: &[String]) -> HashSet<String> {
+    lines
+        .iter()
+        .filter_map(|line| decode(line).map(|envelope| envelope.message_id.0))
+        .collect()
 }
 
 /// The envelope a line holds, read by the generated decoder, or why it does not read.
