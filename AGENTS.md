@@ -125,6 +125,11 @@ delivered, and 2 of the 3 stories of wave 6, added after them (story:dedup-key-s
 - A revision of an accepted story that changes scope, wave order or a settled decision, or adds a
   wave, goes to the host operator first and waits for the answer: silence is not acceptance. Any
   other revision is reported in the wave report.
+- A decision that is the operator's goes to the host operator's session, and its answer is the
+  operator's (the operator, 2026-11-21, in the coordinator's terminal). The coordinator puts no
+  decision to the operator's terminal and does not ask the operator to confirm one the host
+  operator took; it reports the decision once. What only the repository's owner can do on the
+  forge (a ruleset, branch protection) stays the owner's act.
 - A member of a view that no sequence of commands can set, found before the next release, is
   removed from the view in the same unreleased window without asking first: change `ess/`,
   regenerate, name the view and the field in the changelog as a change of the wire rows, and

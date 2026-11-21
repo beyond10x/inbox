@@ -46,7 +46,7 @@ scope:
   path: website/docs/limits.md
 - confidence: inferred
   path: website/docs/status.md
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 3}
@@ -61,11 +61,15 @@ answers that before `unknown-inbox`. A principal that posts as itself to an addr
 has, under the id of a message between two others, is answered `duplicate`, and `unknown-inbox`
 under an id nobody used. Neither post stores anything.
 
-With this story `duplicate` is the answer for the sender's own stored message only, and it is
-still given before `unknown-inbox` and `inbox-closed`, so a sender's repost of an arrived
-message answers `duplicate` whatever happened to the inbox since. An id that a message of
-another sender carries is refused `id-taken`, after `unknown-inbox`, `duplicate-key` and
-`inbox-closed`.
+With this story `duplicate` is the answer for the sender's own stored message only. The order
+of the row refusals is `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`,
+`id-taken`: the model declares `duplicate` first, and ESS 0.97.1 answers `unknown-inbox`
+(`exists: false`) before every row refusal with a `where` (measured by the unit, 2026-11-21;
+the scope had read it the other way round). A sender's repost of an arrived message still
+answers `duplicate`, also after the recipient closed the inbox, because an inbox is never
+removed. A post under the sender's own id to another address that no inbox has answers
+`unknown-inbox`. An id that a message of another sender carries is refused `id-taken`, after
+every other refusal.
 
 Narrowed on 2026-11-21 from "a post does not tell a principal that is neither the recipient nor
 the sender of a message whether that message's id is in use" (see Decisions). What stays, and
