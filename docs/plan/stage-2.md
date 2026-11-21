@@ -343,6 +343,15 @@ Story text changed before dispatch, scope and wave order unchanged:
   `task coverage` writes is read at the opening of wave 5 (story:service-acceptance owns
   `crates/inbox-conformance/` and the `conform` task).
 
+Revision during the wave, decided by the host operator on 2026-11-21 before it was made:
+story:declared-coverage covers 42 of the 50 refusals with scenarios; the other 8 are the
+invariants of `reply` and `decided_option` at the views `Pending` and `Unanswered`, which no row
+can carry. The story's scope gains `ess/domains/messaging.yaml` (the 2 fields leave the 2 views,
+4 lines) and `generated/`. Conditions: the changelog names the change of the wire rows against
+0.1.0; before the merge `task coverage` exits 0 and the suite it writes reports a status other
+than `inconclusive`; story:cli-client is checked against the regenerated crate at the merge; a
+regeneration that changes more than the rows of the 2 views stops the unit. No release with it.
+
 Commits this wave makes: the opening commit (this section, the store, the ruleset state in
 `AGENTS.md` and `docs/releasing.md`), 1 commit per unit (more if a correction round runs), 2
 merges, the closing commit with the Layout row, the numbers and the store, the fast-forward of

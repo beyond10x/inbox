@@ -14,13 +14,17 @@ scope:
   path: Taskfile.yml
 - confidence: inferred
   path: docs/design/inbox.md
+- confidence: cited
+  path: ess/domains/messaging.yaml
 - confidence: inferred
   path: ess/ess-inputs.yaml
 - confidence: inferred
   path: ess/scenarios
+- confidence: cited
+  path: generated
 - confidence: inferred
   path: tools/scenarios.py
-revision: 12
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
@@ -28,9 +32,10 @@ transitions:
 ## Outcome
 
 `ess verify conform synthesize --suite-format 5` exits 0 on `ess/`: each of the generated
-scenarios synthesis refuses is claimed by an authored scenario's `covers:` list. The story
-changes scenarios only: it adds them and makes `task check` run `task coverage`, and it changes
-no file under `ess/domains/`.
+scenarios synthesis refuses is claimed by an authored scenario's `covers:` list. The story adds
+scenarios, makes `task check` run `task coverage`, and makes one change to the model: the views
+`Pending` and `Unanswered` no longer carry the fields `reply` and `decided_option` (the host
+operator's decision of 2026-11-21, under Context).
 
 ## Acceptance
 
@@ -63,9 +68,28 @@ writes is decided at the opening of story:service-acceptance, which owns the run
 `conform` task. This story reports what that suite's run on the interpreted target answers as
 `conformance_status`.
 
+The host operator's decision of 2026-11-21, on the unit's report: scenarios cover 42 of the 50
+refusals, and the other 8 are the invariants of `reply` and `decided_option` at the views
+`Pending` and `Unanswered`. No view row can carry either field there. `Pending` holds a message
+in `Sent` or `Delivered` and `Unanswered` one in `Read`. Both fields are set only by the
+outcomes `Answer/answered` and `Expire/decided-on-silence`, and each of them moves the message
+to the terminal state `Answered`; `PostMessage/posted` creates the message with both fields
+empty, and no other outcome writes them. So no sequence of commands leaves a row of either view
+with either field set, and no scenario that claims the 8 would be true. The decision: remove the
+2 fields from the 2 views in `ess/domains/messaging.yaml` (4 lines) and regenerate `generated/`
+with the tasks, in this story; that replaces the paragraph above that stops the story at a
+model change, for these 8 refusals only. The rows of `Pending` and `Unanswered` on the wire lose
+2 members that were always null, a change against release 0.1.0 that the changelog names. If
+the regeneration changes anything beyond the rows of these 2 views, the story stops and the
+host operator is told. Before the merge the unit shows `task coverage` at exit 0 and a
+`conformance_status` other than `inconclusive` for the suite that task writes.
+
 ## Scope
 
 - `ess/scenarios/`, `ess/ess-inputs.yaml`
+- `ess/domains/messaging.yaml`: the fields `reply` and `decided_option` leave the views `Pending`
+  and `Unanswered`
+- `generated/`: as `task generate` and `task projections` rewrite it
 - `tools/scenarios.py`
 - `Taskfile.yml`: `check` gains `coverage`
 - `docs/design/inbox.md`: the coverage numbers
