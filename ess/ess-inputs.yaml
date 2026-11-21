@@ -21,6 +21,7 @@ scenarios:
 - scenarios/only-the-owner-handles-its-inbox.yaml
 - scenarios/post-from-another-principal-refused.yaml
 - scenarios/post-read-answer.yaml
+- scenarios/read-decision-is-decided-on-silence.yaml
 - scenarios/read-decision-waits-for-its-answer.yaml
 - scenarios/refusal-collected-is-gone.yaml
 - scenarios/refused-message-waits-for-the-sender.yaml

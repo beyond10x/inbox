@@ -494,6 +494,20 @@ s.check("Settled", sender(), contains={"message_id": m, "state": "Answered", "an
 s.exactly("Replies", thread(m), 1).empty("Pending", inbox(OPERATOR))
 names.append(s.write())
 
+# 8, read
+m = mid("RS", 1)
+s = Scenario("read-decision-is-decided-on-silence",
+             "The operator reads a decision and does not answer it before `expires`. The expiry task answers it by silence with the option the decision names for that, as it does one nobody read.")
+s.open(OPERATOR).post(m, OPERATOR, "decision", decision=ASK, default_on_silence="B", expires=60,
+                      body="Ship release 4.2 today?")
+s.read(m, caller=OPERATOR)
+s.expire(m, 59, "not-due", error="NotDue")
+s.expire(m, 60, "decided-on-silence")
+s.check("Settled", sender(), contains={"message_id": m, "state": "Answered", "answered_by": "silence",
+                                       "decided_option": "B", "expires": ts(60 + 24 * 60)})
+s.exactly("Replies", thread(m), 1).empty("Pending", inbox(OPERATOR))
+names.append(s.write())
+
 # 9
 m = mid("NX", 1)
 s = Scenario("note-expires",
