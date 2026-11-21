@@ -66,6 +66,10 @@ pub fn system<B, C>(backend: B, context: C) -> Service<B, C> {
 /// unwinds through it and the backend's section does not stay locked ([`Exclusive`] says what
 /// the store holds then).
 ///
+/// `context`, its verifier and its `PostExternals` must not call this entry over the same store
+/// from inside the command; [`MemoryBackend`] refuses such a call at once with a panic naming the
+/// rule, and another backend's [`Exclusive`] refuses it or documents what it does.
+///
 /// # Errors
 ///
 /// What the generated `handle` refuses ([`Refused`]): an unknown name, an input that is not the
@@ -86,6 +90,9 @@ where
 
 /// [`handle`], and every event the request published, in log order, as the generated
 /// [`inbox_service::handle_with_events`] hands them back.
+///
+/// The rule of [`handle`] holds here too: `context`, its verifier and its `PostExternals` must
+/// not call the entry over the same store from inside the command.
 pub fn handle_with_events<B, C>(
     backend: &B,
     context: C,

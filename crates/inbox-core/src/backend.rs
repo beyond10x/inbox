@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread::ThreadId;
 
 use inbox::behaviour::{InboxStorage, MessageStorage};
 use inbox::messaging::{Address, InboxSnapshot, MessageId, MessageSnapshot};
@@ -17,10 +18,19 @@ use inbox::messaging::{Address, InboxSnapshot, MessageId, MessageSnapshot};
 /// and must not block on it. An implementation lets one `command` run at a time across every
 /// clone or handle that shares its store, and must not stay locked when `command` panics.
 /// Generic, so not object-safe; a backend is a type parameter of [`crate::Core`].
+///
+/// A command's context, verifier or `PostExternals` must not call the entry over the same store:
+/// that is `exclusive` again on the thread that holds the section, and an implementation either
+/// refuses it at once or documents what it does instead.
 pub trait Exclusive {
     /// Runs `command` while no other command runs over this store, and answers what it answers.
     fn exclusive<R>(&self, command: impl FnOnce() -> R) -> R;
 }
+
+/// What the section's second entry on the thread that holds it panics with.
+const REENTERED: &str = "inbox-core: a command's context, verifier or PostExternals \
+    must not call the entry over the same store (the section of the store is already held by \
+    this thread)";
 
 /// Every inbox and every message, in memory, behind the generated storage ports.
 ///
@@ -35,17 +45,42 @@ pub trait Exclusive {
 pub struct MemoryBackend {
     store: Arc<Mutex<Store>>,
     section: Arc<Mutex<()>>,
+    holder: Arc<Mutex<Option<ThreadId>>>,
 }
 
-/// The section is a mutex over nothing, shared by every clone. A command that panics inside it
-/// poisons it, and the next command takes it anyway: nothing is guarded by it but the order of
-/// commands. The rows are then as that command left them. Each command writes at most one row
-/// (one `put` or one `delete`), so the store holds either all of its effect or none of it, and its
-/// caller has no answer.
+/// The section is a mutex over nothing, shared by every clone, and beside it the thread that
+/// holds it.
+///
+/// Another thread waits for the section. The thread that holds it, calling `exclusive` again over
+/// the same store (a context, verifier or `PostExternals` that calls the entry from inside a
+/// command), panics at once with a message naming that rule: it neither waits on itself nor runs
+/// the inner command. The panic unwinds through the outer command before its write, so the store
+/// is unchanged, and the section is free again.
+///
+/// A command that panics inside the section poisons it, and the next command takes it anyway:
+/// nothing is guarded by it but the order of commands. The holder is cleared on the way out, by a
+/// guard, a panic included. The rows are then as that command left them. Each command writes at
+/// most one row (one `put` or one `delete`), so the store holds either all of its effect or none of
+/// it, and its caller has no answer.
 impl Exclusive for MemoryBackend {
     fn exclusive<R>(&self, command: impl FnOnce() -> R) -> R {
+        let me = std::thread::current().id();
+        if *self.holder() == Some(me) {
+            panic!("{REENTERED}");
+        }
         let _section = self.section.lock().unwrap_or_else(PoisonError::into_inner);
+        *self.holder() = Some(me);
+        let _holding = Holding(self);
         command()
+    }
+}
+
+/// Clears the holder of the section when the command leaves it, also by a panic.
+struct Holding<'a>(&'a MemoryBackend);
+
+impl Drop for Holding<'_> {
+    fn drop(&mut self) {
+        *self.0.holder() = None;
     }
 }
 
@@ -65,6 +100,11 @@ impl MemoryBackend {
     /// rows, so no half-written row is left behind.
     fn store(&self) -> MutexGuard<'_, Store> {
         self.store.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The thread that holds the section, if one does.
+    fn holder(&self) -> MutexGuard<'_, Option<ThreadId>> {
+        self.holder.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 

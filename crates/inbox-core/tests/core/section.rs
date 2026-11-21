@@ -20,7 +20,8 @@ const THREADS: usize = 8;
 const ROUNDS: usize = 100;
 const MESSAGE: &str = "01JGT0SC000000000000000001";
 
-/// Runs `request` on `THREADS` threads released together, and answers each thread's outcome.
+/// Runs `request` on `THREADS` threads released together, each over its own clone of the
+/// backend, as a listener moves one to each connection, and answers each thread's outcome.
 fn at_once(world: &World, request: impl Fn(&World, usize) -> String + Sync) -> Vec<String> {
     let barrier = Barrier::new(THREADS);
     std::thread::scope(|scope| {
@@ -28,9 +29,13 @@ fn at_once(world: &World, request: impl Fn(&World, usize) -> String + Sync) -> V
             .map(|n| {
                 let barrier = &barrier;
                 let request = &request;
+                let own = World {
+                    backend: world.backend.clone(),
+                    verifier: world.verifier.clone(),
+                };
                 scope.spawn(move || {
                     barrier.wait();
-                    request(world, n)
+                    request(&own, n)
                 })
             })
             .collect();
