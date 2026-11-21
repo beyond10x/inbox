@@ -9,7 +9,9 @@ tags:
 - from-finding
 relations:
 - informed_by: review-result:adversary-foreign-message-id-pass-1
-revision: 3
+- blocks: epic:two-hosts-and-wake
+- blocks: epic:jetstream-backend
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 3}
@@ -52,8 +54,21 @@ message when the id is free.
 Accepted on 2026-11-21 by the coordinating session under the standing rule of
 approval-record:wave-6-security-drafts-accepted: a draft that an adversary pass files against an
 open limit of `website/docs/limits.md` is accepted by the coordinator without asking and named
-in the wave report. It is not part of wave 6 and no wave is planned for it yet: when it runs is
-the host operator's decision.
+in the wave report. It is not part of wave 6.
+
+Decided by the host operator's session on 2026-11-21, on 3 options the coordinating session put
+to it (A: wait for the ESS fix, outside the gate; B: wait and join the gate; C: run now as its
+own wave), as received:
+
+> host-operator: B. story:post-does-not-tell-a-message-id-exists waits for the ESS fix of issue
+> 805, runs in one wave with story:dedup-key-scope, and joins the gate (blocks edges to
+> epic:two-hosts-and-wake and epic:jetstream-backend).
+> - Reason: it is a finding of the same kind as the 3 in the gate; a gate that leaves one of
+>   them out says less than the limits page.
+
+It also ordered: when the ESS release is out, the wave starts without asking and is reported at
+its close; no release, no listener outside loopback and no deployment before the gate stories
+are implemented.
 
 ## Open for whoever scopes this
 

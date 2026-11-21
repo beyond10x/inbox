@@ -10,8 +10,8 @@ yet: build it from source.
 
 :::warning[Test keys and loopback only]
 
-The service is for a loopback address and test keys while `story:dedup-key-scope` is
-open ([limits](limits.md), finding 2). Make keys on the spot, as below, and never give it a key
+The service is for a loopback address and test keys while findings 1 and 2 of the
+[limits](limits.md) are open. Make keys on the spot, as below, and never give it a key
 that matters. `inbox serve` refuses a `--listen` address outside loopback, and the client
 refuses an `INBOX_URL` outside loopback.
 

@@ -6,8 +6,9 @@ status: open
 title: story:dedup-key-scope waits for an ESS release that fixes beyond10x/ess#805
 relations:
 - blocks: story:dedup-key-scope
+- blocks: story:post-does-not-tell-a-message-id-exists
 withholds: test_result
-revision: 1
+revision: 2
 ---
 ## What is blocked
 
@@ -59,3 +60,10 @@ Nothing is committed. The unit had removed the ignore attribute of the acceptanc
 `duplicate-key` where `posted` is expected), written the rule into the model and regenerated.
 The core's comparison, the core cases, the authored scenario of 2 senders under one key and
 decision 6 of `docs/design/inbox.md` were not started.
+
+## Also blocked
+
+story:post-does-not-tell-a-message-id-exists, by the host operator's decision of 2026-11-21: it
+waits for the same ESS release and runs in one wave with story:dedup-key-scope. Whether its rule
+meets the defect is not measured; a rule that compares the message id among the sender's own
+messages would read `input.from` in a row guard, the construct the defect is about.

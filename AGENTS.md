@@ -140,15 +140,19 @@ delivered, and 2 of the 3 stories of wave 6, added after them (story:dedup-key-s
   `task conform-interpreted`. Until that story lands: no listener bound outside loopback, no
   NATS backend wave, no deployment, no use by a real session (the host operator's decisions,
   2026-11-21; `docs/plan/stage-2.md`, Backlog).
-- When an ESS release fixes beyond10x/ess#805, take story:dedup-key-scope up without asking (the
-  host operator's decision, 2026-11-21): pin that release in `ess/ess-inputs.yaml`, regenerate,
-  move the blocker to `cleared`, and run the story as a unit from `main`. Do not scope the key by
-  `on_behalf_of` in the meantime: the host operator declined that option.
+- When an ESS release fixes beyond10x/ess#805, start one wave with story:dedup-key-scope and
+  story:post-does-not-tell-a-message-id-exists without asking and report at its close (the host
+  operator's decisions, 2026-11-21): pin that release in `ess/ess-inputs.yaml`, regenerate, move
+  the blocker to `cleared`, scope both stories, and run them as units from `main`. Do not scope
+  the dedup key by `on_behalf_of` in the meantime: the host operator declined that option. No
+  release, no listener outside loopback and no deployment before both are implemented. That ESS
+  release does not fix beyond10x/ess#804.
 - The input `from` of `PostMessage` carries `example: principal-262144` for beyond10x/ess#804.
   When an ESS release fixes it, remove the example and its comment, regenerate, and remove the
   lines that name it in `docs/design/inbox.md`, `website/docs/limits.md` and `CHANGELOG.md`.
 - story:post-does-not-tell-a-message-id-exists is accepted (a draft of the adversary of wave 6,
   filed against an open limit of `website/docs/limits.md`; such a draft is accepted by the
   coordinator without asking and named in the wave report, the host operator's standing
-  decision of 2026-11-21). It is in no wave: when it runs is the host operator's decision.
+  decision of 2026-11-21). It is in the gate above and waits for the same ESS release
+  (dependency-blocker:ess-805-second-run-witness blocks it too).
 - The guard on `from` is in `ess/` (`not-sender`); no copy of it is written in the listener.

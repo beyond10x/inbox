@@ -720,6 +720,13 @@ Result:
   story:post-does-not-tell-a-message-id-exists (accepted, in no wave). No release holds waves 4
   to 6.
 
+After the close (2026-11-21): the host operator decided that
+story:post-does-not-tell-a-message-id-exists waits for the ESS release that fixes
+beyond10x/ess#805, runs in one wave with story:dedup-key-scope, and joins the gate of the
+Backlog below. That wave starts without asking when the release is out, with a report at its
+close. No release, no listener outside loopback and no deployment come before the gate
+stories are implemented.
+
 ## Backlog
 
 Drafts filed from findings wait here until every wave of this plan is delivered. Accepting one
@@ -747,13 +754,14 @@ story:post-from-is-the-caller and story:foreign-message-id-answers-as-unknown.
   (dependency-blocker:ess-805-second-run-witness). A dedup key of one sender does not refuse
   another sender's post; today `duplicate-key` compares the key alone over every message. The
   gate above stays closed until it lands.
-- story:post-does-not-tell-a-message-id-exists (wave 6): accepted, in no wave. `post` answers
+- story:post-does-not-tell-a-message-id-exists (wave 6): accepted, in the gate above, waits
+  for the same ESS release and runs in one wave with story:dedup-key-scope. `post` answers
   `duplicate` for a message id that is stored, whoever sent it, so a third principal learns
   from a post whether an id is in use. Its case
   `adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post` is in
   `crates/inbox-server/tests/adversary_w6_foreign.rs` with an ignore attribute naming the story.
-  It carries no `blocks` relation: whether it joins the gate above is the host operator's
-  decision.
+  It carries `blocks` relations to epic:two-hosts-and-wake and epic:jetstream-backend (the
+  host operator's decision, 2026-11-21).
 
 Drafts from the conformance unit, each a gap of the suite and no defect of the core as built:
 

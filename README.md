@@ -70,11 +70,13 @@ Open security findings, each with its story in `.engineering/planning/story/`:
 1. **A post tells whether a message id exists**
    (`story:post-does-not-tell-a-message-id-exists`): `post` answers `duplicate` for a stored
    message id, whoever sent it. `read`, `collect`, `refuse`, `answer` and `mark-delivered` no
-   longer tell: a third principal gets `unknown-message` (404) from them.
+   longer tell: a third principal gets `unknown-message` (404) from them. The story waits
+   for the same ESS release as limit 2.
 2. **A dedup key is shared by every sender** (`story:dedup-key-scope`): a third principal learns
    whether a key is in use, or takes it first. The story is held on a defect of ESS synthesis
-   ([beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805)). Until it lands the
-   service must not listen outside loopback and must not be used by a real session.
+   ([beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805)). Until limits 1 and 2
+   are closed the service must not listen outside loopback and must not be used by a real
+   session.
 3. **No record of requests**: a signed request is accepted again inside its 60 s window.
 
 Closed on `main` in wave 6 and in no release: the replay of a signed envelope under another
@@ -122,8 +124,8 @@ its evidence are in `.engineering/`.
 
 ## Build and first use
 
-The service is for a loopback address and test keys only while `story:dedup-key-scope`
-is open (limit 2 above): make keys on the spot, as below, and never give it a key that matters.
+The service is for a loopback address and test keys only while limits 1 and 2 above are
+open: make keys on the spot, as below, and never give it a key that matters.
 
 ### Build
 

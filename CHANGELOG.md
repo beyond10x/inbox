@@ -75,7 +75,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `duplicate` for a stored id, whoever sent the message
   (`story:post-does-not-tell-a-message-id-exists`).
 - A dedup key is shared by every sender (`story:dedup-key-scope`). The story is held on
-  beyond10x/ess#805. Until it lands the service must not listen outside loopback and must
+  beyond10x/ess#805.
+- Until the 2 stories above land, the service must not listen outside loopback and must
   not be used by a real session.
 - The input `from` of `PostMessage` carries the example value `principal-262144` in the
   OpenAPI documents and the JSON Schema of `PostMessage`. It is a value ESS synthesis

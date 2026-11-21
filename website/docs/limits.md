@@ -10,9 +10,9 @@ Each open one names the story that would close it and the state of that story. T
 in
 [`.engineering/planning/story/`](https://github.com/beyond10x/inbox/tree/main/.engineering/planning/story).
 
-**Until finding 2 below is closed, the service must not listen outside loopback and must not be
-used by a real session, and no NATS backend and no deployment come before it** (the host
-operator's decision, 2026-11-21). In this stage the service refuses, before binding, any address
+**Until findings 1 and 2 below are closed, the service must not listen outside loopback and
+must not be used by a real session, and no NATS backend, no deployment and no release come
+before them** (the host operator's decisions, 2026-11-21). In this stage the service refuses, before binding, any address
 that is not a loopback address.
 
 ## Security findings, open
@@ -33,8 +33,10 @@ an address no inbox has gets `duplicate` under the id of a message between two o
 `unknown-inbox` under an id nobody used. Neither post stores anything. A message id is a ULID,
 which carries its creation time.
 
-- Story: `story:post-does-not-tell-a-message-id-exists` (accepted on 2026-11-21, in no wave
-  yet).
+- Story: `story:post-does-not-tell-a-message-id-exists` (accepted on 2026-11-21). It waits
+  for the ESS release that finding 2 waits for and runs in one wave with
+  `story:dedup-key-scope`.
+- The gate named at the top of this page stays closed on this story.
 - Proof: the case
   `adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post` in
   [`crates/inbox-server/tests/adversary_w6_foreign.rs`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-server/tests/adversary_w6_foreign.rs).
@@ -154,7 +156,7 @@ both.
     anybody holds. It shows in the generated OpenAPI documents and the JSON Schema of
     `PostMessage` (3 files) and changes no decoder. With it, 19 generated scenarios lost a
     second run under a second caller.
-  - [beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805): finding 2 above waits for it.
+  - [beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805): findings 1 and 2 above wait for it.
 
 ## Signing, by design of version 1
 
