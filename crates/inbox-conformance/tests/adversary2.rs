@@ -23,7 +23,6 @@ fn scenario(steps: &str) -> Scenario {
     let text = format!(
         r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
             "coverage": {PROBE_COVERAGE},
-            "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
             "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
     );
     let mut read = suite::read(&text).expect("the probe suite reads");
@@ -104,7 +103,7 @@ const SUITE: &str = r#"{"provenance": {"suite_version": "ess-conformance/65", "s
       "counts": {"authored": 0, "generated": 2, "outside": 0, "refused": 0},
       "generated": ["a", "b"], "knowledge": "complete_inventory", "outside": [], "refused": [],
       "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}},
-    "events": [], "scenarios": {"a": {"purpose": "p", "source": [], "steps": []},
+    "scenarios": {"a": {"purpose": "p", "source": [], "steps": []},
                                 "b": {"purpose": "p", "source": [], "steps": []}}}"#;
 
 /// Runs `inbox-conformance gate` on [`SUITE`] and a report/2 with its digest and these passed ids;

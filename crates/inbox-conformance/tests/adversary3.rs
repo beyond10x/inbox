@@ -14,15 +14,12 @@ const PROBE_COVERAGE: &str = r#"{"authored": [], "authored_sources": {},
     "generated": ["probe"], "knowledge": "complete_inventory", "outside": [], "refused": [],
     "selection": {"filter": {"kind": "all"}, "origins": "generated_and_authored", "scope": {"kind": "system"}}}"#;
 
-const EVENTS: &str = r#"["inbox.messaging.InboxClosed", "inbox.messaging.InboxOpened",
-    "inbox.messaging.MessageDelivered", "inbox.messaging.MessagePosted"]"#;
-
 const WORKER: &str = "agent:box/worker";
 
 fn suite_text(steps: &str) -> String {
     format!(
         r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
-            "coverage": {PROBE_COVERAGE}, "events": {EVENTS},
+            "coverage": {PROBE_COVERAGE},
             "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
     )
 }

@@ -20,7 +20,6 @@ fn scenario(steps: &str) -> Scenario {
     let text = format!(
         r#"{{"provenance": {{"suite_version": "ess-conformance/65", "scenario_initial_state": "empty"}},
             "coverage": {PROBE_COVERAGE},
-            "events": ["inbox.messaging.InboxOpened", "inbox.messaging.MessagePosted"],
             "scenarios": {{"probe": {{"purpose": "a probe", "source": [], "steps": {steps}}}}}}}"#
     );
     let mut read = suite::read(&text).expect("the probe suite reads");

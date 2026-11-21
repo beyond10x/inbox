@@ -15,7 +15,9 @@
 //! those the file lists, each with the reason the run gave it, and its `conformance_status` is the
 //! one such a run carries. A report/2 carries no reasons: they are read from `--results`, the
 //! results document of the same suite the report was written from; without it, a listed
-//! scenario has no reason of the run and fails the gate.
+//! scenario has no reason of the run and fails the gate. The results are held to the report
+//! too: each scenario id with the status of the list the report puts it in, no id more or less,
+//! and the same `completed_at` (ESS copies it from the results into the report).
 //!
 //! Exit 2: an argument, a file or a document this command cannot read, among them a suite with a
 //! top-level or `provenance` key the runner does not know or a member stated twice.
@@ -157,14 +159,18 @@ fn check(arguments: &[String]) -> Result<ExitCode, String> {
     let text = read(&report_path)?;
     let mut report =
         gate::read_report(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
-    if let Some(results_path) = &results_path {
-        report.reasons = gate::read_reasons(&read(results_path)?, &results::suite_digest(&suite))
-            .map_err(|reason| format!("{results_path}: {reason}"))?;
-    }
     let binding = gate::read_binding(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
+    let mut disagreements = Vec::new();
+    if let Some(results_path) = &results_path {
+        let run = gate::read_results(&read(results_path)?, &results::suite_digest(&suite))
+            .map_err(|reason| format!("{results_path}: {reason}"))?;
+        disagreements = gate::agrees(&binding, &run);
+        report.reasons = run.reasons;
+    }
     let listed = gate::read_listed(&read(&listed_path)?)
         .map_err(|reason| format!("{listed_path}: {reason}"))?;
     let mut verdict = gate::verdict(&report, &listed);
+    verdict.problems.extend(disagreements);
     verdict.problems.extend(gate::bound(
         &report,
         &binding,

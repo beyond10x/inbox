@@ -47,20 +47,27 @@ pub struct Suite {
 ///   writes one other than as digits (`24.0`), or states another number than the length of its
 ///   list;
 /// - `knowledge` is neither `complete_inventory` nor `unknown`;
-/// - an entry of `refused` is no object, lacks one of the 11 members ESS 0.96.0 writes there
-///   (`code`, `covered_by`, `effect`, `message`, `needs`, `origin`, `retained`, `scenario`,
-///   `scope`, `source`, `subject`), or has a `covered_by` that is neither `null` nor the id of an
-///   authored scenario of the suite;
+/// - an entry of `refused` is no object, lacks one of the 10 members ESS 0.96.0 requires there
+///   (`code`, `effect`, `message`, `needs`, `origin`, `retained`, `scenario`, `scope`, `source`,
+///   `subject`), or has a `covered_by` that is neither absent, `null` nor the id of an authored
+///   scenario of the suite (an absent `covered_by` is read as `null`, as ESS reads it);
 /// - `authored_sources` is no object, or names no source (an entry whose `scenario` is the id)
 ///   for an authored scenario;
 /// - `selection` is no object or lacks `filter`, `origins` or `scope`.
 ///
-/// Each of these is held by a test of the crate. ESS 0.96.0 refuses each of the altered suites
-/// those tests stand for (measured with `ess verify conform run --target interpreted`); the
-/// runner does not claim to refuse every suite ESS refuses. What else ESS holds of the block
-/// (the members inside an entry of `refused`, `authored_sources` and `selection`, `outside`)
-/// is not read here, so no target runs anything of it; `ess verify conform report` reads the
-/// suite itself and refuses a block it does not accept before it writes a report.
+/// Each of these is held by a test of the crate. Measured with `ess verify conform run --target
+/// interpreted` on the suite `task coverage` writes, altered once per case, ESS 0.96.0 refuses: a
+/// missing `coverage`, a member it does not know, a scenario left out of both lists, a count that
+/// differs from its list, another `knowledge`, `generated` out of order, a count written `24.0`, a
+/// `covered_by` naming a generated scenario, an entry of `refused` without `subject` (and, measured
+/// by the adversary, without any one of the other 9), `authored_sources` emptied or without one
+/// authored scenario, and `selection` without `scope`. It reads an entry without `covered_by` or
+/// with `covered_by: null`. The other rules above (a missing `filter` or `origins`, an unknown
+/// member of `counts`, a block member of the wrong JSON type) were not measured against ESS, and
+/// the runner does not claim to refuse every suite ESS refuses. What else ESS holds of the block
+/// (the members inside an entry of `refused`, `authored_sources` and `selection`, `outside`) is
+/// not read here, so no target runs anything of it; `ess verify conform report` reads the suite
+/// itself and refuses a block it does not accept before it writes a report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Coverage {
     /// The authored scenarios, by id.
@@ -331,7 +338,9 @@ fn stated_once(value: &Value, location: &str) -> Result<(), String> {
 /// A document that is not JSON, not a suite of [`SUITE_VERSION`], not one that starts every
 /// scenario from an empty system, one carrying a top-level or `provenance` key this runner does
 /// not know, an object that states one member name twice, at any depth, or a `coverage` block
-/// that does not account for the suite ([`Coverage`]). A scenario this runner cannot interpret is
+/// that does not account for the suite ([`Coverage`]), an `events` catalog no scenario refers to
+/// (with `absent_events` or `unpublished_events`), or a scenario that refers to a catalog the
+/// suite leaves out or leaves empty. A scenario this runner cannot interpret is
 /// no error: it is read as unsupported.
 pub fn read(text: &str) -> Result<Suite, String> {
     let document = json::parse_written(text).map_err(|error| format!("the suite: {error}"))?;
@@ -367,22 +376,47 @@ pub fn read(text: &str) -> Result<Suite, String> {
             "the suite starts its scenarios from `{initial}`; this runner starts each from an empty store"
         ));
     }
-    let catalog = items(member(root, "events", "the suite")?, "events")?
-        .iter()
-        .map(|event| as_text(event, "an event of the catalog").map(str::to_owned))
-        .collect::<Result<Vec<_>, _>>()?;
     let bodies = object(member(root, "scenarios", "the suite")?, "scenarios")?;
-    if catalog.is_empty() {
-        for (id, body) in bodies {
-            for key in ["absent_events", "unpublished_events"] {
-                if matches!(body.member(key), Some(Value::Array(runs)) if !runs.is_empty()) {
-                    return Err(format!(
-                        "the `events` catalog is empty, and the scenario `{id}` claims `{key}` over it: the claim would check no event"
-                    ));
-                }
-            }
+    // The catalog is written where a scenario refers to it, and only there (ESS 0.96.0, measured:
+    // "an absent-event run requires the suite event catalog", "an unpublished-event list requires
+    // the suite event catalog", "the suite event catalog is written only where a scenario refers
+    // to it").
+    let refers = bodies.iter().find_map(|(id, body)| {
+        ["absent_events", "unpublished_events"]
+            .into_iter()
+            .find(|key| matches!(body.member(key), Some(Value::Array(runs)) if !runs.is_empty()))
+            .map(|key| (id, key))
+    });
+    let stated = root
+        .iter()
+        .find(|(name, _)| name == "events")
+        .map(|(_, events)| events);
+    let catalog = match (stated, refers) {
+        (None, None) => Vec::new(),
+        (None, Some((id, key))) => {
+            return Err(format!(
+                "the scenario `{id}` claims `{key}`, which needs the suite's `events` catalog, and the suite has none"
+            ));
         }
-    }
+        (Some(_), None) => {
+            return Err(
+                "the suite carries an `events` catalog and no scenario claims `absent_events` or `unpublished_events`: the catalog is written only where a scenario refers to it"
+                    .to_owned(),
+            );
+        }
+        (Some(events), Some((id, key))) => {
+            let catalog = items(events, "events")?
+                .iter()
+                .map(|event| as_text(event, "an event of the catalog").map(str::to_owned))
+                .collect::<Result<Vec<_>, _>>()?;
+            if catalog.is_empty() {
+                return Err(format!(
+                    "the `events` catalog is empty, and the scenario `{id}` claims `{key}` over it: the claim would check no event"
+                ));
+            }
+            catalog
+        }
+    };
     let scenarios: Vec<Scenario> = bodies
         .iter()
         .map(|(id, body)| Scenario {
@@ -413,18 +447,11 @@ const COVERAGE: [&str; 8] = [
     "selection",
 ];
 
-/// The members every entry of coverage `refused` carries, as ESS 0.96.0 writes them.
-const REFUSED: [&str; 11] = [
-    "code",
-    "covered_by",
-    "effect",
-    "message",
-    "needs",
-    "origin",
-    "retained",
-    "scenario",
-    "scope",
-    "source",
+/// The members every entry of coverage `refused` carries, as ESS 0.96.0 writes them and requires
+/// them (measured: each one missing is "MissingField: required field absent"). `covered_by` may be
+/// left out, which ESS reads as no covering scenario (measured).
+const REFUSED: [&str; 10] = [
+    "code", "effect", "message", "needs", "origin", "retained", "scenario", "scope", "source",
     "subject",
 ];
 
@@ -456,7 +483,11 @@ fn coverage(value: &Value, ids: &[&str]) -> Result<Coverage, String> {
         for name in REFUSED {
             member(entry, name, "an entry of coverage `refused`")?;
         }
-        match member(entry, "covered_by", "an entry of coverage `refused`")? {
+        let covered_by = entry
+            .iter()
+            .find(|(name, _)| name == "covered_by")
+            .map(|(_, value)| value);
+        match covered_by.unwrap_or(&Value::Null) {
             Value::Null => {}
             Value::Text(id) if authored.contains(id) => {}
             other => {
