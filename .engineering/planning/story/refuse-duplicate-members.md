@@ -2,14 +2,16 @@
 format: aep.planning-md/3
 id: story:refuse-duplicate-members
 kind: story
-status: draft
+status: archived
 title: The listener refuses a request whose JSON carries a member name twice
 summary: A post whose text carries a member twice decodes to the first value and verifies; the service refuses such a text before decoding.
 tags:
 - from-finding
 relations:
 - informed_by: review-result:adversary-signature-verifier-pass-1
-revision: 1
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-21T10:47:41Z", actor: "agent:inbox", revision: 3}
 ---
 ## Outcome
 
@@ -44,3 +46,15 @@ and not as a defect of ESS.
 - the listener crate of story:http-service
 - `crates/inbox-verify/` (the check, if its shape has to change)
 - `docs/design/signing.md`
+
+## Closed as covered
+
+story:http-service delivered all of this draft in wave 3 of stage 2, by the host operator's
+decision of 2026-11-21: the listener calls `inbox_verify::duplicate_member` on every request body
+after authentication and before decoding, and answers `400` with
+`{"refused": "duplicate member", "member": "<dotted path>"}` before any command runs. The case
+`a_body_with_a_member_twice_is_refused_before_any_command_runs` in
+`crates/inbox-server/tests/cases.rs` holds it: the answer is `400`, nothing was posted, and the
+same body without a valid request signature is answered `401`. `docs/design/service.md` (step 4)
+and `docs/design/signing.md` name the refusal. Nothing of the draft is left, so it is archived
+without having been accepted.

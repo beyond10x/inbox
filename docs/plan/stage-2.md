@@ -11,7 +11,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 |---|---|---|---|
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
-| 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | running |
+| 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | planned |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
 
@@ -208,10 +208,86 @@ records the gate run as `test_result` and each claim check as `verification`.
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-3` | `inbox-s2-w3` | `w3/` | open |
-| story:backend-test-kit | `impl/backend-test-kit` | `inbox-s2-w3-kit` | `w3/backend-test-kit/` | dispatched |
-| story:conformance-gate | `impl/conformance-gate` | `inbox-s2-w3-conf` | `w3/conformance-gate/` | dispatched |
-| story:http-service | `impl/http-service` | `inbox-s2-w3-http` | `w3/http-service/` | dispatched |
+| integration | `wave/s2-3` | `inbox-s2-w3` | `w3/` | closed |
+| story:backend-test-kit | `impl/backend-test-kit` | `inbox-s2-w3-kit` | `w3/backend-test-kit/` | merged, `implemented` |
+| story:conformance-gate | `impl/conformance-gate` | `inbox-s2-w3-conf` | `w3/conformance-gate/` | merged, `implemented` |
+| story:http-service | `impl/http-service` | `inbox-s2-w3-http` | `w3/http-service/` | merged, `implemented` |
+
+Result:
+
+- Gate on `wave/s2-3` after the 3 merges (`3509bc0`), `CARGO_INCREMENTAL=0 slot task check`:
+  exit 0, "92 scenarios: 92 passed, 0 failed, 0 error, 0 unsupported" on the interpreted target
+  and against the core (`task conform`, `conformance_status: inconclusive`), 267 cargo test
+  cases passed and 4 ignored: 29 of `inbox-backend-testkit`, 54 of `inbox-conformance` (1
+  ignored, naming beyond10x/ess#799), 48 of `inbox-core`, 38 of `inbox-server` (3 ignored, each
+  naming its backlog story), 63 of `inbox-verify`, 35 of `inbox-xtask`. The run took 107 s in
+  the pool; `target/` of the integration tree was 502 MB afterwards. A second run with `CI=true`
+  and `GITHUB_ACTIONS=true` set gave the same result.
+- Claim checks by the coordinator, each on the base, on the unit and on mutated copies: recorded
+  as `verification` evidence on the 3 stories.
+- story:backend-test-kit: 3 unit commits (`8ed00d9`, `efe92d7`, `58ee30c`). Adversary pass 1:
+  10 findings. Pass 2: 5 findings on the first correction. All 15 introduced by the unit, all
+  fixed.
+- story:http-service: 3 unit commits (`df9d07b`, `973b5a7`, `68aff6e`). Adversary pass 1:
+  8 findings, 5 introduced and fixed (a slow unauthenticated connection held a connection slot
+  and `stop` without end; an unbounded `max_wait` dropped the wait; 2 missing cases), 3 that were
+  in the model before the unit (backlog drafts). Pass 2: 2 notes on missing cases, closed by the
+  adversary's own cases.
+- story:conformance-gate: 3 unit commits (`df1ecc5`, `3ff527d`, `2fecd3d`). Adversary pass 1:
+  8 findings, 5 introduced and fixed, 1 declined (below), 2 that were in the core and the
+  suite before the unit (backlog drafts). Pass 2: 6 findings on the first correction, 4
+  introduced and fixed (`satisfies` passed on a view with no rows; the gate bound a report to
+  the bytes of the suite only; a member stated twice in a step was ignored; lines of the
+  first correction no case held), 2 that were in the suite before the unit (backlog drafts).
+  The adversary's mutant script on the corrected unit: 54 mutants, 48 killed, 6 surviving,
+  the 6 its review names as equivalent. No third pass ran.
+- Differs from the plan:
+  - story:http-service: the listener runs the generated `dispatch` inside the backend's
+    `Exclusive` section over `inbox_core::system`. The story named the entry
+    `inbox_core::handle`, which answers outcomes and no HTTP status. The story's Context states
+    it.
+  - story:http-service: `Config` has one limit the story did not name, `request_timeout`
+    (default 10 s, `408`), and `stop` answers connections still sending with `503`. Both answer
+    findings of adversary pass 1. story:cli-client gains one flag.
+  - story:conformance-gate: a failing `task conform` exits 201 (go-task); the gate command
+    exits 1. The story's Acceptance said "exits 1" and states both now.
+  - story:conformance-gate: finding 3 of adversary pass 1 is declined. In a view row the runner
+    reads an absent top-level member and `null` as one value; ESS's runner compares exactly.
+    The coordinator measured the reason before declining: the generated Rust server leaves an
+    unset `Optional` member out under every `presence:` value, the suite claims `null` under
+    every value, and with the exact comparison 7 of the 92 scenarios fail on the unchanged core.
+    Until beyond10x/ess#799 is closed the gate is weaker than ESS's runner at this point.
+  - story:conformance-gate: 2 cases of adversary pass 1 were deleted. Their fixture declared 1
+    of the 4 types its root reaches, which ESS answers with an error and not a failure; a case
+    of the unit holds the same rows with the full declarations.
+  - story:conformance-gate: finding 2 of adversary pass 2 asked the gate to hold a report to the
+    implementation it names. The gate takes `--implementation` as an option and the Taskfile
+    passes it; a report without that member stays a valid report where the option is not given.
+  - story:conformance-gate: one case holds a reading ESS's runner does not share. A plain
+    snapshot followed by `expect_complete_subject_unchanged` is an error here; ESS compares the
+    rows. The synthesizer always pairs the two steps, so no scenario of the suite reaches it.
+  - story:conformance-gate: the 2 mutants of the core (no duplicate-key check; `Expire` not
+    writing `decided_option`) ran at the first correction and failed `task conform`. They were
+    not run again after the second: the machine had under 105 GB free for a second tree copy.
+  - story:backend-test-kit: 1 case of adversary pass 2 was deleted with its helper and imports.
+    `check_exclusive` holds a command for 500 ms and the crate documentation states that a
+    section which admits a second command only after a longer hold is not seen; it cannot check
+    that a factory answers separate stores.
+- Decisions of the host operator in this wave (2026-11-21): the duplicate member check is part
+  of story:http-service; the guard "a post's `from` is the caller" goes into `ess/` and no copy
+  of it is written in the listener, with the gate stated under Backlog.
+- Defects filed on beyond10x/ess: #798 (the refusal order text of `PLAN.md` against the
+  interpreted target) and #799 (a cleared `Optional` view member: claim, interpreted target,
+  row schema and generated server disagree).
+- For the next waves. story:cli-client: one flag more for `request_timeout`; a client may be
+  answered `408`, or `503` with `{"refused": "stopping"}`, and can send again.
+  story:declared-coverage: `task coverage` writes `ess-conformance/53`, which the runner
+  refuses (it reads `/52` only), and `gate::passing_status` requires `inconclusive` today.
+  story:service-acceptance: the wire target implements the trait `Target`; `gate` needs
+  `--suite`; every request needs the 3 signature headers; views are filtered by caller.
+- Sub-agents, all on Opus, in tool uses as each run reported them: the kit's implementor 121 in
+  3 runs, the listener's 179 in 2 runs, the conformance runner's 375 in 4 runs; the adversaries
+  47 and 55 (kit, pass 1 and 2), 51 and 60 (listener), 91 and 93 (conformance).
 
 ## Backlog
 
@@ -221,7 +297,37 @@ is the operator's act.
 - story:post-refusal-order-scenarios (wave 2): authored scenarios hold the order in which
   `PostMessage` refuses when two refusals apply. The suite of 92 scenarios passes an
   implementation that reads a row before it has checked the signature.
-- story:refuse-duplicate-members (wave 2): the listener refuses a request whose JSON carries a
-  member name twice. The generated reader keeps the first of two members, so one signature
-  covers two texts. `crates/inbox-verify` holds the check (`duplicate_member`); the call in the
-  listener is not part of story:http-service as accepted.
+- story:refuse-duplicate-members (wave 2): closed as covered and archived without having
+  been accepted. story:http-service calls `inbox_verify::duplicate_member` on every request
+  body and answers `400` before any command runs (the host operator's decision,
+  2026-11-21). Nothing of the draft is left.
+
+The host operator's gate (2026-11-21): the 3 drafts of story:http-service's first adversary pass
+are the first work after wave 5 and land before any of: a listener bound outside loopback, a
+NATS backend wave, a deployment, use by a real session. Each carries `blocks` relations to
+epic:two-hosts-and-wake and epic:jetstream-backend. Until story:post-from-is-the-caller lands, a
+recipient can post a sender's signed envelope again under its own request signature. Its guard
+goes into `ess/` (`from != caller.principal`); no copy of it is written in the listener.
+
+- story:post-from-is-the-caller (wave 3): a post or an answer is refused when its `from` is not
+  the caller. Its case `adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal`
+  is in `crates/inbox-server/tests/adversary.rs` with an ignore attribute naming the story.
+- story:foreign-message-id-answers-as-unknown (wave 3): a third principal gets one answer for a
+  message between others and for no message. Today `not-recipient` (403) against
+  `unknown-message` (404) tells any authenticated client whether a message id exists.
+- story:dedup-key-scope (wave 3): a dedup key of one sender does not refuse another sender's
+  post. Today `duplicate-key` compares the key alone over every message.
+
+Drafts from the conformance unit, each a gap of the suite and no defect of the core as built:
+
+- story:read-decision-expires-on-silence-scenario (wave 3): a core that deletes a read decision
+  at expiry passes every gate; the one scenario for decided-on-silence never reads the message.
+- story:external-refusal-order-cases (wave 3): a core that asks the 3 external refusals of
+  `PostMessage` in reverse order passes `task conform` and its own tests.
+- story:silence-leaves-the-other-fields-scenario (wave 3): a core that clears `decision` or
+  `default_on_silence`, empties `body` or rewrites `created` or `thread` after deciding on
+  silence passes the 92 scenarios.
+- story:expire-publishes-once (wave 3): a core that publishes the event of `Expire` twice passes
+  `task conform` and the core's own tests.
+
+Defects filed on beyond10x/ess from this wave: #798 and #799 (see the result of wave 3).

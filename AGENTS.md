@@ -5,8 +5,8 @@ different sessions and on different hosts. One service, `inbox serve`, with inte
 backends, specified in ESS before any code. The design is `docs/design/inbox.md`; read it before
 changing anything.
 
-Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.md`. Stages 2 to
-6 are the epics in `.engineering/planning/epic/`.
+Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.md`, of which
+waves 1 to 3 are delivered. Stages 2 to 6 are the epics in `.engineering/planning/epic/`.
 
 ## Layout
 
@@ -23,7 +23,11 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
 | `crates/inbox-xtask/` | Repository tasks: `generate` and `drift` synthesize `ess/` into `target/inbox-xtask/` and compare it with `generated/rust/inbox` | authored |
 | `crates/inbox-core/` | The core: `Core` (the obligations `PostMessage` and `Expire` over a backend and a context), `ServiceContext` (the generated context port and `PostExternals` over a caller, a `SignatureVerifier` and the backend), `MemoryBackend` (both storage ports in memory; clones share one store; `Send + Sync`), `Exclusive` (the third trait a backend implements: one command at a time per store) and the entry `handle` / `handle_with_events`, which an embedding calls per request with a backend clone and that request's context. `system()` alone serializes nothing. A context or verifier must not call the entry over the same store | authored |
 | `crates/inbox-verify/` | The version 1 signature verifier: Ed25519 signing and strict verification of envelopes, key file entries and requests over RFC 8785 canonical JSON; `KeyRing` holds the entries the pinned operator key signed and checks them at an instant the caller passes; `duplicate_member` finds a member name a parsed JSON text carries twice. Depends on the generated crate and on no other crate of the workspace | authored |
+| `crates/inbox-backend-testkit/` | The backend test kit: `check_inbox_storage`, `check_message_storage` and `check_exclusive`, one call per part of the backend contract (the 2 generated storage ports and `Exclusive` of `inbox-core`), each taking a factory of fresh backends. A broken rule panics with `backend contract broken: <part>: <rule>`. Its tests run it against `MemoryBackend` and against 12 planted backends that each break one rule. A later backend crate calls the 3 functions from its own tests | authored |
+| `crates/inbox-conformance/` | The conformance runner: reads the synthesized `ess-conformance/52` suite and runs it in process against `inbox-core` over a fresh `MemoryBackend` per scenario, through the trait `Target`, whose one target is `CoreTarget`. `run` writes `ess-conformance-results/1`; `gate --suite --report --unsupported [--implementation]` gates on the report/2 that `ess verify conform report` makes from it (the row of `task conform` says what it checks). A suite with a top-level or `provenance` key the runner does not know, or with a member name stated twice in one object, is refused with exit 2. A construct the runner cannot interpret makes the scenario unsupported, and `unsupported.tsv` lists those with reasons (empty today). In a view row an absent top-level member and `null` are one value (`value::field_matches`), where ESS's runner compares exactly: the generated server leaves an unset `Optional` out (beyond10x/ess#799). When that issue is closed, remove the rule and the ignore attribute that names it in `tests/adversary.rs` | authored |
+| `crates/inbox-server/` | The HTTP service library: a loopback listener in front of the generated `server` feature, one thread per connection. Each request is read with the limits of `Config`, its request signature checked (`Inbox-Key-Id`, `Inbox-Timestamp`, `Inbox-Signature`, 60 s window at the `Clock` reading), a body with a member name twice refused, then the generated `dispatch` runs inside the backend's `Exclusive` section over `inbox_core::system`. Adds the read rule, the wait on `Pending`, the expiry task, `request_timeout` (`408`) and a stop that answers `503`. 3 cases in `tests/adversary.rs` are ignored, each naming the backlog story that turns it green | authored |
 | `docs/design/signing.md` | What each signature covers: context strings, canonical bytes, wire encodings, lapse and the 60 s request window, what a verifier refuses, the rules of the key file (an id is never reused), what version 1 leaves out | authored |
+| `docs/design/service.md` | The HTTP service of stage 2: the steps of one request in order with each refusal's status and body, the 3 request signature headers, the caller, the read rule, the wait, the expiry task, the limits, binding and stopping, what stage 2 leaves out | authored |
 | `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.96.0 cannot express | authored |
 | `docs/plan/` | One wave plan page per stage: the waves in order, and per unit its branch, worktree id and stage | the wave's coordinator |
 | `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
@@ -79,3 +83,9 @@ Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.
   wave, goes to the host operator first and waits for the answer: silence is not acceptance. Any
   other revision is reported in the wave report.
 - A reason given for declining a review finding is measured before it is written down.
+- Three backlog drafts are the first work after wave 5 of stage 2: story:post-from-is-the-caller,
+  story:foreign-message-id-answers-as-unknown and story:dedup-key-scope. They land before any of:
+  a listener bound outside loopback, a NATS backend wave, a deployment, use by a real session
+  (the host operator's decision, 2026-11-21; `docs/plan/stage-2.md`, Backlog). Until the first
+  lands, a recipient can post a sender's signed envelope again under its own request signature.
+  Its guard goes into `ess/`; no copy of it is written in the listener.
