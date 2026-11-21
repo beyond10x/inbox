@@ -5,8 +5,8 @@ different sessions and on different hosts. One service, `inbox serve`, with inte
 backends, specified in ESS before any code. The design is `docs/design/inbox.md`; read it before
 changing anything.
 
-Status: stage 1 of 6 is done. The repository holds the specification, its conformance suite and
-the plan. It holds no service code. Stages 2 to 6 are the epics in `.engineering/planning/epic/`.
+Status: stage 1 of 6 is done; stage 2 runs as the 5 waves of `docs/plan/stage-2.md`. Stages 2 to
+6 are the epics in `.engineering/planning/epic/`.
 
 ## Layout
 
@@ -18,6 +18,7 @@ the plan. It holds no service code. Stages 2 to 6 are the epics in `.engineering
 | `tools/scenarios.py` | Source of the authored scenarios and of their `covers:` claims | authored |
 | `generated/{openapi,asyncapi,schema}/` | ESS projections of `ess/`; `generated/openapi` is the wire API of the service | `task projections` |
 | `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.96.0 cannot express | authored |
+| `docs/plan/` | One wave plan page per stage: the waves in order, and per unit its branch, worktree id and stage | the wave's coordinator |
 | `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
 
 ## Commands

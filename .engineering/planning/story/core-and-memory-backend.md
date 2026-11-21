@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:core-and-memory-backend
 kind: story
-status: draft
+status: active
 title: 'The core: the 2 obligations, the context port and the in-memory backend'
 summary: 'What the synthesized crate leaves open, supplied once: `PostMessage`, `Expire`, the context port and a non-persistent backend behind the generated storage ports.'
 relations:
@@ -11,7 +11,10 @@ relations:
 scope:
 - confidence: inferred
   path: crates/inbox-core
-revision: 8
+revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

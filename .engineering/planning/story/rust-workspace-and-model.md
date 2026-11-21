@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:rust-workspace-and-model
 kind: story
-status: draft
+status: active
 title: Rust workspace and the model crate synthesized from `ess/`
 summary: A Cargo workspace whose model, codecs and obligations crate is generated from the specification and held to it by the gate.
 relations:
@@ -24,7 +24,10 @@ scope:
   path: generated/rust
 - confidence: inferred
   path: rust-toolchain.toml
-revision: 5
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

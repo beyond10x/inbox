@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:backend-test-kit
 kind: story
-status: draft
+status: active
 title: A backend test kit that every implementation of the storage ports must pass
 summary: Shared checks of the storage contract, run against the in-memory backend now and the JetStream backend in stage 5.
 relations:
@@ -11,7 +11,10 @@ relations:
 scope:
 - confidence: inferred
   path: crates/inbox-backend-testkit
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

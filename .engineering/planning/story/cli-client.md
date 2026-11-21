@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:cli-client
 kind: story
-status: draft
+status: active
 title: 'The `inbox` CLI: the client of the service'
 summary: One binary that serves, signs, posts, reads, answers, refuses, collects and waits, and reposts what a restart dropped.
 relations:
@@ -15,7 +15,10 @@ scope:
   path: README.md
 - confidence: inferred
   path: crates/inbox-cli
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":3}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":3}}}
 ---
 ## Outcome
 

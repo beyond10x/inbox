@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:service-acceptance
 kind: story
-status: draft
+status: active
 title: The suite and the stage's acceptance checks against a running service
 summary: The conformance suite over HTTP, two sessions exchanging a signed request and reply, and the removal and restart checks.
 relations:
@@ -19,7 +19,10 @@ scope:
   path: crates/inbox-conformance
 - confidence: inferred
   path: tests/acceptance
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

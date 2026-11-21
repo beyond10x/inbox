@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:conformance-gate
 kind: story
-status: draft
+status: active
 title: The conformance suite run against the core in process, as a gate
 summary: '`task conform` runs the synthesized suite against `inbox-core` and fails on a failed, errored or unlisted unsupported scenario.'
 relations:
@@ -15,7 +15,10 @@ scope:
   path: Taskfile.yml
 - confidence: inferred
   path: crates/inbox-conformance
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

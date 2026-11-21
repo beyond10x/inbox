@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:signature-verifier
 kind: story
-status: draft
+status: active
 title: 'The version 1 signature verifier: Ed25519 keys and delegations from an operator-signed key file'
 summary: A standalone library that signs and verifies envelopes, delegations and requests against a key file whose entries the operator key signed.
 relations:
@@ -13,7 +13,10 @@ scope:
   path: crates/inbox-verify
 - confidence: inferred
   path: docs/design/signing.md
-revision: 8
+revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

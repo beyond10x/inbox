@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:declared-coverage
 kind: story
-status: draft
+status: active
 title: 'Declared coverage of the suite: no generated scenario left uncovered'
 summary: '`task coverage` exits 0: every scenario synthesis refuses is covered by an authored one.'
 relations:
@@ -20,7 +20,10 @@ scope:
   path: ess/scenarios
 - confidence: inferred
   path: tools/scenarios.py
-revision: 8
+revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

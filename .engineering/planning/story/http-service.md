@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:http-service
 kind: story
-status: draft
+status: active
 title: '`inbox serve`: the HTTP service over the core'
 summary: The routes of `generated/openapi`, an authenticated caller, the long-poll wait and the expiry task.
 relations:
@@ -14,7 +14,10 @@ scope:
   path: crates/inbox-server
 - confidence: inferred
   path: docs/design/service.md
-revision: 6
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 
