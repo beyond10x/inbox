@@ -129,7 +129,8 @@ enum Command {
         /// The thread id.
         thread: String,
     },
-    /// Post every envelope the outbox file keeps for the caller again, unchanged.
+    /// Post every envelope the outbox file keeps for the caller again, unchanged: for after a
+    /// restart of the service. A note its recipient already read is delivered again.
     Repost {
         #[command(flatten)]
         client: ClientArgs,
@@ -470,6 +471,8 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
     Ok(Some(done))
 }
 
+/// Writes one line to standard output. A failed write (a reader that is gone) is not a panic: the
+/// exit status still says what happened.
 fn print(line: &str) {
     let mut stdout = std::io::stdout().lock();
     let _ = writeln!(stdout, "{line}");
@@ -503,8 +506,10 @@ fn main() {
         Err(failure) => {
             if json {
                 print(&failure.document());
+            } else if let Some(text) = failure.text() {
+                print(text);
             }
-            eprintln!("inbox: {}", failure.message());
+            output::warn(&format!("inbox: {}", failure.message()));
             std::process::exit(failure.status());
         }
     }

@@ -149,12 +149,14 @@ inbox read --secret-key-file bob.key "$MESSAGE_ID"
 ```
 
 Every command takes `--json` and then prints one JSON document. It exits 1 when the service
-refuses (naming the error), 2 on wrong usage, 3 when the service cannot be reached, and 4 when
-a local file cannot be read or written. `inbox --help` lists the other commands: `close`,
-`wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `replies`, `repost` and
-`keyfile add-delegation`. `inbox post` keeps each envelope in an outbox file
+refuses (naming the error), 2 on wrong usage (an `INBOX_URL` that is not a loopback address
+included), 3 when the service cannot be reached or gives an answer that is neither a success
+nor a refusal, and 4 when a local file cannot be read or written. `inbox --help` lists the other
+commands: `close`, `wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `replies`,
+`repost` and `keyfile add-delegation`. `inbox post` keeps each envelope in an outbox file
 (`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused or expired;
-`inbox repost` posts the kept ones again after the service was restarted.
+`inbox repost` posts the kept ones again after the service was restarted. `repost` is for after
+a restart of the service: a note its recipient already read is delivered again.
 
 ## Check
 

@@ -410,3 +410,45 @@ pub fn ids(value: &Value) -> Vec<String> {
         .map(|row| text(row, "message_id"))
         .collect()
 }
+
+/// A stand-in for the service on 127.0.0.1:0 that reads one request in full and answers it with
+/// the status `status` and the body `body`; answers its URL. The thread ends after one request.
+pub fn stand_in(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<()>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
+    let url = format!("http://{}", listener.local_addr().expect("an address"));
+    let handle = std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
+        let mut received = Vec::new();
+        let mut buffer = [0_u8; 4096];
+        let mut expected = None;
+        loop {
+            if expected.is_some_and(|total| received.len() >= total) {
+                break;
+            }
+            match stream.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => received.extend_from_slice(&buffer[..read]),
+            }
+            let head_end = received.windows(4).position(|window| window == b"\r\n\r\n");
+            if let (None, Some(end)) = (expected, head_end) {
+                let head = String::from_utf8_lossy(&received[..end]).to_lowercase();
+                let length: usize = head
+                    .lines()
+                    .find_map(|line| line.strip_prefix("content-length:"))
+                    .and_then(|value| value.trim().parse().ok())
+                    .unwrap_or(0);
+                expected = Some(end + 4 + length);
+            }
+        }
+        let answer = format!(
+            "HTTP/1.1 {status} Stand-in\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream.write_all(answer.as_bytes());
+    });
+    (url, handle)
+}

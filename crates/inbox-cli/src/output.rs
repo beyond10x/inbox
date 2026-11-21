@@ -1,6 +1,7 @@
 //! What a command prints: one JSON document with `--json`, text for a person without.
 
 use std::fmt::Write as _;
+use std::io::Write as _;
 
 use inbox::server::json::{self, Value};
 
@@ -11,6 +12,13 @@ pub struct Done {
     pub document: String,
     /// The text, printed without it.
     pub text: String,
+}
+
+/// Writes one line to standard error. A failed write (a reader that is gone) is ignored, never a
+/// panic, as `eprintln!` would.
+pub fn warn(line: &str) {
+    let mut stderr = std::io::stderr().lock();
+    let _ = writeln!(stderr, "{line}");
 }
 
 /// Appends `value` as JSON. Numbers keep the spelling they arrived in.

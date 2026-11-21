@@ -14,6 +14,7 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::failure::Failure;
+use crate::output::warn;
 
 /// The backends `INBOX_BACKEND` may name in this stage.
 const BACKENDS: &[&str] = &["memory"];
@@ -74,10 +75,10 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
     let keys = KeyRing::parse(&text, &operator)
         .map_err(|error| Failure::Local(format!("the key file {shown}: {error}")))?;
     for ignored in keys.ignored() {
-        eprintln!(
+        warn(&format!(
             "inbox serve: {shown}: the {:?} entry `{}` is ignored: {:?}",
             ignored.kind, ignored.id, ignored.reason
-        );
+        ));
     }
     let mut config = Config::new(settings.listen, keys);
     config.max_connections = settings.max_connections;
@@ -119,8 +120,10 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
         .name("inbox-signals".to_owned())
         .spawn(move || {
             if let Some(signal) = signals.forever().next() {
-                eprintln!("inbox serve: signal {signal}: stopping");
+                // Stop first: what is written after it cannot keep the service from stopping,
+                // and a write to a standard error whose reader is gone is ignored.
                 stopper.stop();
+                warn(&format!("inbox serve: signal {signal}: stopping"));
             }
         })
         .map_err(|error| Failure::Local(format!("the signal thread: {error}")))?;

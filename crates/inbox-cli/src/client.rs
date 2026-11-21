@@ -12,6 +12,7 @@ use inbox_server::{Clock, SystemClock, format_instant, request_headers};
 
 use crate::failure::Failure;
 use crate::keys::Caller;
+use crate::output;
 
 /// How long a connection may take to open.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -33,20 +34,22 @@ pub fn route(method: &str, wire: &str) -> &'static str {
         .unwrap_or_else(|| panic!("the generated route table holds no `{method}` route `{wire}`"))
 }
 
-/// The service a client talks to: `INBOX_URL`, `http://<host>:<port>`.
+/// The service a client talks to: `INBOX_URL`, `http://<host>:<port>`, on a loopback address.
 #[derive(Debug, Clone)]
 pub struct Service {
-    address: SocketAddr,
+    addresses: Vec<SocketAddr>,
     host: String,
 }
 
 impl Service {
-    /// Reads `http://<host>:<port>` with an optional trailing `/`.
+    /// Reads `http://<host>:<port>` with an optional trailing `/`. The service binds a loopback
+    /// address only in this stage, and requests and envelopes travel without TLS, so the client
+    /// talks to a loopback address only: every address the host resolves to must be one.
     ///
     /// # Errors
     ///
-    /// [`Failure::Usage`] when no URL is given, it is not of that form, or its host does not
-    /// resolve.
+    /// [`Failure::Usage`] when no URL is given, it is not of that form, its host does not
+    /// resolve, or it resolves to an address that is not loopback.
     pub fn from_url(url: Option<&str>) -> Result<Self, Failure> {
         let url = url.ok_or_else(|| {
             Failure::Usage("the service: pass --url <url> or set INBOX_URL".to_owned())
@@ -61,15 +64,36 @@ impl Service {
         if host.is_empty() || host.contains(['/', '?', '#', '@']) {
             return Err(refused());
         }
-        let address = host
-            .to_socket_addrs()
-            .map_err(|_| refused())?
-            .next()
-            .ok_or_else(refused)?;
+        let addresses: Vec<SocketAddr> = host.to_socket_addrs().map_err(|_| refused())?.collect();
+        if addresses.is_empty() {
+            return Err(refused());
+        }
+        if let Some(outside) = addresses.iter().find(|address| !address.ip().is_loopback()) {
+            return Err(Failure::Usage(format!(
+                "INBOX_URL `{url}`: {outside} is not a loopback address; the service serves on a \
+                 loopback address only in this stage, and the client sends nowhere else"
+            )));
+        }
         Ok(Self {
-            address,
+            addresses,
             host: host.to_owned(),
         })
+    }
+
+    /// A connection to the first of the resolved addresses that accepts one.
+    fn connect(&self) -> Result<TcpStream, Failure> {
+        let mut failures = Vec::new();
+        for address in &self.addresses {
+            match TcpStream::connect_timeout(address, CONNECT_TIMEOUT) {
+                Ok(stream) => return Ok(stream),
+                Err(error) => failures.push(format!("{address}: {error}")),
+            }
+        }
+        Err(Failure::Transport(format!(
+            "{}: {}",
+            self.host,
+            failures.join("; ")
+        )))
     }
 
     /// Sends one request signed by `caller` at the clock reading and reads the whole answer.
@@ -94,11 +118,12 @@ impl Service {
             &caller.key,
             &timestamp,
         );
-        let transport = |error: std::io::Error| {
-            Failure::Transport(format!("{} ({}): {error}", self.host, self.address))
-        };
-        let mut stream =
-            TcpStream::connect_timeout(&self.address, CONNECT_TIMEOUT).map_err(transport)?;
+        let mut stream = self.connect()?;
+        let peer = stream
+            .peer_addr()
+            .map_or_else(|_| self.host.clone(), |peer| peer.to_string());
+        let transport =
+            |error: std::io::Error| Failure::Transport(format!("{} ({peer}): {error}", self.host));
         stream
             .set_read_timeout(Some(wait.saturating_add(ANSWER_TIMEOUT)))
             .map_err(transport)?;
@@ -121,7 +146,7 @@ impl Service {
         let mut answer = Vec::new();
         stream.read_to_end(&mut answer).map_err(transport)?;
         Reply::read(&answer)
-            .map_err(|why| Failure::Transport(format!("{} ({}): {why}", self.host, self.address)))
+            .map_err(|why| Failure::Transport(format!("{} ({peer}): {why}", self.host)))
     }
 }
 
@@ -149,13 +174,15 @@ impl Reply {
         Ok(Self { status, body })
     }
 
-    /// The answer, or the refusal it is: a body that carries `outcome` and `error` is a declared
-    /// refusal of the model, named by its `error`; any other status from 400 on is the
-    /// service's own, named by its `refused` text.
+    /// The answer, or the refusal it is. A `2xx` answer is the only success. A body that carries
+    /// `outcome` and `error` is a declared refusal of the model, named by its `error`; a status
+    /// from 400 on whose body carries `refused` is the service's own refusal, named by that text.
     ///
     /// # Errors
     ///
-    /// [`Failure::Refused`] for either refusal.
+    /// [`Failure::Refused`] for either refusal; [`Failure::Transport`] naming the status for any
+    /// other answer (a `3xx`, or an error without a `refused` text), which no service of the
+    /// inbox gives.
     pub fn accepted(self) -> Result<Value, Failure> {
         if let Some(name) = declared_error(&self.body) {
             return Err(Failure::Refused {
@@ -164,18 +191,22 @@ impl Reply {
                 answer: self.body,
             });
         }
-        if self.status >= 400 {
-            let name = match self.body.member("refused") {
-                Some(Value::Text(text)) => text.clone(),
-                _ => format!("status {}", self.status),
-            };
+        if let (400.., Some(Value::Text(name))) = (self.status, self.body.member("refused")) {
             return Err(Failure::Refused {
-                name,
+                name: name.clone(),
                 status: self.status,
                 answer: self.body,
             });
         }
-        Ok(self.body)
+        if (200..300).contains(&self.status) {
+            return Ok(self.body);
+        }
+        Err(Failure::Transport(format!(
+            "the answer has the status {}, which is neither a success nor a refusal of the \
+             service: {}",
+            self.status,
+            output::document(&self.body)
+        )))
     }
 }
 
@@ -254,5 +285,23 @@ mod tests {
             assert!(Service::from_url(Some(refused)).is_err(), "{refused}");
         }
         assert!(Service::from_url(None).is_err());
+    }
+
+    #[test]
+    fn the_url_names_a_loopback_address_only() {
+        assert!(Service::from_url(Some("http://[::1]:7700")).is_ok());
+        assert!(Service::from_url(Some("http://localhost:7700")).is_ok());
+        for outside in [
+            "http://192.0.2.1:7700",
+            "http://0.0.0.0:7700",
+            "http://[2001:db8::1]:7700",
+        ] {
+            match Service::from_url(Some(outside)) {
+                Err(crate::failure::Failure::Usage(detail)) => {
+                    assert!(detail.contains("not a loopback address"), "{detail}");
+                }
+                other => panic!("{outside}: {other:?}"),
+            }
+        }
     }
 }

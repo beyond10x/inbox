@@ -31,6 +31,25 @@ pub struct Kept {
     pub text: String,
 }
 
+/// A line of the outbox file that does not read as an envelope. It is never dropped: `outbox`
+/// lists it and `repost` names it, for the owner of the file to remove by hand.
+#[derive(Debug, Clone)]
+pub struct Unreadable {
+    /// Its number in the file, from 1.
+    pub line: usize,
+    /// Why the generated decoder refused it.
+    pub reason: String,
+}
+
+/// What the outbox file holds for one sender.
+#[derive(Debug, Default)]
+pub struct Contents {
+    /// The sender's envelopes.
+    pub kept: Vec<Kept>,
+    /// Every line that does not read as an envelope, whoever wrote it.
+    pub unreadable: Vec<Unreadable>,
+}
+
 /// The outbox file.
 #[derive(Debug)]
 pub struct Outbox {
@@ -66,6 +85,11 @@ impl Outbox {
         Ok(Self { path })
     }
 
+    /// The path of the file.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     /// Keeps `text`, the envelope as it is about to be posted, and drops what expired at `now`.
     ///
     /// # Errors
@@ -85,15 +109,20 @@ impl Outbox {
     }
 
     /// The envelopes kept for `from` that have not expired at `now`, in the order they were
-    /// posted; drops what expired.
+    /// posted, and every line of the file that does not read as an envelope; drops what expired.
     ///
     /// # Errors
     ///
     /// [`Failure::Local`] when the file cannot be read or written.
-    pub fn kept(&self, from: &str, now: Instant) -> Result<Vec<Kept>, Failure> {
-        let mut kept = Vec::new();
-        self.change(now, |lines| kept = of_sender(lines, from))?;
-        Ok(kept)
+    pub fn kept(&self, from: &str, now: Instant) -> Result<Contents, Failure> {
+        let mut contents = Contents::default();
+        self.change(now, |lines| {
+            contents = Contents {
+                kept: of_sender(lines, from),
+                unreadable: unreadable(lines),
+            };
+        })?;
+        Ok(contents)
     }
 
     /// Runs `change` over the lines of the file under the lock, after dropping every envelope
@@ -157,10 +186,29 @@ fn beside(path: &Path, suffix: &str) -> PathBuf {
     beside
 }
 
+/// The envelope a line holds, read by the generated decoder, or why it does not read.
+fn read(line: &str) -> Result<PostMessage, String> {
+    let value = json::parse(line).map_err(|error| error.to_string())?;
+    wire::decode_command_inbox_messaging_post_message(&value, "").map_err(|error| error.to_string())
+}
+
 /// The envelope a line holds, read by the generated decoder.
 fn decode(line: &str) -> Option<PostMessage> {
-    let value = json::parse(line).ok()?;
-    wire::decode_command_inbox_messaging_post_message(&value, "").ok()
+    read(line).ok()
+}
+
+/// Every line that does not read as an envelope: its number (from 1) and why.
+fn unreadable(lines: &[String]) -> Vec<Unreadable> {
+    lines
+        .iter()
+        .enumerate()
+        .filter_map(|(at, line)| {
+            read(line).err().map(|reason| Unreadable {
+                line: at + 1,
+                reason,
+            })
+        })
+        .collect()
 }
 
 /// The lines whose envelope has not expired at `now`: its `expires` is after it (the model's
@@ -212,7 +260,26 @@ mod tests {
     use inbox::server::wire;
     use inbox_verify::Instant;
 
-    use super::{of_sender, unexpired, without};
+    use super::{of_sender, unexpired, unreadable, without};
+
+    #[test]
+    fn a_line_that_does_not_decode_is_named_with_its_number_and_the_decoders_reason() {
+        let lines = vec![
+            envelope(1, "agent:test/alice", "2026-11-22T12:00:00Z"),
+            "not json".to_owned(),
+            envelope(2, "agent:test/alice", "2026-11-22T12:00:00Z").replace(&id(2), "short"),
+        ];
+        let found = unreadable(&lines);
+        assert_eq!(
+            found.iter().map(|entry| entry.line).collect::<Vec<_>>(),
+            [2, 3]
+        );
+        assert!(
+            found[1].reason.contains("message_id"),
+            "{}",
+            found[1].reason
+        );
+    }
 
     /// A ULID-shaped id, distinct per `n`.
     fn id(n: u32) -> String {

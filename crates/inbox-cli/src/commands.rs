@@ -19,8 +19,8 @@ use crate::client::{Service, declared_error, query_value, route};
 use crate::failure::Failure;
 use crate::ids::ulid;
 use crate::keys::Caller;
-use crate::outbox::Outbox;
-use crate::output::{self, Done, document, rows, rows_text};
+use crate::outbox::{Outbox, Unreadable};
+use crate::output::{self, Done, document, rows, rows_text, warn};
 
 /// The model's error a repeated `message_id` or `dedup_key` is answered with (the outcomes
 /// `duplicate` and `duplicate-key` of `PostMessage`): the message is there, so it arrived.
@@ -149,7 +149,9 @@ pub fn refuse(client: &Client, message_id: &str, reason: &str) -> Result<Done, F
 }
 
 /// `inbox collect`: reads the message's row in the caller's `Outbox` first, so the answer or the
-/// refusal it takes is shown, then collects it and drops it from the outbox file.
+/// refusal it takes is shown, then collects it and drops it from the outbox file. The service
+/// removed the message once it answered `collected`: what it handed over is printed also when
+/// the outbox file cannot be changed after that, and the local failure is reported beside it.
 pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
     let outbox = client.view(
         "outbox",
@@ -167,19 +169,13 @@ pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
         &mut body,
     );
     let answer = client.command("collect", &body)?;
-    client.outbox.remove(message_id, now())?;
-    let row = row.unwrap_or(Value::Null);
     let shown = Value::Object(vec![(
         "rows".to_owned(),
-        Value::Array(if row == Value::Null {
-            Vec::new()
-        } else {
-            vec![row.clone()]
-        }),
+        Value::Array(row.iter().cloned().collect()),
     )]);
-    Ok(Done {
+    let done = Done {
         document: document(&Value::Object(vec![
-            ("message".to_owned(), row),
+            ("message".to_owned(), row.unwrap_or(Value::Null)),
             ("answer".to_owned(), answer.clone()),
         ])),
         text: format!(
@@ -187,7 +183,14 @@ pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
             output::text(&answer, "outcome"),
             rows_text(&shown)
         ),
-    })
+    };
+    match client.outbox.remove(message_id, now()) {
+        Ok(()) => Ok(done),
+        Err(cause) => Err(Failure::After {
+            done,
+            cause: Box::new(cause),
+        }),
+    }
 }
 
 /// `inbox pending`, and `inbox wait` with `wait` seconds: the `Pending` view of `inbox`
@@ -211,13 +214,55 @@ pub fn pending(client: &Client, inbox: Option<&str>, wait: Option<u64>) -> Resul
     Ok(view_done(&answer))
 }
 
-/// `inbox outbox`: the caller's `Outbox` view, every live message it sent.
+/// `inbox outbox`: the caller's `Outbox` view, every live message it sent, and, as `unreadable`,
+/// every line of the outbox file that does not read as an envelope.
 pub fn outbox(client: &Client) -> Result<Done, Failure> {
     let answer = client.view(
         "outbox",
         &format!("sender={}", query_value(&client.caller.principal)),
     )?;
-    Ok(view_done(&answer))
+    let unreadable = client
+        .outbox
+        .kept(&client.caller.principal, now())?
+        .unreadable;
+    let mut done = view_done(&answer);
+    if let Value::Object(mut members) = answer {
+        members.push(("unreadable".to_owned(), unreadable_value(&unreadable)));
+        done.document = document(&Value::Object(members));
+    }
+    for line in unreadable_lines(&unreadable) {
+        done.text.push('\n');
+        done.text.push_str(&line);
+    }
+    Ok(done)
+}
+
+/// The unreadable lines of the outbox file, as JSON.
+fn unreadable_value(unreadable: &[Unreadable]) -> Value {
+    Value::Array(
+        unreadable
+            .iter()
+            .map(|entry| {
+                Value::Object(vec![
+                    ("line".to_owned(), Value::Number(entry.line.to_string())),
+                    ("reason".to_owned(), Value::Text(entry.reason.clone())),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// The unreadable lines of the outbox file, for a person.
+fn unreadable_lines(unreadable: &[Unreadable]) -> Vec<String> {
+    unreadable
+        .iter()
+        .map(|entry| {
+            format!(
+                "unreadable outbox line {}: {} (never reposted; remove it by hand)",
+                entry.line, entry.reason
+            )
+        })
+        .collect()
 }
 
 /// `inbox thread` and `inbox replies`: the view `wire` of one thread.
@@ -326,10 +371,37 @@ fn reply_shape(text: &str) -> Result<inbox::messaging::ReplyShape, Failure> {
     )))
 }
 
+/// Whether a refusal of a post is final for the envelope's text, so the outbox file drops it: a
+/// declared refusal of the model other than `UnknownInbox` (a restarted service holds no inbox
+/// until its owner opens it again), and the service's own `400` and `413` (the same text is
+/// refused again). `401`, `408` and `503` say something of the service or the clock, not of the
+/// envelope, and keep it.
+fn final_refusal(name: &str, status: u16, answer: &Value) -> bool {
+    if declared_error(answer).is_some() {
+        name != UNKNOWN_INBOX
+    } else {
+        matches!(status, 400 | 413)
+    }
+}
+
+/// The encoded envelope read back by the generated decoder, as the service reads it: what the
+/// decoder refuses (a body over the model's limit, an id of the wrong shape) is wrong usage, and
+/// never kept or sent. The decoder holds the model's rules; the client writes none of them.
+fn admitted<T>(
+    text: &str,
+    decode: fn(&Value, &str) -> Result<T, json::DecodeError>,
+) -> Result<(), Failure> {
+    let value = json::parse(text).map_err(|error| Failure::Usage(error.to_string()))?;
+    decode(&value, "body")
+        .map(|_| ())
+        .map_err(|error| Failure::Usage(error.to_string()))
+}
+
 /// `inbox post`: writes the envelope (draws `id`, and `thread` when none is given; `created` is
-/// the clock reading and `expires` `created` plus 24 hours when none is given), signs it, keeps
-/// it in the outbox, and posts it. A declared refusal drops it from the outbox again, except
-/// `UnknownInbox`; a transport failure and the service's own refusals keep it for `repost`.
+/// the clock reading and `expires` `created` plus 24 hours when none is given), signs it, reads
+/// it back through the generated decoder, keeps it in the outbox, and posts it. A final refusal
+/// ([`final_refusal`]) drops it from the outbox again; a transport failure and the other
+/// refusals keep it for `repost`.
 pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     let reading = now();
     let message_id = ulid()?;
@@ -388,6 +460,7 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
         .map_err(|error| Failure::Usage(error.to_string()))?;
     let mut text = String::new();
     wire::encode_command_inbox_messaging_post_message(&envelope, &mut text);
+    admitted(&text, wire::decode_command_inbox_messaging_post_message)?;
     client.outbox.keep(&text, reading)?;
     match client.command("post", &text) {
         Ok(answer) => Ok(Done {
@@ -403,7 +476,7 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
             status,
             answer,
         }) => {
-            if declared_error(&answer).is_some() && name != UNKNOWN_INBOX {
+            if final_refusal(&name, status, &answer) {
                 client.outbox.remove(&message_id, now())?;
             }
             Err(Failure::Refused {
@@ -462,6 +535,7 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
         .map_err(|error| Failure::Usage(error.to_string()))?;
     let mut text = String::new();
     wire::encode_command_inbox_messaging_answer(&envelope, &mut text);
+    admitted(&text, wire::decode_command_inbox_messaging_answer)?;
     let answer = client.command("answer", &text)?;
     Ok(Done {
         document: document(&Value::Object(vec![
@@ -476,12 +550,18 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
     })
 }
 
-/// `inbox repost`: posts every envelope the outbox keeps for the caller again, unchanged.
-/// `posted` and `Duplicate` count as arrived. A declared refusal other than `UnknownInbox` drops
-/// the envelope; the service's own refusals keep it. Exits as a refusal, naming the first, when
-/// any envelope did not arrive; a transport failure ends the run.
+/// `inbox repost`: posts every envelope the outbox keeps for the caller again, unchanged; for
+/// after a restart of the service. `posted` and `Duplicate` count as arrived. A final refusal
+/// ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a refusal,
+/// naming the first, when any envelope did not arrive, and with an unreadable entry, naming each
+/// line of the outbox file that does not read as an envelope; a transport failure ends the run.
+///
+/// A note its recipient already read is delivered again: the service keeps no record of a handled
+/// note and answers it as it answers one a restart dropped
+/// (story:repost-does-not-redeliver-a-handled-note).
 pub fn repost(client: &Client) -> Result<Done, Failure> {
-    let kept = client.outbox.kept(&client.caller.principal, now())?;
+    let contents = client.outbox.kept(&client.caller.principal, now())?;
+    let kept = contents.kept;
     let mut entries = Vec::new();
     let mut lines = Vec::new();
     let mut first_refusal: Option<(String, u16)> = None;
@@ -495,11 +575,10 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
                 status,
                 answer,
             }) => {
-                let declared = declared_error(&answer).is_some();
-                if declared && name == DUPLICATE {
+                if declared_error(&answer).is_some() && name == DUPLICATE {
                     (true, answer, format!("arrived ({name})"))
                 } else {
-                    if declared && name != UNKNOWN_INBOX {
+                    if final_refusal(&name, status, &answer) {
                         client.outbox.remove(&message_id, now())?;
                     }
                     let said = format!("refused: {name} ({status})");
@@ -517,14 +596,38 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
             ("answer".to_owned(), answer),
         ]));
     }
-    let report = Value::Object(vec![("reposted".to_owned(), Value::Array(entries))]);
-    if let Some((name, status)) = first_refusal {
+    let report = Value::Object(vec![
+        ("reposted".to_owned(), Value::Array(entries)),
+        (
+            "unreadable".to_owned(),
+            unreadable_value(&contents.unreadable),
+        ),
+    ]);
+    lines.extend(unreadable_lines(&contents.unreadable));
+    if first_refusal.is_some() || !contents.unreadable.is_empty() {
         for line in &lines {
-            eprintln!("inbox repost: {line}");
+            warn(&format!("inbox repost: {line}"));
         }
+    }
+    if let Some((name, status)) = first_refusal {
         return Err(Failure::Refused {
             name,
             status,
+            answer: report,
+        });
+    }
+    if !contents.unreadable.is_empty() {
+        let numbers: Vec<String> = contents
+            .unreadable
+            .iter()
+            .map(|entry| entry.line.to_string())
+            .collect();
+        return Err(Failure::Unreadable {
+            detail: format!(
+                "line {} of {}",
+                numbers.join(", "),
+                client.outbox.path().display()
+            ),
             answer: report,
         });
     }

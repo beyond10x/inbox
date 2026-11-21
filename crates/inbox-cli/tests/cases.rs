@@ -13,7 +13,7 @@ use inbox_verify::{Instant, KeyRing, PublicKey};
 
 use support::{
     ALICE, BOB, Dir, LOCAL, REFUSED, TRANSPORT, USAGE, World, ids, key_new, keys_only, rows, run,
-    serve, serve_refused, text,
+    serve, serve_refused, stand_in, text,
 };
 
 fn member<'a>(value: &'a Value, path: &[&str]) -> &'a Value {
@@ -639,4 +639,173 @@ fn add_key_refuses_a_public_key_that_is_not_one() {
     );
     assert_eq!(refused.status, USAGE, "{refused:#?}");
     assert!(!dir.join("keys.json").exists());
+}
+
+/// The lines of the outbox file at `path`, as they are.
+fn outbox_lines(path: &std::path::Path) -> Vec<String> {
+    fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn a_400_or_413_is_final_for_the_envelope_and_401_408_503_keep_it() {
+    let dir = Dir::new("final-refusals");
+    key_new(&dir.path, "alice.key", Some(("alice-1", ALICE)));
+    for (status, body, kept) in [
+        (400, r#"{"refused":"duplicate member","member":"body"}"#, 0),
+        (413, r#"{"refused":"body too large","limit":1}"#, 0),
+        (401, r#"{"refused":"unauthenticated"}"#, 1),
+        (408, r#"{"refused":"request timeout"}"#, 1),
+        (503, r#"{"refused":"stopping"}"#, 1),
+    ] {
+        let outbox = dir.join(&format!("alice-{status}.outbox"));
+        let outbox_text = outbox.display().to_string();
+        let (url, served) = stand_in(status, body);
+        let env = [
+            ("INBOX_URL", url.as_str()),
+            ("INBOX_SECRET_KEY_FILE", "alice.key"),
+            ("INBOX_OUTBOX", outbox_text.as_str()),
+        ];
+        let posted = run(
+            &dir.path,
+            &["post", "--to", BOB, "--body", "x", "--json"],
+            &env,
+        );
+        served.join().expect("the stand-in ends");
+        assert_eq!(posted.status, REFUSED, "{status}: {posted:#?}");
+        assert_eq!(
+            posted.json().member("status"),
+            Some(&Value::Number(status.to_string()))
+        );
+        assert_eq!(outbox_lines(&outbox).len(), kept, "{status}");
+    }
+
+    // A kept envelope reposted and answered 400 leaves too.
+    let outbox = dir.join("alice-503.outbox").display().to_string();
+    let (url, served) = stand_in(400, r#"{"refused":"the body is not JSON"}"#);
+    let env = [
+        ("INBOX_URL", url.as_str()),
+        ("INBOX_SECRET_KEY_FILE", "alice.key"),
+        ("INBOX_OUTBOX", outbox.as_str()),
+    ];
+    let reposted = run(&dir.path, &["repost", "--json"], &env);
+    served.join().expect("the stand-in ends");
+    assert_eq!(reposted.status, REFUSED, "{reposted:#?}");
+    assert!(outbox_lines(std::path::Path::new(&outbox)).is_empty());
+}
+
+#[test]
+fn an_answer_neither_success_nor_refusal_is_a_transport_failure() {
+    let dir = Dir::new("odd-status");
+    key_new(&dir.path, "alice.key", Some(("alice-1", ALICE)));
+    let (url, served) = stand_in(404, r#"{"no":"refused member"}"#);
+    let env = [
+        ("INBOX_URL", url.as_str()),
+        ("INBOX_SECRET_KEY_FILE", "alice.key"),
+    ];
+    let pending = run(&dir.path, &["pending", "--json"], &env);
+    served.join().expect("the stand-in ends");
+    assert_eq!(pending.status, TRANSPORT, "{pending:#?}");
+    assert!(pending.stderr.contains("404"), "{pending:#?}");
+}
+
+#[test]
+fn an_unreadable_outbox_line_is_listed_by_outbox_and_named_by_repost_and_never_dropped() {
+    let world = World::new("unreadable-line");
+    world.client("bob", &["open"]).ok();
+    world
+        .client("alice", &["post", "--to", BOB, "--body", "fine"])
+        .ok();
+    let path = world.outbox("alice");
+    let mut text_of_file = fs::read_to_string(&path).unwrap();
+    text_of_file.push_str("{\"not\":\"an envelope\"}\n");
+    fs::write(&path, &text_of_file).unwrap();
+
+    let listed = world.client("alice", &["outbox", "--json"]).ok().json();
+    let unreadable = match member(&listed, &["unreadable"]) {
+        Value::Array(entries) => entries.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(unreadable.len(), 1);
+    assert_eq!(
+        unreadable[0].member("line"),
+        Some(&Value::Number("2".to_owned()))
+    );
+    let listed_text = world.client("alice", &["outbox"]).ok();
+    assert!(
+        listed_text.stdout.contains("unreadable outbox line 2"),
+        "{listed_text:#?}"
+    );
+
+    let reposted = world.client("alice", &["repost", "--json"]);
+    assert_eq!(reposted.status, REFUSED, "{reposted:#?}");
+    assert_eq!(text(&reposted.json(), "error"), "unreadable outbox entry");
+    assert!(reposted.stderr.contains("line 2"), "{reposted:#?}");
+    assert_eq!(outbox_lines(&path).len(), 2, "nothing is dropped");
+}
+
+#[test]
+fn keyfile_refuses_a_lapsed_valid_until_and_a_file_another_operator_signed() {
+    let (dir, _operator) = keys_only("keyfile-refusals");
+    let before = fs::read_to_string(dir.join("keys.json")).unwrap();
+    let carol = key_new(
+        &dir.path,
+        "carol.key",
+        Some(("carol-1", "agent:test/carol")),
+    );
+    let add = |operator: &str, valid_until: Option<&str>| {
+        let mut args = vec![
+            "keyfile",
+            "add-key",
+            "--file",
+            "keys.json",
+            "--operator-secret-key-file",
+            operator,
+            "--key-id",
+            "carol-1",
+            "--principal",
+            "agent:test/carol",
+            "--public-key",
+            &carol,
+        ];
+        if let Some(valid_until) = valid_until {
+            args.extend(["--valid-until", valid_until]);
+        }
+        run(&dir.path, &args, &[])
+    };
+    let lapsed = add("operator.key", Some("2000-01-01T00:00:00Z"));
+    assert_eq!(lapsed.status, USAGE, "{lapsed:#?}");
+    assert!(lapsed.stderr.contains("not after now"), "{lapsed:#?}");
+
+    key_new(&dir.path, "other-operator.key", None);
+    let mixed = add("other-operator.key", None);
+    assert_eq!(mixed.status, LOCAL, "{mixed:#?}");
+    assert!(
+        mixed.stderr.contains("alice-1"),
+        "the foreign entry is named: {mixed:#?}"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("keys.json")).unwrap(),
+        before,
+        "no mixed file"
+    );
+}
+
+#[test]
+fn a_url_outside_loopback_is_refused_before_anything_is_sent() {
+    let dir = Dir::new("outside-url");
+    key_new(&dir.path, "alice.key", Some(("alice-1", ALICE)));
+    let refused = run(
+        &dir.path,
+        &["pending", "--secret-key-file", "alice.key", "--json"],
+        &[("INBOX_URL", "http://192.0.2.1:9")],
+    );
+    assert_eq!(refused.status, USAGE, "{refused:#?}");
+    assert!(
+        refused.stderr.contains("not a loopback address"),
+        "{refused:#?}"
+    );
 }
