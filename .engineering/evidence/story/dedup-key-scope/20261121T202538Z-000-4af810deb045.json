@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T20:25:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:dedup-key-scope",
+  "kind": "story",
+  "revision": 19,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the unit before the merge: the case adv_a_third_principal_cannot_take_another_senders_dedup_key fails on da272a7 with only its ignore attribute removed (duplicate-key where it expects posted) and passes on 58258a8 in the unit's gate"
+  }
+}
