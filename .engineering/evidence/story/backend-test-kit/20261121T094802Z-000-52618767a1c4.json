@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T09:48:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:backend-test-kit",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator claim check, cargo test -p inbox-backend-testkit --locked: base c582901 exit 101 (no such package); unit exit 0, 15 passed (3 + 12); a copy of the kit without the delete-from-list check exit 101, a_delete_that_leaves_the_snapshot_in_list_fails FAILED"
+  }
+}
