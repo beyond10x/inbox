@@ -7,22 +7,23 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. The 5 waves of stage 2 of 6 are on `main`. Release 0.1.0 holds waves 1 to 3.
+Early. The 5 waves of stage 2 of 6 are on `main`, and 2 of the 3 stories of a sixth wave that
+closes security findings. Release 0.1.0 holds waves 1 to 3.
 
 What works on `main`:
 
 - The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 24 authored scenarios.
+  their lifecycle, every refusal, and 27 authored scenarios.
 - The Rust crate ESS generates from it, the core that implements its 2 obligations, the
   in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
   library, loopback only).
 - The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
   address over the in-memory backend, and the other commands are the client. It is built
   from source; no release holds it.
-- The conformance suite: 93 scenarios pass on ESS's interpreted target and against the core,
+- The conformance suite: 97 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
-  (`task coverage`: 89 of 89). ESS reports the run against the core as `passed`.
-- The same suite against a running `inbox serve` over HTTP: 20 scenarios pass, and 73
+  (`task coverage`: 95 of 95). ESS reports the run against the core as `passed`.
+- The same suite against a running `inbox serve` over HTTP: 22 scenarios pass, and 75
   cannot be witnessed over HTTP and are listed with their reasons
   (`crates/inbox-conformance/unsupported.tsv`).
 - 3 acceptance checks against the built binary (`task acceptance`): a signed request and
@@ -64,25 +65,26 @@ with that option at `expires`.
 
 ## Known limits
 
-Open security findings, each a draft story in `.engineering/planning/story/`:
+Open security findings, each with its story in `.engineering/planning/story/`:
 
-1. **Replay of a signed envelope under another caller** (`story:post-from-is-the-caller`). The
-   service does not check that an envelope's `from` is the caller that signed the request. A
-   principal that holds another principal's signed envelope (every recipient holds the ones it
-   received) can post the same bytes again under its own request signature; once the first
-   message has been handled and removed, the service answers `posted` again, and the message
-   reappears under the original sender's name. Until this is fixed the service must not listen
-   outside loopback and must not be used by a real session.
-2. **A refusal tells whether a message exists** (`story:foreign-message-id-answers-as-unknown`):
-   `not-recipient` (403) against `unknown-message` (404), for any authenticated client.
-3. **A dedup key is shared by every sender** (`story:dedup-key-scope`): a third principal learns
-   whether a key is in use, or takes it first.
-4. **No record of requests**: a signed request is accepted again inside its 60 s window.
+1. **A post tells whether a message id exists**
+   (`story:post-does-not-tell-a-message-id-exists`): `post` answers `duplicate` for a stored
+   message id, whoever sent it. `read`, `collect`, `refuse`, `answer` and `mark-delivered` no
+   longer tell: a third principal gets `unknown-message` (404) from them.
+2. **A dedup key is shared by every sender** (`story:dedup-key-scope`): a third principal learns
+   whether a key is in use, or takes it first. The story is held on a defect of ESS synthesis
+   ([beyond10x/ess#805](https://github.com/beyond10x/ess/issues/805)). Until it lands the
+   service must not listen outside loopback and must not be used by a real session.
+3. **No record of requests**: a signed request is accepted again inside its 60 s window.
+
+Closed on `main` in wave 6 and in no release: the replay of a signed envelope under another
+caller (`story:post-from-is-the-caller`). A post or an answer whose `from` is not the caller is
+refused `not-sender`.
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
 loses every message; no release holds the binary; `inbox repost` delivers a note again that
-its recipient already read; the run of the suite over HTTP witnesses 20 of the 93 scenarios;
-gaps in the suite filed as draft stories; two ESS issues worked around; nothing deployed.
+its recipient already read; the run of the suite over HTTP witnesses 22 of the 97 scenarios;
+gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
 
@@ -120,8 +122,8 @@ its evidence are in `.engineering/`.
 
 ## Build and first use
 
-The service is for a loopback address and test keys only while `story:post-from-is-the-caller`
-is open (limit 1 above): make keys on the spot, as below, and never give it a key that matters.
+The service is for a loopback address and test keys only while `story:dedup-key-scope`
+is open (limit 2 above): make keys on the spot, as below, and never give it a key that matters.
 
 ### Build
 

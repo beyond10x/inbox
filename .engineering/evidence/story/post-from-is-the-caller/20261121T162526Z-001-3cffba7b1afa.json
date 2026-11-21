@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T16:25:26Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-from-is-the-caller",
+  "kind": "story",
+  "revision": 24,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (no test held that the comparison of from with the caller's principal is exact): 1d2e791 holds it with the adversary's 2 cases, red on a core that compares without regard to ASCII case; no implementation file changed; the coordinator's gate on the unit tree with the cases of 1d2e791: task check exit 0, 355 cases passed, 8 ignored",
+    "review": "review-result:adversary-post-from-is-the-caller-pass-1",
+    "outcome": "fixed"
+  }
+}

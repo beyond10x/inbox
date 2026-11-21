@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:foreign-message-id-answers-as-unknown
 kind: story
-status: active
+status: implemented
 title: A third principal gets one answer for a message between others and for no message
 summary: not-recipient (403) against unknown-message (404) tells any authenticated client whether a message id exists.
 tags:
@@ -11,7 +11,6 @@ relations:
 - informed_by: review-result:adversary-http-service-pass-1
 - blocks: epic:two-hosts-and-wake
 - blocks: epic:jetstream-backend
-- depends_on: story:dedup-key-scope
 scope:
 - confidence: cited
   path: AGENTS.md
@@ -39,10 +38,11 @@ scope:
   path: tools/scenarios.py
 - confidence: cited
   path: website/docs/limits.md
-revision: 17
+revision: 19
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 16}
 - {from: "proposed", to: "active", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 17}
+- {from: "active", to: "implemented", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 19, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}}
 ---
 ## Outcome
 
@@ -159,3 +159,39 @@ Corrected by the coordinator on 2026-11-21, after the section above was returned
 - `docs/plan/stage-2.md`, `README.md`, `CHANGELOG.md`, `website/` and the count lines of
   `AGENTS.md` are written by the coordinator at the close of the wave, from the gate's
   numbers; the unit reports the lines its change makes untrue.
+
+## As built
+
+Wave 6 of stage 2, 2026-11-21: commits `d9b724d` and `bda962d`, merged as `0b45685`. Forked from
+the merge of story:post-from-is-the-caller, without story:dedup-key-scope, which is held
+(dependency-blocker:ess-805-second-run-witness). Checked against the Scope above by the
+implementor; what differs:
+
+- The model: the outcome `foreign-message` on `MarkDelivered`, `MarkRead`, `Answer`, `Refuse`
+  and `Collect` (`when_subject`: `to != caller.inbox` and `from != caller.principal`, error
+  `UnknownMessage`), behind `unknown-message` and ahead of `not-recipient` or `not-sender`. The 5
+  commands stay generated.
+- "Nothing outside `ess/` has to change" was untrue. The generated surface answers the outcome
+  403 under its own name, so the listener gives it the status and the body of `unknown-message`
+  (`as_unknown` in `crates/inbox-server/src/service.rs`, on answers of requests that are not a
+  GET). The model alone decides who is a party; the function compares no caller.
+- The 5 steps of a third principal are a new authored scenario,
+  `a-third-principal-finds-no-message`, which claims the 5 `foreign-message` ids. It is
+  unsupported over HTTP (a step as the Sweeper), and the run over HTTP could not witness the
+  outcome anyway: it reads `unknown-message` there. The witness over HTTP is
+  `crates/inbox-server/tests/foreign_message.rs` and the acceptance case.
+- Not in the Scope: cases in `crates/inbox-server/tests/` and `crates/inbox-core/tests/`, and
+  `crates/inbox-conformance/tests/adversary3.rs`.
+- The claim is limited to the 5 commands. `post` still tells a third principal whether a message
+  id is in use (`duplicate` for a stored id): story:post-does-not-tell-a-message-id-exists.
+- A relaying sender (`from`) is a party; the principal it speaks for (`on_behalf_of`) is a third
+  principal. 2 cases of `crates/inbox-core/tests/foreign_message.rs` hold that.
+
+Adversary: 1 pass on `d9b724d`, 4 findings (2 warnings, 2 notes), 3 introduced and corrected in
+`bda962d`, 1 there before the unit and filed as the story named above
+(review-result:adversary-foreign-message-id-pass-1). No second pass: the corrections changed no
+guard, no source line of a crate and no scenario.
+
+Numbers after the unit (the coordinator's gate, `task check` exit 0): 97 scenarios, 27 authored,
+95 refused and covered; the core lane 97 of 97; the serve lane 22 passed and 75 unsupported;
+`cargo test --workspace` 366 passed, 0 failed, 8 ignored.

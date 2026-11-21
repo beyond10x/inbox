@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-21T17:16:07Z",
+  "actor": "agent:inbox",
+  "artifact": "story:foreign-message-id-answers-as-unknown",
+  "kind": "story",
+  "revision": 18,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "the gate on wave/s2-6 after the 2 merges (0b45685) and the closing edits: CARGO_INCREMENTAL=0 slot task check exit 0, task coverage 97 scenarios with 95 refused and 95 covered, the core lane 97 of 97 passed with conformance_status passed, the serve lane 22 passed and 75 unsupported held to the list, task acceptance 3 checks passed, cargo test --workspace 366 passed, 0 failed and 8 ignored",
+    "reference": "docs/plan/stage-2.md#wave-6"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T16:54:07Z",
+  "actor": "agent:inbox",
+  "artifact": "story:foreign-message-id-answers-as-unknown",
+  "kind": "story",
+  "revision": 18,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the coordinator before the merge: the case adv_a_third_principal_cannot_tell_a_message_between_others_from_no_message fails on the base e353a41 (403 not-recipient against 404 unknown-message, measured 2026-11-21T16:54:07Z) and passes on d9b724d in the coordinator's gate"
+  }
+}

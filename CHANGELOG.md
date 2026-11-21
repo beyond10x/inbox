@@ -20,15 +20,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   specification other than `UnknownInbox`, or expired. Exit statuses: 0 done, 1 refused, 2
   wrong usage, 3 transport, 4 a local file.
 - Declared coverage: every refusal of the specification is claimed by an authored scenario.
-  `task coverage` exits 0 (89 refused generated scenarios, 89 covered) and is part of
+  `task coverage` exits 0 (95 refused generated scenarios, 95 covered) and is part of
   `task check`; the suite it writes reports `conformance_status: passed` on ESS's
-  interpreted target. 1 scenario is new (24 authored, 93 in the suite).
+  interpreted target. 4 authored scenarios are new (27 authored, 97 in the suite).
 - `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
   `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
 - `task conform` also runs the conformance suite against a running `inbox serve` over
   HTTP (`crates/inbox-conformance`, `run --target serve`): a fresh service per scenario,
   every request and envelope signed with keys made for the run, each answer held to the
-  HTTP status of the generated contract. 20 of the 93 scenarios pass there; 73 cannot be
+  HTTP status of the generated contract. 22 of the 97 scenarios pass there; 75 cannot be
   witnessed over HTTP and are listed with their reasons in
   `crates/inbox-conformance/unsupported.tsv`.
 - `task acceptance`, in `task check`: 3 checks against the built binary
@@ -53,14 +53,39 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   says `conformance_status: passed`, where 0.1.0 reports `inconclusive`. The gate refuses
   `inconclusive`.
 
+### Security
+
+- A post or an answer whose envelope `from` is not the caller's principal is refused:
+  `PostMessage` and `Answer` answer `not-sender` (403, error `NotSender`) before every
+  other refusal. In 0.1.0 a principal that held another principal's signed envelope could
+  post the same bytes again under its own request signature; once the first message was
+  handled and removed, the service answered `posted` again.
+- `read`, `collect`, `refuse`, `answer` and `mark-delivered` answer a caller that is
+  neither the recipient nor the sender of a message with `unknown-message` (404), the
+  answer of an id no message carries. In 0.1.0 they answered that caller 403, which told
+  any authenticated client that the message exists. The specification names the case as
+  the outcome `foreign-message` of `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` and
+  `Collect`; the listener answers it with the status and the body of `unknown-message`.
+  The generated OpenAPI document lists `foreign-message` under 403 for the 5 commands;
+  `inbox serve` never sends it.
+
 ### Known limits
 
+- `post` still tells a third principal whether a message id is in use: it answers
+  `duplicate` for a stored id, whoever sent the message
+  (`story:post-does-not-tell-a-message-id-exists`).
+- A dedup key is shared by every sender (`story:dedup-key-scope`). The story is held on
+  beyond10x/ess#805. Until it lands the service must not listen outside loopback and must
+  not be used by a real session.
+- The input `from` of `PostMessage` carries the example value `principal-262144` in the
+  OpenAPI documents and the JSON Schema of `PostMessage`. It is a value ESS synthesis
+  needs until beyond10x/ess#804 is fixed, and not an address anybody holds.
 - `inbox repost` delivers a note again that its recipient already read
   (`story:repost-does-not-redeliver-a-handled-note`).
-- Over HTTP 73 of the 93 scenarios are unsupported: a caller whose principal and
-  inbox differ (64), a step as the Sweeper (35), a step as no actor (9), a claim on the
-  stored `signature` (7); a scenario can have several. ESS reports that run as `failed`,
-  and the gate holds it to the list.
+- Over HTTP 75 of the 97 scenarios are unsupported: a caller whose principal and
+  inbox differ (65), a step as the Sweeper (36), a step as no actor (9), a claim on the
+  stored `signature` (7), one delegation id for two pairs (2); a scenario can have
+  several. ESS reports that run as `failed`, and the gate holds it to the list.
 - The run over HTTP and the acceptance checks send valid signatures only and read a view
   as every key. The read rule, the request signature and its window, the lapse of a key
   or a delegation, and the binding of a key to `from` are held by the tests of

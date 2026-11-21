@@ -369,7 +369,7 @@ commands:
       # SYNTHESIS: `principal-262144` is the value ESS 0.96.0 synthesis gives the first caller's
       # `principal`, not an address anybody holds. Without it synthesis writes no stored message
       # under the `not-sender` guard and 49 generated scenarios leave the suite. It goes when ESS
-      # writes those scenarios without it.
+      # writes those scenarios without it: the fix of beyond10x/ess#804.
       - {name: from, type: inbox.messaging.Principal, example: principal-262144}
       - {name: on_behalf_of, type: inbox.messaging.Principal, summary: "The principal whose word this is; `from` itself when the sender speaks for nobody else."}
       - {name: authority, type: Optional<inbox.messaging.DelegationId>}

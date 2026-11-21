@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:post-from-is-the-caller
 kind: story
-status: active
+status: implemented
 title: A post or an answer is refused when its from is not the caller
 summary: A recipient sends a sender's signed envelope again under its own request signature and it is posted once the first message is gone; the model guards PostMessage and Answer on the caller.
 tags:
@@ -48,10 +48,11 @@ scope:
   path: website/docs/limits.md
 - confidence: inferred
   path: website/docs/status.md
-revision: 23
+revision: 25
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 22}
 - {from: "proposed", to: "active", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 23}
+- {from: "active", to: "implemented", at: "2026-11-21T17:17:28Z", actor: "agent:inbox", revision: 25, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Outcome
 
@@ -197,3 +198,34 @@ Corrected by the coordinator on 2026-11-21, after the section above was returned
 - `docs/plan/stage-2.md`, `README.md`, `CHANGELOG.md`, `website/` and the count lines of
   `AGENTS.md` are written by the coordinator at the close of the wave, from the gate's
   numbers; the unit reports the lines its change makes untrue.
+
+## As built
+
+Wave 6 of stage 2, 2026-11-21: commits `3cb3eb9` and `1d2e791`, merged as `e353a41`. Checked
+against the Scope above by the implementor; what differs:
+
+- `not-sender` (`when: from != caller.principal`, error `NotSender`) is the first outcome of
+  `PostMessage` and of `Answer`. `Answer` stays generated. The obligation `post_message` checks it
+  first; a caller without a principal is an unmet obligation, as in the generated guard.
+- The authored scenario `answer-from-another-principal-refused` claims
+  `Answer/outcome/not-sender`. `post-from-another-principal-refused` claims nothing: ESS refuses
+  a claim on `PostMessage/outcome/not-sender`, which synthesis writes itself. That generated
+  scenario is unsupported over HTTP (its caller's principal and inbox differ); the authored one
+  witnesses the replay there.
+- Not in the Scope: `crates/inbox-conformance/tests/adversary3.rs` (the pinned totals) and a
+  `# SYNTHESIS:` comment in the model.
+- The interim the Scope did not foresee: with the guard, ESS 0.96.0 synthesis writes no stored
+  message and 49 generated scenarios leave the suite (beyond10x/ess#804). The input `from` of
+  `PostMessage` carries `example: principal-262144`, the value synthesis gives its first caller.
+  No scenario id leaves with it; 19 generated scenarios lost the second run under a second
+  caller. The example shows in 3 generated files (2 OpenAPI documents, 1 JSON Schema) and
+  changes no decoder. It goes when an ESS release fixes the issue.
+- `generated/`: 36 files changed, 12 of them beyond the digest line.
+
+Adversary: 1 pass on `3cb3eb9`, 2 notes, both introduced and both answered with cases in
+`1d2e791` (review-result:adversary-post-from-is-the-caller-pass-1). 8 changed cores were built;
+the 2 that stayed green are the 2 notes.
+
+Numbers after the unit (the coordinator's gate, `task check` exit 0): 96 scenarios, 26 authored,
+90 refused and covered; the core lane 96 of 96; the serve lane 22 passed and 74 unsupported;
+`cargo test --workspace` 355 passed, 0 failed, 8 ignored.

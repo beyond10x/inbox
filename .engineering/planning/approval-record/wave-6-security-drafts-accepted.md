@@ -8,6 +8,7 @@ relations:
 - decides: story:post-from-is-the-caller
 - decides: story:foreign-message-id-answers-as-unknown
 - decides: story:dedup-key-scope
+- decides: story:post-does-not-tell-a-message-id-exists
 revision: 1
 ---
 ## Decision

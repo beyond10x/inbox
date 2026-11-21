@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T16:03:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:post-from-is-the-caller",
+  "kind": "story",
+  "revision": 24,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the coordinator before the merge: the case adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal fails on the base dcaa193 with only its ignore attribute removed (the repost answered 202 posted) and passes on 3cb3eb9"
+  }
+}

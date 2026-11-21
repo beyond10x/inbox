@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T17:08:21Z",
+  "actor": "agent:inbox",
+  "artifact": "story:foreign-message-id-answers-as-unknown",
+  "kind": "story",
+  "revision": 18,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F4 (the sentence that the outcome moves nothing a wait reads was untrue): bda962d corrects it in docs/design/service.md; the coordinator's gate on bda962d: task check exit 0, 366 cases passed, 8 ignored",
+    "review": "review-result:adversary-foreign-message-id-pass-1",
+    "outcome": "fixed"
+  }
+}

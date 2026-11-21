@@ -14,12 +14,13 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 | 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | delivered 2026-11-21 |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | delivered 2026-11-21 |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | delivered 2026-11-21 |
-| 6 | story:post-from-is-the-caller, story:dedup-key-scope, story:foreign-message-id-answers-as-unknown | the 3 security findings of wave 3 closed before the service is used | running |
+| 6 | story:post-from-is-the-caller, story:dedup-key-scope, story:foreign-message-id-answers-as-unknown | the 3 security findings of wave 3 closed before the service is used | closed 2026-11-21 with 2 of 3 stories; story:dedup-key-scope is held |
 
 Wave 6 is not part of the plan approved as waves 1 to 5. It is the plan derived after those
 were delivered, from the 3 drafts the host operator accepted on 2026-11-21
 (approval-record:wave-6-security-drafts-accepted). epic:service-in-memory stays `active`
-until it is delivered.
+until it is delivered. It closed on 2026-11-21 with 2 of its 3 stories;
+story:dedup-key-scope is held (the result of wave 6, below), so the epic stays `active`.
 
 The stage is not done while the conformance report's `conformance_status` is `inconclusive`
 (50 uncovered refusals at the start of stage 2; story:declared-coverage owns them). Since wave 5
@@ -647,10 +648,77 @@ uses.
 
 | Unit | Branch | Worktree id | Scratch | Stage |
 |---|---|---|---|---|
-| integration | `wave/s2-6` | `inbox-s2-w6` | `w6/` | open |
-| story:post-from-is-the-caller | `impl/post-from-is-the-caller` | `inbox-s2-w6-from` | `w6/post-from-is-the-caller/` | next |
-| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w6-key` | `w6/dedup-key-scope/` | waits for the unit above |
-| story:foreign-message-id-answers-as-unknown | `impl/foreign-message-id` | `inbox-s2-w6-foreign` | `w6/foreign-message-id/` | waits for the unit above |
+| integration | `wave/s2-6` | `inbox-s2-w6` | `w6/` | closed |
+| story:post-from-is-the-caller | `impl/post-from-is-the-caller` | `inbox-s2-w6-from` | `w6/post-from-is-the-caller/` | merged (`e353a41`), `implemented` |
+| story:dedup-key-scope | `impl/dedup-key-scope` | `inbox-s2-w6-key` | `w6/dedup-key-scope/` | held: stopped before any commit, branch deleted, tree archived |
+| story:foreign-message-id-answers-as-unknown | `impl/foreign-message-id` | `inbox-s2-w6-foreign` | `w6/foreign-message-id/` | merged (`0b45685`), `implemented` |
+
+Result:
+
+- Gate on `wave/s2-6` after the 2 merges (`0b45685`) and the closing edits,
+  `CARGO_INCREMENTAL=0 slot task check`: exit 0. `task coverage`: 97 scenarios, 27 authored, 95
+  refused, 95 covered. `task conform`, the core lane: "97 scenarios: 97 passed, 0 failed, 0
+  error, 0 unsupported", `conformance_status: passed`. The serve lane: "97 scenarios: 22 passed,
+  0 failed, 0 error, 75 unsupported", `conformance_status: failed`, held to the 75 lines of
+  `crates/inbox-conformance/unsupported.tsv`. `task acceptance`: "3 checks passed".
+  `cargo test --workspace`: 366 cases passed, 0 failed and 8 ignored (343 and 9 after wave 5: 12
+  more in `crates/inbox-core`, 11 more in `crates/inbox-server`, where 2 cases lost their
+  ignore attribute and 1 ignored case is new). The run took 64 s in the pool. A second
+  run with `CI=true` and `GITHUB_ACTIONS=true` set gave the same result. The documentation site
+  builds (`npm --prefix website run build`, exit 0).
+- story:post-from-is-the-caller: 2 unit commits (`3cb3eb9`, `1d2e791`), merged as `e353a41`.
+  `PostMessage` and `Answer` refuse `not-sender` (403) first when `from` is not the caller's
+  principal. Verified by the coordinator before the merge: the case
+  `adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal` fails on `dcaa193`
+  and passes on `3cb3eb9`. Adversary pass 1, on `3cb3eb9`: 2 notes, both introduced, both
+  answered by cases in `1d2e791` (no test held a caller without a principal; no test held that
+  the comparison is exact). 8 changed cores were built. No second pass ran: the corrections
+  changed no implementation file.
+- story:foreign-message-id-answers-as-unknown: 2 unit commits (`d9b724d`, `bda962d`), merged as
+  `0b45685`. `read`, `collect`, `refuse`, `answer` and `mark-delivered` answer a caller that is
+  neither recipient nor sender 404 `unknown-message`. Verified by the coordinator before the
+  merge: the case `adv_a_third_principal_cannot_tell_a_message_between_others_from_no_message`
+  fails on `e353a41` (403 `not-recipient`) and passes on `d9b724d`. Adversary pass 1, on
+  `d9b724d`: 4 findings, 2 warnings and 2 notes. 3 were introduced and are corrected in
+  `bda962d`: the claim was stated for every command and holds for the 5; no case held who is a
+  party of a relayed message; 1 untrue sentence on the waits. 1 was there before the unit
+  (`post` answers `duplicate` for a stored message id, whoever sent it) and is filed as
+  story:post-does-not-tell-a-message-id-exists. No second pass ran: the corrections changed no
+  guard, no source line of a crate and no scenario.
+- story:dedup-key-scope is held, by the host operator's decision of 2026-11-21
+  (dependency-blocker:ess-805-second-run-witness). Its unit was stopped before any commit: with
+  the rule the story settled, ESS 0.96.0 synthesis writes a generated scenario that the
+  interpreted target fails (96 scenarios, 95 passed, 1 failed), so `task check` exits at
+  `task conform-interpreted`. 7 other spellings of the rule fail the same way. Filed as
+  beyond10x/ess#805. The option not taken was a scope by `on_behalf_of`. The story is taken up,
+  without asking, when an ESS release fixes the defect.
+- Differs from the plan:
+  - 2 of the 3 stories landed. The gate of the Backlog below stays closed on the third: no
+    listener outside loopback, no NATS backend wave, no deployment, no use by a real session.
+  - story:foreign-message-id-answers-as-unknown was forked from the merge of
+    story:post-from-is-the-caller and merged second. Its `depends_on` relation to
+    story:dedup-key-scope stated the order of the units and no dependency of the code; it was
+    removed at the close.
+  - An interim the plan did not have, decided by the coordinator: with the guard `not-sender`
+    in the model, synthesis writes no stored message and 49 generated scenarios leave the
+    suite (beyond10x/ess#804). The input `from` of `PostMessage` carries
+    `example: principal-262144`, the value synthesis gives its first caller. No scenario id
+    leaves with it; 19 generated scenarios lost the second run under a second caller. It shows
+    in 3 generated files of the public contract and goes when an ESS release fixes the issue.
+  - The listener changed in the third story, where its Scope said nothing outside `ess/` would:
+    the generated surface answers `foreign-message` 403 under its own name, and the listener
+    gives that one outcome the status and the body of `unknown-message`.
+  - The suite over HTTP gained a fifth reason for unsupported scenarios: one delegation id for
+    two pairs (2 scenarios). The counts are 65, 36, 9, 7 and 2 over 75 scenarios.
+  - story:post-does-not-tell-a-message-id-exists was accepted by the coordinator without asking,
+    under the host operator's standing decision of 2026-11-21 for a draft that an adversary or
+    security pass files against an open limit of `website/docs/limits.md`. It is in no wave.
+- Sub-agent runs (tool uses): the implementor of the first story 93; an agent that wrote the
+  reproduction of beyond10x/ess#804, 152; the adversary of the first story 93; the implementor
+  of the held story 61; the implementor of the third story 122 and 29; its adversary 73.
+- Open after wave 6: story:dedup-key-scope (held) and
+  story:post-does-not-tell-a-message-id-exists (accepted, in no wave). No release holds waves 4
+  to 6.
 
 ## Backlog
 
@@ -672,17 +740,20 @@ epic:two-hosts-and-wake and epic:jetstream-backend. Until story:post-from-is-the
 recipient can post a sender's signed envelope again under its own request signature. Its guard
 goes into `ess/` (`from != caller.principal`); no copy of it is written in the listener.
 
-The 3 were accepted on 2026-11-21 and are wave 6, above. They stay listed here until that
-wave is delivered.
+The 3 were accepted on 2026-11-21 and are wave 6, above. 2 landed in it:
+story:post-from-is-the-caller and story:foreign-message-id-answers-as-unknown.
 
-- story:post-from-is-the-caller (wave 3): a post or an answer is refused when its `from` is not
-  the caller. Its case `adv_a_principal_cannot_post_an_envelope_whose_from_is_another_principal`
-  is in `crates/inbox-server/tests/adversary.rs` with an ignore attribute naming the story.
-- story:foreign-message-id-answers-as-unknown (wave 3): a third principal gets one answer for a
-  message between others and for no message. Today `not-recipient` (403) against
-  `unknown-message` (404) tells any authenticated client whether a message id exists.
-- story:dedup-key-scope (wave 3): a dedup key of one sender does not refuse another sender's
-  post. Today `duplicate-key` compares the key alone over every message.
+- story:dedup-key-scope (wave 3): accepted and held on beyond10x/ess#805
+  (dependency-blocker:ess-805-second-run-witness). A dedup key of one sender does not refuse
+  another sender's post; today `duplicate-key` compares the key alone over every message. The
+  gate above stays closed until it lands.
+- story:post-does-not-tell-a-message-id-exists (wave 6): accepted, in no wave. `post` answers
+  `duplicate` for a message id that is stored, whoever sent it, so a third principal learns
+  from a post whether an id is in use. Its case
+  `adv_w6_a_third_principal_cannot_tell_a_message_between_others_from_no_message_by_post` is in
+  `crates/inbox-server/tests/adversary_w6_foreign.rs` with an ignore attribute naming the story.
+  It carries no `blocks` relation: whether it joins the gate above is the host operator's
+  decision.
 
 Drafts from the conformance unit, each a gap of the suite and no defect of the core as built:
 
@@ -704,4 +775,5 @@ Draft from the client unit:
   Its case `repost_does_not_deliver_again_a_note_its_recipient_already_read` is in
   `crates/inbox-cli/tests/adversary.rs` with an ignore attribute naming the story.
 
-Defects filed on beyond10x/ess in wave 3: #798 and #799 (see the result of wave 3).
+Defects filed on beyond10x/ess in wave 3: #798 and #799 (see the result of wave 3). In wave 6:
+#804 and #805 (see the result of wave 6).

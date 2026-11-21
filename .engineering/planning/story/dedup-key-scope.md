@@ -41,7 +41,7 @@ scope:
   path: website/docs/limits.md
 - confidence: inferred
   path: website/docs/status.md
-revision: 18
+revision: 19
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 17}
 - {from: "proposed", to: "active", at: "2026-11-21T15:32:33Z", actor: "agent:inbox", revision: 18}
@@ -87,6 +87,26 @@ Settled by the coordinator on 2026-11-21:
   caller, so a post is compared only with the caller's own messages; without it a third
   principal could still post with `from` set to the sender whose key it wants to take.
 - `docs/design/inbox.md`, decision 6, is where the scope is written down.
+
+Held on 2026-11-21 (dependency-blocker:ess-805-second-run-witness). The unit was started and
+stopped before any commit: with the rule above in the model
+(`where: {all: [dedup_key == input.dedup_key, from == input.from]}`), ESS 0.96.0 synthesis writes
+the second run of the generated scenario `PostMessage/outcome/decision-without-options` with a
+fresh `from` under a caller it does not name, `not-sender` answers first, and ESS's own
+interpreted target fails the scenario (beyond10x/ess#805). 7 other spellings of the rule fail the
+same way, and a row-set selector cannot read the caller (`ESS-COMMAND-003`).
+
+The coordinator put 2 options to the host operator: A, hold the story until an ESS release fixes
+the defect; B, scope the key by `on_behalf_of`, which passes the interpreted target and leaves a
+delegate sharing the keys of the principal it speaks for. The host operator chose A on
+2026-11-21: B would put a second meaning of the key scope on the wire that is then changed
+again. Wave 6 closed with the 2 other stories. Until this story lands: no listener outside
+loopback, no NATS backend wave, no deployment, no use by a real session. When an ESS release
+fixes the defect, the coordinating session takes the story up without asking.
+
+story:foreign-message-id-answers-as-unknown was built without this story. Its `depends_on`
+relation to this story stated the order of the units in the wave and no dependency of the code,
+and was removed at the close of the wave.
 
 ## Scope
 

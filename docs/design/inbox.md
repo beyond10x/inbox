@@ -114,8 +114,8 @@ Each can be changed; the alternative is named where there is one.
 ## What the specification cannot say (ESS 0.96.0)
 
 Each item is a rule of the service that stage 2 implements and tests outside the suite, or a
-limit of synthesis that an authored scenario makes up for. None is filed in the `ess` repository
-yet.
+limit of synthesis that an authored scenario makes up for. Only the item on `from` is filed in
+the `ess` repository (beyond10x/ess#804).
 
 - **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
   answered to the owner of the inbox in `to` or to the sender in `from`.
@@ -141,8 +141,9 @@ yet.
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
   suite. The input `from` of `PostMessage` carries `example: principal-262144`, the value ESS
   0.96.0 synthesis gives the first caller's `principal` and not an address anybody holds; it goes
-  when ESS writes those scenarios without it. With it, a generated scenario posts as one caller
-  only: 19 of them lost the second run under a second caller they had before the guard.
+  when ESS writes those scenarios without it, which is the fix of beyond10x/ess#804. With it, a
+  generated scenario posts as one caller only: 19 of them lost the second run under a second
+  caller they had before the guard.
 - **42 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
   synthesis arranges no row. `decision-answered-by-the-operator` covers 36 of them: it reads an
   answered decision, its reply and its option in `Settled`, `Replies`, `Thread`, `Outbox`,
