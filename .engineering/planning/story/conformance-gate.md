@@ -15,7 +15,7 @@ scope:
   path: Taskfile.yml
 - confidence: inferred
   path: crates/inbox-conformance
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
@@ -50,6 +50,12 @@ suite runs on the ESS interpreted target only.
 Stage 1 result on the interpreted target with ESS 0.96.0: 92 scenarios (23 authored), 92 passed.
 The interpreted run stays as `task conform-interpreted`; a scenario that passes there and fails
 here is a defect of the core or a gap of the model, and the story says which for each.
+
+Since wave 2 the entry is `inbox_core::handle_with_events`: it takes the backend's `Exclusive`
+section, builds the generated system over a clone of the backend and the step's context, and runs
+the generated `handle`. The target calls this entry once per step with its own context type,
+which implements `TryContext` and `PostExternals`. The order in which `PostMessage` refuses is in
+the Context of story:core-and-memory-backend.
 
 ## Scope
 

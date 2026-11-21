@@ -14,7 +14,7 @@ scope:
   path: crates/inbox-server
 - confidence: inferred
   path: docs/design/service.md
-revision: 8
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
@@ -64,6 +64,19 @@ interval and the answer retention, is story:cli-client.
 
 The request signature carries its timestamp; a request older than 60 s is answered `401`. The
 header names are written into `docs/design/service.md` before code.
+
+Since wave 2: the listener calls the entry `inbox_core::handle` once per request, with a clone
+of the backend and a `ServiceContext` over that request's caller; the entry runs one command at a
+time per store. The verifier (`inbox-verify`) reads no clock and keeps no record of requests it
+has seen: the listener passes the instant of each check, and a signed request can be sent again
+inside its 60 s window.
+
+Added by the host operator on 2026-11-21 (decision on finding 4 of
+review-result:adversary-signature-verifier-pass-1): the listener runs the check
+`inbox_verify::duplicate_member` on every request body after parsing and before decoding, and
+refuses a body in which an object carries a member name twice, at any depth, before any command
+runs. The generated reader keeps the first of two members, so without the check one signature
+covers two texts. One call and one case; `docs/design/service.md` names the refusal.
 
 ## Scope
 

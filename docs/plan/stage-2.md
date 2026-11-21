@@ -11,7 +11,7 @@ Derived with `aep plan artifact waves --kind story --status active` (aep 0.80.0)
 |---|---|---|---|
 | 1 | story:rust-workspace-and-model | the generated crate every later story builds on | delivered 2026-11-21 |
 | 2 | story:core-and-memory-backend, story:signature-verifier | the rules complete in process; signatures | delivered 2026-11-21 |
-| 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | planned |
+| 3 | story:backend-test-kit, story:conformance-gate, story:http-service | the backend contract checked; the suite against the core; the listener | running |
 | 4 | story:cli-client, story:declared-coverage | the client; no generated scenario left uncovered | planned |
 | 5 | story:service-acceptance | the suite over HTTP against a running service; closes the stage | planned |
 
@@ -162,6 +162,56 @@ Result:
 - Sub-agents, all on Opus. Counted from the transcripts, where each tool call appears twice: the
   core's implementor 171 tool uses in 4 runs, the verifier's implementor 140 in 3 runs; the
   adversaries 57 and 42 (core, pass 1 and 2) and 54 and 39 (verifier).
+
+## Wave 3
+
+Three units at once. Re-derived on `main` at `88b336a` with
+`aep plan artifact waves --kind story --status active`: the 3 stories are the first wave that is
+left, and no collision is reported among them (`3 wave(s), 7 collision(s), 0 unassessed`; every
+collision is between stories of different waves). Their scope entries are `inferred`:
+`crates/inbox-backend-testkit` for story:backend-test-kit; `crates/inbox-conformance`,
+`Taskfile.yml` and `AGENTS.md` for story:conformance-gate; `crates/inbox-server` and
+`docs/design/service.md` for story:http-service. No story of the planned wave left it.
+
+Files more than one unit would touch, and who owns them in this wave:
+
+- `Cargo.lock`: each unit's build adds its crate and dependencies. Each unit keeps its own lock
+  current; at the second and third merge the coordinator takes the wave branch's side and
+  regenerates it with `cargo metadata`.
+- `AGENTS.md`: story:conformance-gate edits the Commands table (its scope). No unit edits the
+  Layout table: each reports its row and the coordinator adds the 3 rows after the merges.
+- `Taskfile.yml`: story:conformance-gate only.
+
+No unit edits the root `Cargo.toml`, and none depends on another unit's crate: all 3 depend on
+`crates/inbox-core`, story:http-service also on `crates/inbox-verify`.
+
+Story text changed before dispatch, scope and wave order unchanged:
+
+- Each of the 3 stories has one Context paragraph on what wave 2 settled: the entry
+  `inbox_core::handle`, and `Exclusive` as the third part of the backend contract, which
+  story:backend-test-kit checks too.
+- story:http-service calls `inbox_verify::duplicate_member` on every request body and refuses a
+  body with a member name twice: the host operator's decision of 2026-11-21 on finding 4 of
+  review-result:adversary-signature-verifier-pass-1. story:refuse-duplicate-members stays in the
+  backlog only if something of it is left after this wave.
+
+Commits this wave makes: the opening store commit, 1 commit per unit (more if a correction round
+runs), 3 merges, the closing commit with the Layout rows and the store, the fast-forward of
+`main`.
+
+Pre-flight (2026-11-21): the primary checkout is clean on `main` at `88b336a`; the 3 trees of
+wave 2 are removed; 161 GB free on the root file system; the integration tree of wave 2 held
+335 MB of `target/` after the gate, so 4 trees stay below 2 GB before the new dependencies.
+
+What a story's move to `implemented` needs: no evidence requirement in the lifecycle. The wave
+records the gate run as `test_result` and each claim check as `verification`.
+
+| Unit | Branch | Worktree id | Scratch | Stage |
+|---|---|---|---|---|
+| integration | `wave/s2-3` | `inbox-s2-w3` | `w3/` | open |
+| story:backend-test-kit | `impl/backend-test-kit` | `inbox-s2-w3-kit` | `w3/backend-test-kit/` | dispatched |
+| story:conformance-gate | `impl/conformance-gate` | `inbox-s2-w3-conf` | `w3/conformance-gate/` | dispatched |
+| story:http-service | `impl/http-service` | `inbox-s2-w3-http` | `w3/http-service/` | dispatched |
 
 ## Backlog
 

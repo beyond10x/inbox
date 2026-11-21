@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/inbox-backend-testkit
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
@@ -39,6 +39,11 @@ test layer both backends pass; epic:jetstream-backend adds its own checks to it 
 survives a restart, a failure between a write and its acknowledgement).
 
 Dedup and expiry are rules of the core, so the kit holds no check of them.
+
+Since wave 2 the backend contract has a third part: `Exclusive` of `inbox-core`, the section in
+which the entry `inbox_core::handle` runs one command at a time per store. The kit checks it
+beside the 2 storage ports: clones of one backend share the section, a second command waits
+while one runs, and the section is free again after a command that panics.
 
 ## Scope
 
