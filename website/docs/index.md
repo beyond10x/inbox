@@ -60,4 +60,5 @@ The non-goals of version 1, from the design note:
 - No general identity service. Keys and delegations come from one key file signed by the
   operator key.
 
-It is also not deployed anywhere, and not ready for a real session (see [the limits](limits.md)).
+It is also not deployed anywhere, and not ready for principals of different operators to share
+one service (see [the limits](limits.md)).

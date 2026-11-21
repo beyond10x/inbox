@@ -113,7 +113,8 @@ byte what an id no message carries gets from the same route: `404`
 these 5 commands a third principal cannot tell a message between others from no message, in any
 state of the message. A `post` to an address no inbox has, or into a closed inbox, answers alike
 for the id of another sender's message and a free id: `409` with the body of `unknown-inbox` or
-of `inbox-closed`. The row refusals of a post come in the order `unknown-inbox`, `duplicate`
+of `inbox-closed`, or of `duplicate-key` when a live message of the caller carries the post's
+dedup key. The row refusals of a post come in the order `unknown-inbox`, `duplicate`
 (the sender's own stored message), `duplicate-key`, `inbox-closed`, `id-taken` (decision 6 of
 `docs/design/inbox.md`); `id-taken` is `409`
 `{"outcome":"id-taken","published":[],"error":"inbox.messaging.MessageIdTaken"}`, the status of

@@ -152,15 +152,16 @@ the `ess` repository (beyond10x/ess#804).
   and refuses one that is not the caller's.
 - **Synthesis arranges no caller for a guard over a stored field** that was not set from the
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
-  rule), and only notes once an input guard depends on `kind`. 53 generated scenarios are
+  rule), and only notes once an input guard depends on `kind`. 51 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
 - **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
-  suite. The input `from` of `PostMessage` carries `example: principal-262144`, the value ESS
-  0.97.1 synthesis gives the first caller's `principal` and not an address anybody holds; it goes
-  when ESS writes those scenarios without it, which is the fix of beyond10x/ess#804. With it, a
-  generated scenario posts as one caller only: 19 of them lost the second run under a second
-  caller they had before the guard.
+  suite (measured on ESS 0.96.0). The input `from` of `PostMessage` carries
+  `example: principal-262144`, the value ESS 0.97.1 synthesis gives the first caller's
+  `principal` and not an address anybody holds; it goes when ESS writes those scenarios without
+  it, which is the fix of beyond10x/ess#804. With it, a generated scenario posts as one caller
+  only: 19 of them lost the second run under a second caller they had before the guard (also
+  measured on ESS 0.96.0).
 - **42 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
   synthesis arranges no row. `decision-answered-by-the-operator` covers 36 of them: it reads an
   answered decision, its reply and its option in `Settled`, `Replies`, `Thread`, `Outbox`,
@@ -170,9 +171,9 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 98 scenarios (28 authored) and refuses 95,
-  and authored scenarios cover all 95, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 98 passed and reports `conformance_status: passed`.
+- **`task coverage` on ESS 0.97.1**: synthesis writes 103 scenarios (30 authored) and refuses 93,
+  and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
+  runs on the interpreted target as 103 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 
@@ -199,7 +200,7 @@ refusals.
 The plan is in `.engineering/planning/`: one epic per stage 2 to 6 and draft stories for stage 2.
 
 Stage 2 starts from what ESS synthesizes. `ess generate synthesize --target rust --layout crate`
-on ESS 0.96.0 writes 85 of 87 capabilities: the model types, the behaviour of 7 commands, the
+on ESS 0.97.1 writes 86 of 88 capabilities: the model types, the behaviour of 7 commands, the
 query of 9 views, the storage and context ports, and an HTTP route table with JSON codecs. It
 leaves 2 obligations, the behaviours of `PostMessage` (the row-set guard `duplicate-key`) and
 `Expire` (a narrowed read of `default_on_silence`). The generated storage ports (`get`, `put`,

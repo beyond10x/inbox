@@ -13,7 +13,7 @@ disagree, `ess/` holds.
 [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md):
 the problem, the shape (one service, backends behind one storage contract, signed envelopes),
 the model of two entities, nine commands and nine views, when a message is removed, the eight
-decisions taken while modelling, what ESS 0.96.0 cannot express, and the six stages. Its status
+decisions taken while modelling, what ESS 0.97.1 cannot express, and the six stages. Its status
 line was written at the end of stage 1 and says that no service code exists; the code of stage
 2 has since been added (see [what works](status.md)).
 
