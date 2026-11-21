@@ -134,25 +134,11 @@ impl Outbox {
         epoch: &Epoch,
         now: Instant,
     ) -> Result<(), Failure> {
-        self.record_epochs(&[(message_id.to_owned(), epoch.clone())], now)
-    }
-
-    /// [`Outbox::record_epoch`] for each `(message id, epoch)` of `arrived`, with one read and at
-    /// most one write of the epochs file.
-    ///
-    /// # Errors
-    ///
-    /// [`Failure::Local`] when a file cannot be read or written.
-    pub fn record_epochs(&self, arrived: &[(String, Epoch)], now: Instant) -> Result<(), Failure> {
-        if arrived.is_empty() {
-            return Ok(());
-        }
         self.change(now, true, |lines, epochs| {
-            let kept = message_ids(lines);
-            for (message_id, epoch) in arrived {
-                if kept.contains(message_id.as_str()) {
-                    epochs.record(message_id, epoch);
-                }
+            if lines.iter().any(|line| {
+                decode(line).is_some_and(|envelope| envelope.message_id.0 == message_id)
+            }) {
+                epochs.record(message_id, epoch);
             }
         })
     }
@@ -315,14 +301,6 @@ impl Epochs {
             })
             .collect()
     }
-}
-
-/// The message ids of the envelopes `lines` holds.
-fn message_ids(lines: &[String]) -> HashSet<String> {
-    lines
-        .iter()
-        .filter_map(|line| decode(line).map(|envelope| envelope.message_id.0))
-        .collect()
 }
 
 /// The envelope a line holds, read by the generated decoder, or why it does not read.

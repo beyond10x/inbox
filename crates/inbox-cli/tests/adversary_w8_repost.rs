@@ -147,9 +147,11 @@ fn repost_posts_every_dropped_envelope_when_the_epochs_file_cannot_be_written() 
     );
 }
 
-/// F2. A post refused `duplicate-key` did not arrive: the service holds another message under
-/// that key, possibly from another sender, and stores nothing. Once that other message is gone,
-/// a `repost` in the same start must post the envelope; the client of `d52ba0f` did.
+/// F2. A post refused `duplicate-key` did not arrive: the service holds another message of the
+/// sender under that key and stores nothing. Once that other message is gone, a `repost` in the
+/// same start must post the envelope; the client of `d52ba0f` did. The key is held by a second
+/// note of the same sender, so the case holds whether a dedup key is shared by every sender or
+/// belongs to its sender (story:dedup-key-scope).
 #[test]
 fn a_post_refused_duplicate_key_is_posted_again_once_the_message_holding_the_key_is_gone() {
     let world = World::new("adv-w8-dedup");
@@ -171,16 +173,17 @@ fn a_post_refused_duplicate_key_is_posted_again_once_the_message_holding_the_key
     assert_eq!(kept.len(), 1);
     let for_bob = kept[0].clone();
 
-    // Bob opens his inbox and posts a note of his own under the same key, to himself.
+    // Bob opens his inbox, and Alice posts a second note under the same key: it arrives, holds
+    // the key and is recorded at the epoch of this start.
     world.client("bob", &["open"]).ok();
     let own = post(
         &world,
-        "bob",
+        "alice",
         &[
             "--to",
             BOB,
             "--body",
-            "bob's own",
+            "the second",
             "--dedup-key",
             "daily-report",
         ],
@@ -190,7 +193,8 @@ fn a_post_refused_duplicate_key_is_posted_again_once_the_message_holding_the_key
     .trim()
     .to_owned();
 
-    // Alice reposts: the key is taken, the service answers `duplicate-key` and stores nothing.
+    // Alice reposts: the second note is left alone; for the first the key is taken, the service
+    // answers `duplicate-key` and stores nothing.
     let first = world.client("alice", &["repost", "--json"]).ok().json();
     let entries = reposted(&first);
     assert_eq!(entries.len(), 1, "{first:?}");
@@ -202,10 +206,10 @@ fn a_post_refused_duplicate_key_is_posted_again_once_the_message_holding_the_key
     assert_eq!(
         ids(&pending),
         std::slice::from_ref(&own),
-        "alice's note was not stored"
+        "alice's first note was not stored"
     );
 
-    // Bob reads his own note: the key is free again.
+    // Bob reads the second note: the key is free again.
     world.client("bob", &["read", &own]).ok();
     let again = world.client("alice", &["repost", "--json"]);
     let pending = world.client("bob", &["pending", "--json"]).ok().json();

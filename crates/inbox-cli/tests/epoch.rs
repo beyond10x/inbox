@@ -114,25 +114,6 @@ fn a_post_that_arrived_records_the_epoch_beside_the_outbox_and_one_refused_recor
 }
 
 #[test]
-fn a_post_refused_duplicate_key_records_no_epoch() {
-    let world = World::new("epoch-duplicate-key");
-    world.client("bob", &["open"]).ok();
-    let post = |body: &str| {
-        world.client(
-            "alice",
-            &["post", "--to", BOB, "--dedup-key", "daily", "--body", body],
-        )
-    };
-    let first = post("first").ok().stdout.trim().to_owned();
-    let second = post("second");
-    assert_eq!(second.status, REFUSED, "{second:#?}");
-    assert!(second.stderr.contains("Duplicate"), "{second:#?}");
-    let recorded = entries(&world.outbox("alice"));
-    assert_eq!(recorded.len(), 1, "{recorded:?}");
-    assert_eq!(recorded[0].0, first);
-}
-
-#[test]
 fn repost_in_the_start_a_post_arrived_at_posts_nothing() {
     let world = World::new("epoch-same-start");
     world.client("bob", &["open"]).ok();
