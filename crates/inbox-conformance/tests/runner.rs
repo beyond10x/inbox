@@ -266,6 +266,32 @@ fn an_error_an_event_payload_and_a_row_are_each_compared() {
 }
 
 #[test]
+fn a_claimed_null_holds_of_an_absent_or_null_member_and_not_of_a_value() {
+    let contains_null = |rows: &str| {
+        let steps = r#"[{"step": "query_view", "view": "inbox.messaging.Inboxes"},
+            {"step": "expect_view", "view": "inbox.messaging.Inboxes", "expectation": {"expect": "contains",
+              "fields": {"address": {"kind": "literal", "value": "a"}, "owner": {"kind": "literal", "value": null}}}}]"#;
+        let mut target = Scripted {
+            reads: vec![Read::Rows(match parse(rows) {
+                Value::Array(rows) => rows,
+                _ => unreachable!(),
+            })],
+            ..Scripted::default()
+        };
+        run_scenario(&scenario(steps, ""), &mut target)
+    };
+    for rows in [
+        r#"[{"address": "a", "owner": null}]"#,
+        r#"[{"address": "a"}]"#,
+    ] {
+        let result = contains_null(rows);
+        assert_eq!(result.status, Status::Passed, "{rows}: {result:?}");
+    }
+    let valued = contains_null(r#"[{"address": "a", "owner": "agent:box/worker"}]"#);
+    assert_eq!(valued.status, Status::Failed, "{valued:?}");
+}
+
+#[test]
 fn two_claims_of_one_event_need_two_occurrences() {
     let claim = r#"{"step": "expect_event", "event": "inbox.messaging.InboxOpened", "payload": {"address": "a"}}"#;
     let steps = format!("[{OPEN}, {claim}, {claim}]");
@@ -460,13 +486,28 @@ fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
         Status::Failed
     );
 
-    let invariant = |letter: &str| {
+    let declarations = r#"{"inbox.messaging.DecisionAsk": {"kind": "struct", "fields": [
+                  {"name": "options", "type": "List<inbox.messaging.DecisionOption>"},
+                  {"name": "recommended_option", "type": "Optional<inbox.messaging.OptionLetter>"},
+                  {"name": "request_ref", "type": "Optional<String>"}], "invariants": []},
+                "inbox.messaging.DecisionOption": {"kind": "struct", "fields": [
+                  {"name": "letter", "type": "inbox.messaging.OptionLetter"},
+                  {"name": "text", "type": "String"}], "invariants": []},
+                "inbox.messaging.MessageId": {"kind": "newtype", "of": "String",
+                  "invariants": [{"statement": "value.count == 26", "predicate": "value.count == 26"}]},
+                "inbox.messaging.OptionLetter": {"kind": "newtype", "of": "String",
+                  "invariants": [{"statement": "value.count == 1", "predicate": "value.count == 1"}], "alphabet": "AB"}}"#;
+    let options = |letter: &str| {
+        format!(
+            r#"{{"options": [{{"letter": "A", "text": "t"}}, {{"letter": "{letter}", "text": "u"}}]}}"#
+        )
+    };
+    let witnessed = |rows: &str, declarations: &str| {
         let steps = format!(
             r#"[{}, {{"step": "query_view", "view": "inbox.messaging.Due"}},
             {{"step": "expect_view", "view": "inbox.messaging.Due", "expectation": {{"expect": "value_invariants",
               "root": {{"name": "decision", "type": "Optional<inbox.messaging.DecisionAsk>"}},
-              "declarations": {{"inbox.messaging.OptionLetter": {{"kind": "newtype", "of": "String",
-                "invariants": [{{"statement": "value.count == 1", "predicate": "value.count == 1"}}], "alphabet": "AB"}}}},
+              "declarations": {declarations},
               "value": "inbox.messaging.OptionLetter",
               "position": {{"kind": "site", "path": [{{"op": "present"}}, {{"op": "field", "name": "options"}}, {{"op": "element"}}, {{"op": "field", "name": "letter"}}]}},
               "witness": {{"kind": "arranged_row", "selector": {{"kind": "projected_identity", "entity": "inbox.messaging.Message",
@@ -474,9 +515,6 @@ fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
                 "expected": {{"kind": "observed", "event": "inbox.messaging.MessagePosted", "field": "message_id"}}}}}},
               "work_limit": 1048576}}}}]"#,
             post(FIRST, "k")
-        );
-        let row = format!(
-            r#"[{{"message_id": "{FIRST}", "decision": {{"options": [{{"letter": "A", "text": "t"}}, {{"letter": "{letter}", "text": "u"}}]}}}}]"#
         );
         let mut target = Scripted {
             answers: vec![outcome(
@@ -487,7 +525,7 @@ fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
                     format!(r#"{{"message_id": "{FIRST}"}}"#).as_str(),
                 )],
             )],
-            reads: vec![Read::Rows(match parse(&row) {
+            reads: vec![Read::Rows(match parse(rows) {
                 Value::Array(rows) => rows,
                 _ => unreachable!(),
             })],
@@ -495,9 +533,51 @@ fn a_predicate_and_a_value_invariant_are_checked_on_every_row() {
         };
         run_scenario(&scenario(&steps, ""), &mut target)
     };
+    let invariant = |letter: &str| {
+        witnessed(
+            &format!(
+                r#"[{{"message_id": "{FIRST}", "decision": {}}}]"#,
+                options(letter)
+            ),
+            declarations,
+        )
+    };
     assert_eq!(invariant("B").status, Status::Passed);
     assert_eq!(invariant("BB").status, Status::Failed);
     assert_eq!(invariant("C").status, Status::Failed);
+    let unwitnessed = witnessed(
+        &format!(
+            r#"[{{"message_id": "{FIRST}", "decision": null}}, {{"message_id": "{SECOND}", "decision": {}}}]"#,
+            options("B")
+        ),
+        declarations,
+    );
+    assert_eq!(unwitnessed.status, Status::Failed, "{unwitnessed:?}");
+    for empty in [
+        format!(r#"[{{"message_id": "{FIRST}"}}]"#),
+        format!(r#"[{{"message_id": "{FIRST}", "decision": {{"options": []}}}}]"#),
+    ] {
+        let none = witnessed(&empty, declarations);
+        assert_eq!(none.status, Status::Failed, "{empty}: {none:?}");
+    }
+    let other_row = witnessed(
+        &format!(
+            r#"[{{"message_id": "{FIRST}", "decision": {}}}, {{"message_id": "{SECOND}", "decision": {}}}]"#,
+            options("B"),
+            options("BB")
+        ),
+        declarations,
+    );
+    assert_eq!(other_row.status, Status::Failed, "{other_row:?}");
+    let undeclared = witnessed(
+        &format!(
+            r#"[{{"message_id": "{FIRST}", "decision": {}}}]"#,
+            options("B")
+        ),
+        r#"{"inbox.messaging.OptionLetter": {"kind": "newtype", "of": "String",
+            "invariants": [{"statement": "value.count == 1", "predicate": "value.count == 1"}]}}"#,
+    );
+    assert_eq!(undeclared.status, Status::Error, "{undeclared:?}");
 }
 
 #[test]

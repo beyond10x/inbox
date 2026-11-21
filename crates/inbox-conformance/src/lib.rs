@@ -1,7 +1,15 @@
 //! The synthesized ESS conformance suite, run against the core of the inbox in process.
 //!
-//! [`suite::read`] reads an `ess-conformance/52` suite; a scenario holding a construct this
-//! runner does not interpret is admitted as unsupported with its reason and not run.
+//! [`suite::read`] reads an `ess-conformance/52` suite. Nothing the suite states is silently
+//! ignored:
+//!
+//! - a key the runner does not know at the top level of the suite or in `provenance` belongs to
+//!   no single scenario, so the whole suite is refused, naming the key (`run` exits 2), as is a
+//!   suite of another format or one not starting from an empty system;
+//! - a step kind, key, value reference, predicate, shape or declaration the runner does not
+//!   interpret inside a scenario makes that scenario unsupported, with the reason, and none of its
+//!   steps runs; `unsupported.tsv` must list it for the gate to pass.
+//!
 //! [`run_suite`] interprets every other scenario against a [`Target`], each from an empty system,
 //! and gives each one terminal status: passed, failed, error or unsupported. [`CoreTarget`] is
 //! the one target: the generated `handle` over the 2 obligations of `inbox-core` and its
@@ -9,22 +17,30 @@
 //! 6 `external:` branches as the step's expected outcome says.
 //!
 //! [`results::document`] writes the `ess-conformance-results/1` document `ess verify conform
-//! report` turns into a report/2, and [`gate::verdict`] holds that report to `unsupported.tsv`.
-//! `task conform` runs the three.
+//! report` turns into a report/2, and [`gate::verdict`] holds that report to the suite it was
+//! made for and to `unsupported.tsv`. `task conform` runs the three.
 //!
-//! What the runner compares, as far as the suite states it: the outcome and the command it
-//! answers, the declared error or its absence, a refusal as not granted and the actor it names,
-//! each claimed event by name and exact payload (matched to distinct occurrences, and checked
-//! against the step's payload shape), the absence of an event or of all events, view rows
-//! (`contains`, `excludes`, `counts`, `satisfies`, `value_invariants`) and a subject row kept
-//! unchanged. It does not compare a declared error's payload, and no step of the suite claims
-//! one.
+//! What the runner compares, as far as the suite states it and as the ESS 0.96.0 runner compares
+//! it: the outcome and the command it answers, the declared error or its absence, a refusal as
+//! not granted and the actor it names, each claimed event by name and exact payload (matched to
+//! distinct occurrences, and checked against the step's payload shape), the absence of an event
+//! or of all events, view rows (`contains` and `excludes`, `counts`, `satisfies`,
+//! `value_invariants` over every row as `Contract::observe` does, an error where its
+//! declarations are not the closure of the types it reaches, as ESS's `Contract::admit` refuses
+//! them) and a subject row, exactly one, kept exactly unchanged. It does not compare a declared
+//! error's payload, and no step of the suite claims one; it does not check the declared types of
+//! a complete subject's fields (ESS `admit_row`).
+//!
+//! One departure from ESS: a top-level member a view row leaves out and one it carries as `null`
+//! are one value ([`value::field_matches`]), where ESS compares a plain top-level field exactly,
+//! because the generated server leaves an unset `Optional` member out (beyond10x/ess#799).
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 mod core_target;
 pub mod gate;
+pub mod invariants;
 pub mod results;
 mod runner;
 pub mod suite;

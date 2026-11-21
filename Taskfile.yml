@@ -69,7 +69,7 @@ tasks:
       - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
       - cargo run -q --locked -p inbox-conformance -- run --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json
       - ess verify conform report --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json --implementation inbox-core --runner inbox-conformance@0.1.0 --report-out {{.OUT}}/conform/core-report.json
-      - cargo run -q --locked -p inbox-conformance -- gate --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported.tsv
+      - cargo run -q --locked -p inbox-conformance -- gate --suite {{.OUT}}/conform/suite.json --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported.tsv
 
   coverage:
     desc: Synthesize with declared coverage and list the generated scenarios nothing covers; exits 1 while one remains.

@@ -56,7 +56,8 @@ pub struct Report {
 ///
 /// # Errors
 ///
-/// A document that is not JSON, not a report/2, or whose counts disagree with its lists.
+/// A document that is not JSON, not a report/2, whose counts disagree with its lists (passed
+/// included), or whose total is not the sum of its outcomes.
 pub fn read_report(text: &str) -> Result<Report, String> {
     let document = json::parse_written(text).map_err(|error| format!("the report: {error}"))?;
     match document.member("format") {
@@ -98,14 +99,94 @@ pub fn read_report(text: &str) -> Result<Report, String> {
         }
         Ok(listed)
     };
-    Ok(Report {
+    let passed = ids("passed")?;
+    let report = Report {
         total: count("total")?,
-        passed: count("passed")?,
+        passed: passed.len() as u64,
         failed: ids("failed")?,
         error: ids("error")?,
         skipped: ids("skipped")?,
         unsupported: ids("unsupported")?,
+    };
+    if report.total != accounted(&report) {
+        return Err(format!(
+            "the report counts {} scenarios and accounts for {}",
+            report.total,
+            accounted(&report)
+        ));
+    }
+    Ok(report)
+}
+
+/// The scenarios a report accounts for: its passed count and every listed id.
+fn accounted(report: &Report) -> u64 {
+    report.passed
+        + (report.failed.len()
+            + report.error.len()
+            + report.skipped.len()
+            + report.unsupported.len()) as u64
+}
+
+/// What binds a report/2 to a run: its verdict and the suite it was made for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    /// `conformance_status`.
+    pub conformance_status: String,
+    /// `suite.digest`: `sha256:<hex>` of the suite's bytes.
+    pub suite_digest: String,
+}
+
+/// Reads the [`Binding`] of an `ess-conformance-report/2`.
+///
+/// # Errors
+///
+/// A document that is not JSON or carries no `conformance_status` or `suite.digest`.
+pub fn read_binding(text: &str) -> Result<Binding, String> {
+    let document = json::parse_written(text).map_err(|error| format!("the report: {error}"))?;
+    let Some(Value::Text(conformance_status)) = document.member("conformance_status") else {
+        return Err("the report has no `conformance_status`".to_owned());
+    };
+    let Some(Value::Text(suite_digest)) = document
+        .member("suite")
+        .and_then(|suite| suite.member("digest"))
+    else {
+        return Err("the report has no `suite.digest`".to_owned());
+    };
+    Ok(Binding {
+        conformance_status: conformance_status.clone(),
+        suite_digest: suite_digest.clone(),
     })
+}
+
+/// The `conformance_status` ESS 0.96.0 gives a run this gate passes: `inconclusive` where every
+/// scenario passed (the suite declares no coverage), and `failed` where the only scenarios that
+/// did not pass are unsupported ones the list names (ESS fails any unsupported scenario).
+pub fn passing_status(report: &Report) -> &'static str {
+    if report.unsupported.is_empty() {
+        "inconclusive"
+    } else {
+        "failed"
+    }
+}
+
+/// Holds a report's binding to the suite the task synthesized (`suite_digest`) and to the status
+/// a passing run carries; one problem per mismatch.
+pub fn bound(report: &Report, binding: &Binding, suite_digest: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if binding.suite_digest != suite_digest {
+        problems.push(format!(
+            "the report is for the suite {}, not for {suite_digest}, the suite this run synthesized",
+            binding.suite_digest
+        ));
+    }
+    let expected = passing_status(report);
+    if binding.conformance_status != expected {
+        problems.push(format!(
+            "conformance_status is `{}`; a passing run carries `{expected}`",
+            binding.conformance_status
+        ));
+    }
+    problems
 }
 
 /// The gate's answer: the result line, and every reason it fails; none where it passes.
@@ -137,6 +218,13 @@ pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
         report.unsupported.len()
     );
     let mut problems = Vec::new();
+    if report.total != accounted(report) {
+        problems.push(format!(
+            "the report counts {} scenarios and accounts for {}",
+            report.total,
+            accounted(report)
+        ));
+    }
     if report.total == 0 || report.passed == 0 {
         problems.push("the run passed no scenario: the suite did not run".to_owned());
     }

@@ -1,9 +1,13 @@
 //! The synthesized suite, read into the steps this runner interprets.
 //!
-//! A scenario holding a construct the runner does not interpret (a step kind, a key, a value
-//! reference, a predicate, a shape it has no reading for) is not run: it is admitted as
-//! [`Scenario::unsupported`] with the reason, and no step of it is executed. A key the runner does
-//! not know is such a construct too, so nothing the suite states is silently ignored.
+//! Nothing the suite states is silently ignored. What the runner does with a key or construct it
+//! does not know depends on who owns it:
+//!
+//! - at the top level of the suite or in `provenance`, no single scenario owns it: [`read`]
+//!   refuses the whole suite, naming the key (the binary exits 2);
+//! - in a scenario, a step, an expectation, a value reference, a predicate or a declaration (a
+//!   step kind, a key, a shape it has no reading for): the scenario is admitted as
+//!   [`Scenario::unsupported`] with the reason, and no step of it is executed.
 
 use std::collections::BTreeMap;
 
@@ -123,38 +127,7 @@ pub enum Predicate {
     },
 }
 
-/// One step of a position path inside a published value.
-#[derive(Debug, Clone, PartialEq)]
-pub enum PathOp {
-    /// `present`: an `Optional` holds a value; an absent one yields none.
-    Present,
-    /// `field`: a struct member.
-    Field(String),
-    /// `element`: every element of a list.
-    Element,
-}
-
-/// `expect: value_invariants`: every value of a newtype at a position inside the row the
-/// witness names satisfies what the type declares (its invariants and its alphabet).
-#[derive(Debug, Clone, PartialEq)]
-pub struct ValueInvariants {
-    /// The row member the position starts at.
-    pub root: String,
-    /// The position inside it.
-    pub path: Vec<PathOp>,
-    /// The newtype checked, for messages.
-    pub value_type: String,
-    /// Its invariants, each `value.count <op> <n>`.
-    pub counts: Vec<(Op, f64)>,
-    /// Its alphabet, if it declares one.
-    pub alphabet: Option<String>,
-    /// The row member that holds the witness row's identity.
-    pub identity: String,
-    /// The event whose latest occurrence carries that identity.
-    pub event: String,
-    /// The payload member of that event.
-    pub field: String,
-}
+pub use crate::invariants::{Body, PathOp, Primitive, TypeRef, ValueInvariants};
 
 /// What a step expects of the rows the last read answered.
 #[derive(Debug, Clone, PartialEq)]
@@ -284,13 +257,26 @@ pub enum Step {
 ///
 /// # Errors
 ///
-/// A document that is not JSON, not a suite of [`SUITE_VERSION`], or not one that starts every
-/// scenario from an empty system. A scenario this runner cannot interpret is no error: it is read
-/// as unsupported.
+/// A document that is not JSON, not a suite of [`SUITE_VERSION`], not one that starts every
+/// scenario from an empty system, or one carrying a top-level or `provenance` key this runner
+/// does not know. A scenario this runner cannot interpret is no error: it is read as unsupported.
 pub fn read(text: &str) -> Result<Suite, String> {
     let document = json::parse_written(text).map_err(|error| format!("the suite: {error}"))?;
     let root = object(&document, "the suite")?;
+    only(root, &["provenance", "events", "scenarios"], "the suite")?;
     let provenance = object(member(root, "provenance", "the suite")?, "provenance")?;
+    only(
+        provenance,
+        &[
+            "suite_version",
+            "system",
+            "specification_version",
+            "spec_digest",
+            "contract_digest",
+            "scenario_initial_state",
+        ],
+        "provenance",
+    )?;
     let version = text_member(provenance, "suite_version", "provenance")?;
     if version != SUITE_VERSION {
         return Err(format!(
@@ -663,39 +649,64 @@ fn value_invariants(fields: &[(String, Value)]) -> Result<ValueInvariants, Strin
     only(root, &["name", "type"], "root")?;
     let value_type = text_member(fields, "value", what)?.to_owned();
     let declarations = object(member(fields, "declarations", what)?, "declarations")?;
-    let declared = object(
-        member(declarations, &value_type, "declarations")?,
-        &value_type,
-    )?;
-    only(
-        declared,
-        &["kind", "of", "invariants", "alphabet"],
-        &value_type,
-    )?;
-    if text_member(declared, "kind", &value_type)? != "newtype"
-        || text_member(declared, "of", &value_type)? != "String"
-    {
-        return Err(format!(
-            "`{value_type}` is not a newtype of String, the one value type this runner checks"
-        ));
+    let mut types = BTreeMap::new();
+    for (name, declaration) in declarations {
+        types.insert(name.clone(), body(name, declaration)?);
     }
-    let counts = items(member(declared, "invariants", &value_type)?, "invariants")?
-        .iter()
-        .map(|invariant| {
-            let invariant = object(invariant, "an invariant")?;
-            only(invariant, &["statement", "predicate"], "an invariant")?;
-            let text = text_member(invariant, "predicate", "an invariant")?;
-            match counted(text) {
-                Some(("value", op, bound)) => Ok((op, bound)),
-                _ => Err(format!(
-                    "the invariant `{text}` of `{value_type}` is not one this runner interprets"
-                )),
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let alphabet = match declared.iter().find(|(name, _)| name == "alphabet") {
-        None => None,
-        Some((_, alphabet)) => Some(as_text(alphabet, "alphabet")?.to_owned()),
+    let root_type = crate::invariants::parse_type(text_member(root, "type", "root")?)?;
+    let identity_type = {
+        let witness = object(member(fields, "witness", what)?, "witness")?;
+        let selector = object(member(witness, "selector", "witness")?, "selector")?;
+        let identity = object(member(selector, "identity", "selector")?, "identity")?;
+        crate::invariants::parse_type(text_member(identity, "type", "identity")?)?
+    };
+    let broken = crate::invariants::closure(vec![root_type.clone(), identity_type], &types).err();
+    let invariants = || -> Result<&[Value], String> {
+        let declaration = object(
+            member(declarations, &value_type, "declarations")?,
+            &value_type,
+        )?;
+        items(
+            member(declaration, "invariants", &value_type)?,
+            "invariants",
+        )
+    };
+    let asserted = match types.get(&value_type) {
+        Some(Body::Newtype { .. } | Body::Struct { .. }) => invariants()?.len(),
+        _ => 0,
+    };
+    let broken = broken.or_else(|| {
+        (asserted == 0)
+            .then(|| format!("`{value_type}` is no declared newtype or struct with invariants"))
+    });
+    let counts = if broken.is_some() {
+        Vec::new()
+    } else {
+        if !matches!(
+            types.get(&value_type),
+            Some(Body::Newtype {
+                of: TypeRef::Primitive(Primitive::Text),
+                ..
+            })
+        ) {
+            return Err(format!(
+                "`{value_type}` is not a newtype over text, the one value type this runner checks"
+            ));
+        }
+        invariants()?
+            .iter()
+            .map(|invariant| {
+                let invariant = object(invariant, "an invariant")?;
+                let text = text_member(invariant, "predicate", "an invariant")?;
+                let statement = text_member(invariant, "statement", "an invariant")?;
+                match counted(text) {
+                    Some(("value", op, bound)) => Ok((statement.to_owned(), op, bound)),
+                    _ => Err(format!(
+                        "the invariant `{text}` of `{value_type}` is not one this runner interprets"
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?
     };
     let position = object(member(fields, "position", what)?, "position")?;
     only(position, &["kind", "path"], "position")?;
@@ -752,14 +763,83 @@ fn value_invariants(fields: &[(String, Value)]) -> Result<ValueInvariants, Strin
     }
     Ok(ValueInvariants {
         root: text_member(root, "name", "root")?.to_owned(),
-        path,
+        root_type,
+        types,
         value_type,
         counts,
-        alphabet,
+        path,
         identity: text_member(identity, "name", "identity")?.to_owned(),
         event: text_member(expected, "event", "expected")?.to_owned(),
         field: text_member(expected, "field", "expected")?.to_owned(),
+        broken,
     })
+}
+
+/// One declaration of a `value_invariants` expectation. The invariants of a declaration other
+/// than the checked value type are read as statements only: ESS evaluates none of them there.
+fn body(name: &str, declaration: &Value) -> Result<Body, String> {
+    let declaration = object(declaration, name)?;
+    let invariants = |declaration: &[(String, Value)]| -> Result<(), String> {
+        for invariant in items(member(declaration, "invariants", name)?, "invariants")? {
+            let invariant = object(invariant, "an invariant")?;
+            only(invariant, &["statement", "predicate"], "an invariant")?;
+            text_member(invariant, "statement", "an invariant")?;
+        }
+        Ok(())
+    };
+    let optional_text = |key: &str| -> Result<Option<String>, String> {
+        declaration
+            .iter()
+            .find(|(member, _)| member == key)
+            .map(|(_, value)| as_text(value, key).map(str::to_owned))
+            .transpose()
+    };
+    match text_member(declaration, "kind", name)? {
+        "newtype" => {
+            only(
+                declaration,
+                &["kind", "of", "invariants", "alphabet", "prefix"],
+                name,
+            )?;
+            invariants(declaration)?;
+            Ok(Body::Newtype {
+                of: crate::invariants::parse_type(text_member(declaration, "of", name)?)?,
+                alphabet: optional_text("alphabet")?,
+                prefix: optional_text("prefix")?,
+            })
+        }
+        "struct" => {
+            only(declaration, &["kind", "fields", "invariants"], name)?;
+            invariants(declaration)?;
+            let fields = items(member(declaration, "fields", name)?, "fields")?
+                .iter()
+                .map(|field| {
+                    let field = object(field, "a declared field")?;
+                    only(field, &["name", "type"], "a declared field")?;
+                    Ok((
+                        text_member(field, "name", "a declared field")?.to_owned(),
+                        crate::invariants::parse_type(text_member(
+                            field,
+                            "type",
+                            "a declared field",
+                        )?)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(Body::Struct { fields })
+        }
+        "enum" => {
+            only(declaration, &["kind", "variants"], name)?;
+            let variants = items(member(declaration, "variants", name)?, "variants")?
+                .iter()
+                .map(|variant| as_text(variant, "variants").map(str::to_owned))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Body::Enum { variants })
+        }
+        other => Err(format!(
+            "the declaration kind `{other}` of `{name}` is not one this runner checks"
+        )),
+    }
 }
 
 fn shapes(value: &Value) -> Result<Vec<(String, Shape)>, String> {

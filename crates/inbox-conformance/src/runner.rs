@@ -5,8 +5,9 @@ use std::collections::HashMap;
 
 use inbox::server::json::Value;
 
-use crate::suite::{Expectation, Fields, PathOp, Predicate, Ref, Scenario, Shape, Step, Suite};
-use crate::value::{brief, exact_equal, render, view_equal};
+use crate::invariants::Observed;
+use crate::suite::{Expectation, Fields, Predicate, Ref, Scenario, Shape, Step, Suite};
+use crate::value::{brief, exact_equal, field_matches, render};
 
 /// What a target answered a command with.
 #[derive(Debug, Clone, PartialEq)]
@@ -192,7 +193,7 @@ struct Sent {
 /// A row kept by a snapshot step.
 struct Kept {
     subject: Vec<(String, Value)>,
-    row: Option<Value>,
+    row: Value,
     complete: Option<Vec<String>>,
 }
 
@@ -459,7 +460,7 @@ impl Run {
             } => {
                 let subject = self.resolve_fields(subject)?;
                 let rows = self.rows(view)?;
-                let row = subject_row(view, rows, &subject)?.cloned();
+                let row = subject_row(view, rows, &subject)?.clone();
                 self.kept.insert(
                     view.clone(),
                     Kept {
@@ -481,24 +482,14 @@ impl Run {
                     ));
                 }
                 let now = subject_row(view, rows, &kept.subject)?;
-                let same = match (&kept.row, now) {
-                    (None, None) => true,
-                    (Some(before), Some(now)) => match &kept.complete {
-                        Some(fields) => fields
-                            .iter()
-                            .all(|field| view_equal(before.member(field), now.member(field))),
-                        None => view_equal(Some(before), Some(now)),
-                    },
-                    _ => false,
-                };
-                if same {
+                if exact_equal(&kept.row, now) {
                     return Ok(());
                 }
                 failed(format!(
                     "the row of `{view}` the subject {} names changed: it was {}, it is {}",
                     render(&Value::Object(kept.subject.clone())),
-                    kept.row.as_ref().map_or("absent".to_owned(), render),
-                    now.map_or("absent".to_owned(), render)
+                    render(&kept.row),
+                    render(now)
                 ))
             }
         }
@@ -550,10 +541,12 @@ impl Run {
                 Ok(())
             }
             Expectation::ValueInvariants(check) => {
+                if let Some(reason) = &check.broken {
+                    return error(format!("`{view}`: {reason}"));
+                }
                 let Some(witness) = self
                     .published
                     .iter()
-                    .rev()
                     .find(|published| published.name == check.event)
                 else {
                     return error(format!(
@@ -562,68 +555,18 @@ impl Run {
                     ));
                 };
                 let Some(identity) = witness.payload.member(&check.field) else {
-                    return failed(format!(
+                    return error(format!(
                         "`{}` carries no `{}`: {}",
                         check.event,
                         check.field,
                         render(&witness.payload)
                     ));
                 };
-                let named: Vec<&Value> = rows
-                    .iter()
-                    .filter(|row| view_equal(Some(identity), row.member(&check.identity)))
-                    .collect();
-                let [row] = named.as_slice() else {
-                    return failed(format!(
-                        "`{view}` should hold one row with `{}` {}; it holds {}",
-                        check.identity,
-                        render(identity),
-                        named.len()
-                    ));
-                };
-                let mut values = Vec::new();
-                reach(row.member(&check.root), &check.path, &mut values).map_err(|reason| {
-                    Halt::Failed(format!(
-                        "`{view}` at `{}` of row {}: {reason}",
-                        check.root,
-                        render(row)
-                    ))
-                })?;
-                for value in values {
-                    let Value::Text(text) = value else {
-                        return failed(format!(
-                            "`{view}` publishes {} where `{}` holds text",
-                            render(value),
-                            check.value_type
-                        ));
-                    };
-                    let scalars = text.chars().count() as f64;
-                    if let Some((op, bound)) = check
-                        .counts
-                        .iter()
-                        .find(|(op, bound)| !op.holds(scalars, *bound))
-                    {
-                        return failed(format!(
-                            "`{view}` publishes {} at `{}`, and `{}` declares `value.count {op:?} {bound}`",
-                            render(value),
-                            check.root,
-                            check.value_type
-                        ));
-                    }
-                    if let Some(alphabet) = &check.alphabet
-                        && let Some(stray) = text
-                            .chars()
-                            .find(|character| !alphabet.contains(*character))
-                    {
-                        return failed(format!(
-                            "`{view}` publishes {} at `{}`, and `{stray}` is outside the alphabet of `{}`",
-                            render(value),
-                            check.root,
-                            check.value_type
-                        ));
-                    }
+                match check.observe(rows, identity) {
+                    Ok(()) => Ok(()),
+                    Err(Observed::Unsatisfied(reason)) => failed(format!("`{view}`: {reason}")),
+                    Err(Observed::Broken(reason)) => error(format!("`{view}`: {reason}")),
                 }
-                Ok(())
             }
         }
     }
@@ -704,65 +647,36 @@ fn expected_outcome<'a>(steps: &'a [Step], at: usize, command: &str) -> Option<&
         })
 }
 
-/// Whether `row` holds every claimed field, as a view assertion reads it.
+/// Whether `row` holds every claimed field, each by [`field_matches`].
 fn holds(row: &Value, claim: &[(String, Value)]) -> bool {
     claim
         .iter()
-        .all(|(name, value)| view_equal(Some(value), row.member(name)))
+        .all(|(name, value)| field_matches(row, name, value))
 }
 
-/// The row of `rows` the subject names, if one does.
+/// The one row of `rows` the subject names, as ESS `snapshot_subject` selects it: every subject
+/// field carried and exactly equal. None or several is a failure.
 fn subject_row<'a>(
     view: &str,
     rows: &'a [Value],
     subject: &[(String, Value)],
-) -> Result<Option<&'a Value>, Halt> {
-    let mut named = rows.iter().filter(|row| holds(row, subject));
-    match (named.next(), named.next()) {
-        (row, None) => Ok(row),
+) -> Result<&'a Value, Halt> {
+    let named: Vec<&Value> = rows
+        .iter()
+        .filter(|row| {
+            subject.iter().all(|(field, value)| {
+                row.member(field)
+                    .is_some_and(|carried| exact_equal(carried, value))
+            })
+        })
+        .collect();
+    match named.as_slice() {
+        [row] => Ok(row),
         _ => failed(format!(
-            "`{view}` holds several rows the subject {} names",
-            render(&Value::Object(subject.to_vec()))
+            "`{view}` should hold exactly one row the subject {} names; it holds {}",
+            render(&Value::Object(subject.to_vec())),
+            named.len()
         )),
-    }
-}
-
-/// Collects every value at `path`, starting from `value`.
-fn reach<'a>(
-    value: Option<&'a Value>,
-    path: &[PathOp],
-    out: &mut Vec<&'a Value>,
-) -> Result<(), String> {
-    let present = value.filter(|value| **value != Value::Null);
-    match path.split_first() {
-        None => match present {
-            Some(value) => {
-                out.push(value);
-                Ok(())
-            }
-            None => Err("a value the type requires is absent".to_owned()),
-        },
-        Some((PathOp::Present, rest)) => match present {
-            Some(value) => reach(Some(value), rest, out),
-            None => Ok(()),
-        },
-        Some((PathOp::Field(name), rest)) => match present {
-            Some(Value::Object(_)) => {
-                reach(present.and_then(|value| value.member(name)), rest, out)
-            }
-            Some(other) => Err(format!(
-                "`{name}` is read from {}, not a struct",
-                render(other)
-            )),
-            None => Err(format!("the struct holding `{name}` is absent")),
-        },
-        Some((PathOp::Element, rest)) => match present {
-            Some(Value::Array(items)) => items
-                .iter()
-                .try_for_each(|item| reach(Some(item), rest, out)),
-            Some(other) => Err(format!("{} is not a list", render(other))),
-            None => Err("the list is absent".to_owned()),
-        },
     }
 }
 

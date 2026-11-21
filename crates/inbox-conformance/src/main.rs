@@ -2,11 +2,14 @@
 //! `inbox-core` and writes the `ess-conformance-results/1` document; exit 0 when it is written,
 //! whatever the scenarios answered.
 //!
-//! `inbox-conformance gate --report <report> --unsupported <unsupported.tsv>`: prints the result
-//! line of the report/2 ESS wrote from those results, and exits 1 unless 0 scenarios failed, 0
-//! errored, 0 were skipped and the unsupported ones are exactly those the file lists.
+//! `inbox-conformance gate --suite <suite> --report <report> --unsupported <unsupported.tsv>`:
+//! prints the result line and the `conformance_status` of the report/2 ESS wrote from those
+//! results, and exits 1 unless the report is for that suite (its `suite.digest`), its counts add
+//! up, 0 scenarios failed, 0 errored, 0 were skipped, the unsupported ones are exactly those the
+//! file lists, and its `conformance_status` is the one such a run carries.
 //!
-//! Exit 2: an argument, a file or a document this command cannot read.
+//! Exit 2: an argument, a file or a document this command cannot read, among them a suite with a
+//! top-level or `provenance` key the runner does not know.
 
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -30,7 +33,7 @@ fn main() -> ExitCode {
 }
 
 fn usage() -> String {
-    "usage: inbox-conformance run --suite <suite> --results <results> | gate --report <report> --unsupported <unsupported.tsv>".to_owned()
+    "usage: inbox-conformance run --suite <suite> --results <results> | gate --suite <suite> --report <report> --unsupported <unsupported.tsv>".to_owned()
 }
 
 /// The value of each named option, in the order of `names`.
@@ -87,13 +90,22 @@ fn run(arguments: &[String]) -> Result<ExitCode, String> {
 }
 
 fn check(arguments: &[String]) -> Result<ExitCode, String> {
-    let [report_path, listed_path] = options(arguments, ["--report", "--unsupported"])?;
-    let report = gate::read_report(&read(&report_path)?)
-        .map_err(|reason| format!("{report_path}: {reason}"))?;
+    let [suite_path, report_path, listed_path] =
+        options(arguments, ["--suite", "--report", "--unsupported"])?;
+    let suite = std::fs::read(&suite_path).map_err(|error| format!("{suite_path}: {error}"))?;
+    let text = read(&report_path)?;
+    let report = gate::read_report(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
+    let binding = gate::read_binding(&text).map_err(|reason| format!("{report_path}: {reason}"))?;
     let listed = gate::read_listed(&read(&listed_path)?)
         .map_err(|reason| format!("{listed_path}: {reason}"))?;
-    let verdict = gate::verdict(&report, &listed);
+    let mut verdict = gate::verdict(&report, &listed);
+    verdict.problems.extend(gate::bound(
+        &report,
+        &binding,
+        &results::suite_digest(&suite),
+    ));
     println!("  {}", verdict.line);
+    println!("  conformance_status: {}", binding.conformance_status);
     for problem in &verdict.problems {
         println!("  {problem}");
     }
