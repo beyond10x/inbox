@@ -205,23 +205,27 @@ fn after_a_restart_two_reposts_put_the_unread_message_in_pending_once() {
     assert!(ids(&lost).is_empty(), "the restart lost the message");
 
     world.client("bob", &["open"]).ok();
-    // The first repost delivers the message again; the second is the same envelope, which the
-    // service already holds: `duplicate`, changing nothing.
-    let outcomes: Vec<String> = (0..2)
+    // The first repost delivers the message again, and the outbox file records the start that
+    // said it arrived; the second, in that start, posts nothing.
+    let outcomes: Vec<Vec<String>> = (0..2)
         .map(|_| {
             let reposted = world.client("alice", &["repost", "--json"]).ok().json();
             let Value::Array(entries) = member(&reposted, &["reposted"]) else {
                 panic!("`reposted` is no list: {reposted:?}");
             };
-            assert_eq!(entries.len(), 1, "{reposted:?}");
-            assert_eq!(text(&entries[0], &["message_id"]), message);
-            text(&entries[0], &["answer", "outcome"])
+            entries
+                .iter()
+                .map(|entry| {
+                    assert_eq!(text(entry, &["message_id"]), message);
+                    text(entry, &["answer", "outcome"])
+                })
+                .collect()
         })
         .collect();
     assert_eq!(
         outcomes,
-        ["posted", "duplicate"],
-        "what the 2 reposts after the restart were answered"
+        [vec!["posted".to_owned()], Vec::new()],
+        "what the 2 reposts after the restart posted, and what each was answered"
     );
     let pending = world.client("bob", &["pending", "--json"]).ok().json();
     assert_eq!(

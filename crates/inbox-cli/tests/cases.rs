@@ -319,26 +319,26 @@ fn repost_after_a_restart_puts_the_message_in_pending_once() {
         .trim()
         .to_owned();
     let same = world.client("alice", &["repost", "--json"]).ok().json();
-    let entries = items(member(&same, &["reposted"]));
-    assert_eq!(
-        outcome(&entries[0]),
-        "duplicate",
-        "a repost the service still holds is `Duplicate`, and counts as arrived"
+    assert!(
+        items(member(&same, &["reposted"])).is_empty(),
+        "the start the post arrived at still holds it: nothing to repost; {same:?}"
     );
-    assert_eq!(entries[0].member("arrived"), Some(&Value::Bool(true)));
 
     world.restart();
     let lost = world.client("bob", &["pending", "--json"]).ok().json();
     assert!(ids(&lost).is_empty(), "a restart lost the message");
     world.client("bob", &["open"]).ok();
 
-    for _ in 0..2 {
-        let reposted = world.client("alice", &["repost", "--json"]).ok().json();
-        let entries = items(member(&reposted, &["reposted"]));
-        assert_eq!(entries.len(), 1);
-        assert_eq!(text(&entries[0], "message_id"), message_id);
-        assert_eq!(entries[0].member("arrived"), Some(&Value::Bool(true)));
-    }
+    // The first repost after the restart delivers the message again and records the new start;
+    // the second, in the same start, has nothing to post.
+    let reposted = world.client("alice", &["repost", "--json"]).ok().json();
+    let entries = items(member(&reposted, &["reposted"]));
+    assert_eq!(entries.len(), 1, "{reposted:?}");
+    assert_eq!(text(&entries[0], "message_id"), message_id);
+    assert_eq!(outcome(&entries[0]), "posted");
+    assert_eq!(entries[0].member("arrived"), Some(&Value::Bool(true)));
+    let again = world.client("alice", &["repost"]).ok();
+    assert_eq!(again.stdout.trim(), "nothing to repost", "{again:#?}");
     let pending = world.client("bob", &["pending", "--json"]).ok().json();
     assert_eq!(ids(&pending), std::slice::from_ref(&message_id));
     assert_eq!(world.kept("alice"), [message_id]);

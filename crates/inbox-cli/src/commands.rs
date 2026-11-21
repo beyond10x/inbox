@@ -15,7 +15,7 @@ use inbox::server::wire;
 use inbox_server::{Clock, SystemClock, format_instant};
 use inbox_verify::{Instant, sign_envelope};
 
-use crate::client::{Service, declared_error, query_value, route};
+use crate::client::{Epoch, Service, declared_error, query_value, route};
 use crate::failure::Failure;
 use crate::ids::ulid;
 use crate::keys::Caller;
@@ -56,6 +56,39 @@ impl Client {
     fn view(&self, wire: &str, query: &str) -> Result<Value, Failure> {
         let target = format!("{}?{query}", route("GET", wire));
         self.send("GET", &target, b"")
+    }
+
+    /// [`Client::command`], with the epoch its answer named, whatever the answer was; `None`
+    /// beside a transport failure.
+    fn command_in_epoch(&self, wire: &str, body: &str) -> (Result<Value, Failure>, Option<Epoch>) {
+        let sent = self.service.send(
+            &self.caller,
+            "POST",
+            route("POST", wire),
+            body.as_bytes(),
+            Duration::ZERO,
+        );
+        match sent {
+            Ok(reply) => {
+                let epoch = reply.epoch.clone();
+                (reply.accepted(), epoch)
+            }
+            Err(failure) => (Err(failure), None),
+        }
+    }
+
+    /// The epoch of the service's start, asked with one signed request that changes nothing (the
+    /// caller's own `Outbox` view) and read from its answer, whatever its status.
+    fn epoch(&self) -> Result<Option<Epoch>, Failure> {
+        let target = format!(
+            "{}?sender={}",
+            route("GET", "outbox"),
+            query_value(&self.caller.principal)
+        );
+        Ok(self
+            .service
+            .send(&self.caller, "GET", &target, b"", Duration::ZERO)?
+            .epoch)
     }
 
     /// The caller's own inbox: the address with the text of its principal (decision 5 of
@@ -398,7 +431,9 @@ fn admitted<T>(
 /// the clock reading and `expires` `created` plus 24 hours when none is given), signs it, reads
 /// it back through the generated decoder, keeps it in the outbox, and posts it. A final refusal
 /// ([`final_refusal`]) drops it from the outbox again; a transport failure and every other
-/// refusal keep it for `repost`.
+/// refusal keep it for `repost`. A post that arrived records the epoch of its answer on the kept
+/// envelope; the message id is printed also when the outbox file cannot be changed after that,
+/// and the local failure is reported beside it.
 pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     let reading = now();
     let message_id = ulid()?;
@@ -459,15 +494,27 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     wire::encode_command_inbox_messaging_post_message(&envelope, &mut text);
     admitted(&text, wire::decode_command_inbox_messaging_post_message)?;
     client.outbox.keep(&text, reading)?;
-    match client.command("post", &text) {
-        Ok(answer) => Ok(Done {
-            document: document(&Value::Object(vec![
-                ("message_id".to_owned(), Value::Text(message_id.clone())),
-                ("thread".to_owned(), Value::Text(envelope.thread.0.clone())),
-                ("answer".to_owned(), answer),
-            ])),
-            text: message_id,
-        }),
+    let (outcome, epoch) = client.command_in_epoch("post", &text);
+    match outcome {
+        Ok(answer) => {
+            let recorded =
+                epoch.map(|epoch| client.outbox.record_epoch(&message_id, &epoch, now()));
+            let done = Done {
+                document: document(&Value::Object(vec![
+                    ("message_id".to_owned(), Value::Text(message_id.clone())),
+                    ("thread".to_owned(), Value::Text(envelope.thread.0.clone())),
+                    ("answer".to_owned(), answer),
+                ])),
+                text: message_id,
+            };
+            match recorded {
+                Some(Err(cause)) => Err(Failure::After {
+                    done,
+                    cause: Box::new(cause),
+                }),
+                _ => Ok(done),
+            }
+        }
         Err(Failure::Refused {
             name,
             status,
@@ -547,25 +594,39 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
     })
 }
 
-/// `inbox repost`: posts every envelope the outbox keeps for the caller again, unchanged; for
-/// after a restart of the service. `posted` and `Duplicate` count as arrived. A final refusal
-/// ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a refusal,
-/// naming the first, when any envelope did not arrive, and with an unreadable entry, naming each
-/// line of the outbox file that does not read as an envelope; a transport failure ends the run.
+/// `inbox repost`: posts again, unchanged, every envelope the outbox keeps for the caller that
+/// was not said to arrive at the service's current start; for after a restart of the service.
+/// When the epochs file beside the outbox file records, for a kept envelope, the epoch of the
+/// start its post arrived at, the service is asked for its epoch first ([`Client::epoch`]); an
+/// envelope recorded at that epoch is left alone and not listed. Every other envelope is posted: one recorded at another epoch, one without an
+/// epoch, and every one when the service names no epoch (an older service). `posted` and
+/// `Duplicate` count as arrived, and the envelope records the epoch of that answer. A final
+/// refusal ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a
+/// refusal, naming the first, when any envelope did not arrive, and with an unreadable entry,
+/// naming each line of the outbox file that does not read as an envelope; a transport failure
+/// ends the run.
 ///
-/// A note its recipient already read is delivered again: the service keeps no record of a handled
-/// note and answers it as it answers one a restart dropped
-/// (story:repost-does-not-redeliver-a-handled-note).
+/// A note its recipient read before a restart is delivered once more by the first `repost`
+/// after it: the service keeps no record of a handled note.
 pub fn repost(client: &Client) -> Result<Done, Failure> {
     let contents = client.outbox.kept(&client.caller.principal, now())?;
     let kept = contents.kept;
+    let current = if kept.iter().any(|entry| entry.epoch.is_some()) {
+        client.epoch()?
+    } else {
+        None
+    };
     let mut entries = Vec::new();
     let mut lines = Vec::new();
     let mut first_refusal: Option<(String, u16)> = None;
     for entry in kept {
+        if current.is_some() && entry.epoch == current {
+            continue;
+        }
         let message_id = entry.envelope.message_id.0.clone();
         let to = entry.envelope.to.0.clone();
-        let (arrived, answer, said) = match client.command("post", &entry.text) {
+        let (outcome, epoch) = client.command_in_epoch("post", &entry.text);
+        let (arrived, answer, said) = match outcome {
             Ok(answer) => (true, answer, "arrived".to_owned()),
             Err(Failure::Refused {
                 name,
@@ -585,6 +646,9 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
             }
             Err(other) => return Err(other),
         };
+        if let (true, Some(epoch)) = (arrived, &epoch) {
+            client.outbox.record_epoch(&message_id, epoch, now())?;
+        }
         lines.push(format!("{message_id} to {to}: {said}"));
         entries.push(Value::Object(vec![
             ("message_id".to_owned(), Value::Text(message_id)),

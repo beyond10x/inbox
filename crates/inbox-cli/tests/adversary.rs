@@ -138,7 +138,6 @@ fn run_env(dir: &Path, args: &[&str], env: &[(String, String)]) -> support::Run 
 /// A note the recipient read is handled and gone from the service; `inbox repost` must not put it
 /// in the recipient's `pending` a second time.
 #[test]
-#[ignore = "story:repost-does-not-redeliver-a-handled-note: the service answers a read note and one a restart dropped alike, so repost cannot tell them apart"]
 fn repost_does_not_deliver_again_a_note_its_recipient_already_read() {
     let world = World::new("adv-note-twice");
     world.client("bob", &["open"]).ok();

@@ -367,6 +367,7 @@ dependencies = [
 name = "inbox-server"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.4.3",
  "inbox",
  "inbox-core",
  "inbox-verify",

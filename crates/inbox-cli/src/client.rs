@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use inbox::server::inbox_service::ROUTES;
 use inbox::server::json::{self, Value};
-use inbox_server::{Clock, SystemClock, format_instant, request_headers};
+use inbox_server::{Clock, EPOCH_HEADER, SystemClock, format_instant, request_headers};
 
 use crate::failure::Failure;
 use crate::keys::Caller;
@@ -150,6 +150,27 @@ impl Service {
     }
 }
 
+/// The epoch of one start of the service, as its answers name it in [`EPOCH_HEADER`]: 32
+/// lower-case hex digits (`docs/design/service.md`, the epoch).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Epoch(String);
+
+impl Epoch {
+    /// The epoch `text` names, when it is 32 lower-case hex digits, as the service writes one.
+    pub fn parse(text: &str) -> Option<Self> {
+        (text.len() == 32
+            && text
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+        .then(|| Self(text.to_owned()))
+    }
+
+    /// The 32 hex digits.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// One answer of the service.
 #[derive(Debug)]
 pub struct Reply {
@@ -157,6 +178,10 @@ pub struct Reply {
     pub status: u16,
     /// The body, read as JSON.
     pub body: Value,
+    /// The epoch the answer names, whatever its status; `None` when its head carries no
+    /// [`EPOCH_HEADER`] (an older service), carries two different ones, or one that is not an
+    /// epoch.
+    pub epoch: Option<Epoch>,
 }
 
 impl Reply {
@@ -171,7 +196,11 @@ impl Reply {
             .and_then(|status| status.parse().ok())
             .ok_or("the answer has no status line")?;
         let body = json::parse(body).map_err(|error| format!("the answer is not JSON: {error}"))?;
-        Ok(Self { status, body })
+        Ok(Self {
+            status,
+            body,
+            epoch: epoch(head),
+        })
     }
 
     /// The answer, or the refusal it is. A `2xx` answer is the only success. A body that carries
@@ -210,6 +239,22 @@ impl Reply {
     }
 }
 
+/// The epoch the head of an answer names: the value of its [`EPOCH_HEADER`] headers (the name
+/// compared without regard to case) when they all carry one and it is an [`Epoch`].
+fn epoch(head: &str) -> Option<Epoch> {
+    let mut values = head
+        .split("\r\n")
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(name, _)| name.trim().eq_ignore_ascii_case(EPOCH_HEADER))
+        .map(|(_, value)| value.trim());
+    let first = values.next()?;
+    if values.any(|value| value != first) {
+        return None;
+    }
+    Epoch::parse(first)
+}
+
 /// The model's error name of a declared refusal: the `error` member the generated route writes
 /// beside `outcome` (`{"outcome":"unknown-inbox","published":[],"error":"inbox.messaging.UnknownInbox"}`).
 pub fn declared_error(body: &Value) -> Option<&str> {
@@ -234,7 +279,46 @@ pub fn query_value(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Service, query_value, route};
+    use super::{Epoch, Reply, Service, query_value, route};
+
+    const EPOCH: &str = "0123456789abcdef0123456789abcdef";
+
+    fn answer(headers: &str, status: u16) -> Reply {
+        let text = format!(
+            "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{headers}Connection: close\r\n\r\n{{}}"
+        );
+        Reply::read(text.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn the_epoch_is_read_from_the_head_of_an_answer_of_any_status() {
+        for status in [200, 202, 400, 401, 404, 503] {
+            let reply = answer(&format!("Inbox-Epoch: {EPOCH}\r\n"), status);
+            assert_eq!(reply.epoch, Epoch::parse(EPOCH), "{status}");
+        }
+        let reply = answer(&format!("inbox-EPOCH:{EPOCH} \r\n"), 200);
+        assert_eq!(reply.epoch.as_ref().map(Epoch::as_str), Some(EPOCH));
+    }
+
+    #[test]
+    fn no_header_two_values_or_a_value_that_is_no_epoch_is_no_epoch() {
+        assert_eq!(answer("", 200).epoch, None);
+        let other = "fedcba9876543210fedcba9876543210";
+        let two = format!("Inbox-Epoch: {EPOCH}\r\nInbox-Epoch: {other}\r\n");
+        assert_eq!(answer(&two, 200).epoch, None);
+        let same = format!("Inbox-Epoch: {EPOCH}\r\nInbox-Epoch: {EPOCH}\r\n");
+        assert_eq!(answer(&same, 200).epoch, Epoch::parse(EPOCH));
+        for wrong in [
+            "0123456789ABCDEF0123456789ABCDEF",
+            "0123456789abcdef",
+            "0123456789abcdef0123456789abcdefa",
+            "0123456789abcdef 123456789abcdef",
+            "",
+        ] {
+            let reply = answer(&format!("Inbox-Epoch: {wrong}\r\n"), 200);
+            assert_eq!(reply.epoch, None, "{wrong:?}");
+        }
+    }
 
     /// Every wire name the client sends to, by method.
     pub const USED: &[(&str, &str)] = &[

@@ -535,6 +535,156 @@ fn stop_answers_a_connection_still_sending_its_request_with_503() {
     assert_eq!(reply.body, r#"{"refused":"stopping"}"#);
 }
 
+// ---- the epoch ------------------------------------------------------------------------------
+
+/// The one `Inbox-Epoch` header of an answer's head: 32 lower-case hex digits.
+fn epoch_of(head: &str) -> String {
+    let values = support::header(head, "Inbox-Epoch");
+    assert_eq!(values.len(), 1, "one Inbox-Epoch header in {head}");
+    let value = values[0].clone();
+    assert!(
+        value.len() == 32
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+        "Inbox-Epoch {value:?} is not 32 lower-case hex digits"
+    );
+    value
+}
+
+#[test]
+fn every_answer_of_one_start_carries_its_epoch_whatever_its_status() {
+    let world = World::new();
+    let server = world.start(|config| {
+        config.max_body = 4096;
+        config.max_messages = 1;
+    });
+    let address = server.local_addr();
+    let mut seen = Vec::new();
+
+    // 200: a view, signed.
+    let (head, reply) = world.send_answer(address, AGENT, "GET", "/messaging/views/inboxes", b"");
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    seen.push((200, epoch_of(&head)));
+
+    // 202: a command, signed.
+    world.open(address, OTHER);
+    let envelope = world.post(AGENT, OTHER, 1, "a note");
+    let (head, reply) = world.send_answer(address, AGENT, "POST", POST, &encoded(&envelope));
+    assert_eq!(reply.status, 202, "{}", reply.body);
+    seen.push((202, epoch_of(&head)));
+
+    // 503: the message limit, before the command runs.
+    let envelope = world.post(AGENT, OTHER, 2, "a second note");
+    let (head, reply) = world.send_answer(address, AGENT, "POST", POST, &encoded(&envelope));
+    assert_eq!(reply.status, 503, "{}", reply.body);
+    seen.push((503, epoch_of(&head)));
+
+    // 401: no request signature.
+    let (head, reply) =
+        support::send_raw_answer(address, "GET", "/messaging/views/inboxes", &[], b"");
+    assert_eq!(reply.status, 401, "{}", reply.body);
+    seen.push((401, epoch_of(&head)));
+
+    // 400: a member twice, signed.
+    let twice = br#"{"address":"x","address":"y","adapter":"terminal"}"#;
+    let (head, reply) = world.send_answer(
+        address,
+        AGENT,
+        "POST",
+        "/messaging/commands/open-inbox",
+        twice,
+    );
+    assert_eq!(reply.status, 400, "{}", reply.body);
+    seen.push((400, epoch_of(&head)));
+
+    // 413: the body limit of the embedding, before authentication.
+    let (head, reply) = support::send_raw_answer(address, "POST", POST, &[], &[b' '; 5000]);
+    assert_eq!(reply.status, 413, "{}", reply.body);
+    seen.push((413, epoch_of(&head)));
+
+    // 413: the generated reader's own refusal, before the body is read.
+    let mut stream = std::net::TcpStream::connect(address).unwrap();
+    std::io::Write::write_all(
+        &mut stream,
+        format!("POST {POST} HTTP/1.1\r\nContent-Length: 2000000\r\n\r\n").as_bytes(),
+    )
+    .unwrap();
+    let (head, reply) = support::read_answer(stream);
+    assert_eq!(reply.status, 413, "{}", reply.body);
+    seen.push((413, epoch_of(&head)));
+
+    let first = seen[0].1.clone();
+    for (status, epoch) in &seen {
+        assert_eq!(epoch, &first, "the {status} answer names another start");
+    }
+}
+
+#[test]
+fn the_answers_cut_off_before_a_request_arrived_carry_the_epoch() {
+    let world = World::new();
+    let server = world.start(|config| config.request_timeout = Duration::from_millis(300));
+    let (head, reply) = support::read_answer(half_a_request(server.local_addr()));
+    assert_eq!(reply.status, 408, "{}", reply.body);
+    let timed_out = epoch_of(&head);
+    let (head, _) = world.send_answer(
+        server.local_addr(),
+        AGENT,
+        "GET",
+        "/messaging/views/inboxes",
+        b"",
+    );
+    assert_eq!(epoch_of(&head), timed_out, "one start, one epoch");
+
+    let server = world.start(|config| config.request_timeout = Duration::from_secs(3600));
+    let stream = half_a_request(server.local_addr());
+    thread::sleep(Duration::from_millis(100));
+    server.stop().expect("the service stops");
+    let (head, reply) = support::read_answer(stream);
+    assert_eq!(reply.status, 503, "{}", reply.body);
+    epoch_of(&head);
+}
+
+#[test]
+fn two_starts_answer_two_epochs() {
+    let world = World::new();
+    let first = world.start(|_| {});
+    let second = world.start(|_| {});
+    let epochs: Vec<String> = [&first, &second]
+        .into_iter()
+        .map(|server| {
+            let (head, reply) = world.send_answer(
+                server.local_addr(),
+                AGENT,
+                "GET",
+                "/messaging/views/inboxes",
+                b"",
+            );
+            assert_eq!(reply.status, 200, "{}", reply.body);
+            epoch_of(&head)
+        })
+        .collect();
+    assert_ne!(
+        epochs[0], epochs[1],
+        "two starts over one clock and one store answer one epoch"
+    );
+    // A start over the same store, after the first stopped: a restart.
+    first.stop().expect("the first service stops");
+    let third = world.start(|_| {});
+    let (head, _) = world.send_answer(
+        third.local_addr(),
+        AGENT,
+        "GET",
+        "/messaging/views/inboxes",
+        b"",
+    );
+    let restarted = epoch_of(&head);
+    assert!(
+        !epochs.contains(&restarted),
+        "a restart answers an epoch of an earlier start"
+    );
+}
+
 #[test]
 fn every_duration_of_the_configuration_may_be_the_largest_there_is() {
     let world = World::new();

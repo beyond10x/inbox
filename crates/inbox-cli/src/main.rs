@@ -129,8 +129,10 @@ enum Command {
         /// The thread id.
         thread: String,
     },
-    /// Post every envelope the outbox file keeps for the caller again, unchanged: for after a
-    /// restart of the service. A note its recipient already read is delivered again.
+    /// Post again, unchanged, every envelope the outbox file keeps for the caller that did not
+    /// arrive at the service's current start: for after a restart of the service. An envelope
+    /// whose post the current start answered (`posted` or `Duplicate`) is left alone; a note its
+    /// recipient read before a restart is delivered once more by the first repost after it.
     Repost {
         #[command(flatten)]
         client: ClientArgs,

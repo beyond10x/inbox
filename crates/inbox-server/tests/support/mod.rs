@@ -186,6 +186,28 @@ impl World {
         send_raw(address, method, target, &headers, body)
     }
 
+    /// [`World::send`], answering the head of the answer beside it.
+    pub fn send_answer(
+        &self,
+        address: SocketAddr,
+        principal: &str,
+        method: &str,
+        target: &str,
+        body: &[u8],
+    ) -> (String, Reply) {
+        let member = self.member(principal);
+        let headers = request_headers(
+            method,
+            target,
+            body,
+            &member.key_id,
+            &member.key,
+            &self.timestamp(),
+        );
+        let headers: Vec<(&str, String)> = headers.into_iter().collect();
+        send_raw_answer(address, method, target, &headers, body)
+    }
+
     /// Opens `principal`'s own inbox and asserts it was opened.
     pub fn open(&self, address: SocketAddr, principal: &str) {
         let body = format!(r#"{{"address":"{principal}","adapter":"terminal"}}"#);
@@ -258,6 +280,17 @@ pub fn send_raw(
     headers: &[(&str, String)],
     body: &[u8],
 ) -> Reply {
+    send_raw_answer(address, method, target, headers, body).1
+}
+
+/// [`send_raw`], answering the head of the answer beside it.
+pub fn send_raw_answer(
+    address: SocketAddr,
+    method: &str,
+    target: &str,
+    headers: &[(&str, String)],
+    body: &[u8],
+) -> (String, Reply) {
     let mut stream = TcpStream::connect(address).expect("the service accepts");
     stream
         .set_read_timeout(Some(Duration::from_secs(20)))
@@ -272,10 +305,26 @@ pub fn send_raw(
     head.push_str("\r\n");
     stream.write_all(head.as_bytes()).expect("the head is sent");
     stream.write_all(body).expect("the body is sent");
-    read_reply(stream)
+    read_answer(stream)
 }
 
-pub fn read_reply(mut stream: TcpStream) -> Reply {
+pub fn read_reply(stream: TcpStream) -> Reply {
+    read_answer(stream).1
+}
+
+/// The values of the header `name` in the head of an answer, the name compared without regard to
+/// case, in the order they came.
+pub fn header(head: &str, name: &str) -> Vec<String> {
+    head.split("\r\n")
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(held, _)| held.trim().eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.trim().to_owned())
+        .collect()
+}
+
+/// Reads the whole answer: its head, and the answer as [`read_reply`] reads it.
+pub fn read_answer(mut stream: TcpStream) -> (String, Reply) {
     let mut answer = Vec::new();
     stream.read_to_end(&mut answer).expect("the answer is read");
     let answer = String::from_utf8(answer).expect("the answer is UTF-8");
@@ -285,8 +334,11 @@ pub fn read_reply(mut stream: TcpStream) -> Reply {
         .nth(1)
         .and_then(|status| status.parse().ok())
         .unwrap_or_else(|| panic!("a status line in {head}"));
-    Reply {
-        status,
-        body: body.to_owned(),
-    }
+    (
+        head.to_owned(),
+        Reply {
+            status,
+            body: body.to_owned(),
+        },
+    )
 }

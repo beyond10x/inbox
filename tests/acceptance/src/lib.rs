@@ -279,6 +279,12 @@ impl World {
         &self.service.as_ref().expect("a service runs").url
     }
 
+    /// The outbox file of `who` (`alice` or `bob`).
+    #[must_use]
+    pub fn outbox(&self, who: &str) -> PathBuf {
+        self.dir.join(format!("{who}.outbox"))
+    }
+
     /// `inbox <args>` as `who` (`alice` or `bob`): its key file, its outbox file and the URL of
     /// the running service.
     #[must_use]

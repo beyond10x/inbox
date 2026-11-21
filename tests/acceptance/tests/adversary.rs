@@ -7,8 +7,20 @@
 //! guards of `PostMessage` removed passes all 3 checks). What the repost scenario claims, that the
 //! second post arrives as `duplicate` and changes nothing, is asserted here from the answer the
 //! client prints. Ignored like the 3 checks; run with `INBOX_BIN` and `--ignored`.
+//!
+//! The first repost records, in the epochs file beside the outbox file, the epoch of the start
+//! that said the post arrived, and a second repost in that start posts nothing
+//! (story:repost-does-not-redeliver-a-handled-note). Each repost here runs without that file, as
+//! after a client before the epoch, so the second post reaches the duplicate check.
 
 use inbox_acceptance::{BOB, World, ids, member, text};
+
+/// Removes the epochs file beside the outbox file of `who`, if there is one.
+fn forget_the_epochs(world: &World, who: &str) {
+    let mut path = world.outbox(who).into_os_string();
+    path.push(".epochs");
+    let _ = std::fs::remove_file(path);
+}
 
 fn root() -> &'static std::path::Path {
     std::path::Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -32,6 +44,7 @@ fn after_a_restart_the_second_repost_is_answered_duplicate() {
     world.client("bob", &["open"]).ok();
     let outcomes: Vec<String> = (0..2)
         .map(|_| {
+            forget_the_epochs(&world, "alice");
             let reposted = world.client("alice", &["repost", "--json"]).ok().json();
             let inbox::server::json::Value::Array(entries) = member(&reposted, &["reposted"])
             else {
