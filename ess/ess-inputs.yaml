@@ -5,6 +5,7 @@ specification:
 - components.yaml
 - domains/messaging.yaml
 scenarios:
+- scenarios/answer-from-another-principal-refused.yaml
 - scenarios/answered-decision-expires-uncollected.yaml
 - scenarios/bad-signature-refused.yaml
 - scenarios/closed-inbox-refuses-posts.yaml
@@ -17,6 +18,7 @@ scenarios:
 - scenarios/note-read-is-gone.yaml
 - scenarios/note-takes-no-answer.yaml
 - scenarios/only-the-owner-handles-its-inbox.yaml
+- scenarios/post-from-another-principal-refused.yaml
 - scenarios/post-read-answer.yaml
 - scenarios/read-decision-waits-for-its-answer.yaml
 - scenarios/refusal-collected-is-gone.yaml

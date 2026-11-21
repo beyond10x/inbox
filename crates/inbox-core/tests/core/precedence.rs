@@ -11,7 +11,7 @@ use inbox::messaging::{Address, InboxSnapshot, MessageId, MessageSnapshot, Princ
 use inbox::server::json;
 use inbox_core::{CallerAttributes, Exclusive, MemoryBackend, ServiceContext};
 
-use crate::support::{KeyIdVerifier, Post, World, open_worker, outcome, post, quoted};
+use crate::support::{KeyIdVerifier, Post, World, open_worker, outcome, post, published, quoted};
 
 const FIRST: &str = "01JGT0PR000000000000000001";
 const SECOND: &str = "01JGT0PR000000000000000002";
@@ -47,6 +47,16 @@ enum Fault {
 }
 
 impl Fault {
+    const ALL: [Fault; 7] = [
+        Fault::NoAuthority,
+        Fault::AlreadyExpired,
+        Fault::RequestWithoutShape,
+        Fault::DecisionWithoutOptions,
+        Fault::UnknownOption,
+        Fault::SignatureInvalid,
+        Fault::AuthorityInvalid,
+    ];
+
     fn outcome(self) -> &'static str {
         match self {
             Fault::NoAuthority => "no-authority",
@@ -94,19 +104,35 @@ fn verifier() -> KeyIdVerifier {
 /// outcome.
 fn pair(fault: Fault, row: Row) -> String {
     let world = World::new(verifier());
-    open_worker(&world);
-    let mut envelope = fault.envelope(SECOND);
+    let envelope = arrange(&world, Some(fault), Some(row));
+    outcome(&post(&world, &envelope)).to_owned()
+}
+
+/// A principal other than every `from` the envelopes of this file name.
+const NOT_THE_SENDER: &str = "agent:box/other";
+
+/// Opens the worker's inbox, makes `row` hold where one is named, and answers the second
+/// envelope, carrying `fault` where one is named.
+fn arrange(world: &World, fault: Option<Fault>, row: Option<Row>) -> Post {
+    open_worker(world);
+    let mut envelope = match fault {
+        Some(fault) => fault.envelope(SECOND),
+        None => Post::note(SECOND),
+    };
+    let Some(row) = row else {
+        return envelope;
+    };
     match row {
         Row::UnknownInbox => envelope.to = "agent:box/nobody".to_owned(),
         Row::Duplicate => {
             let mut first = Post::note(SECOND);
             first.dedup_key = "held-by-the-first".to_owned();
-            assert_eq!(outcome(&post(&world, &first)), "posted");
+            assert_eq!(outcome(&post(world, &first)), "posted");
         }
         Row::DuplicateKey => {
             let mut first = Post::note(FIRST);
             first.dedup_key = envelope.dedup_key.clone();
-            assert_eq!(outcome(&post(&world, &first)), "posted");
+            assert_eq!(outcome(&post(world, &first)), "posted");
         }
         Row::InboxClosed => {
             let closed = world.client(
@@ -117,7 +143,79 @@ fn pair(fault: Fault, row: Row) -> String {
             assert_eq!(outcome(&closed), "closed");
         }
     }
-    outcome(&post(&world, &envelope)).to_owned()
+    envelope
+}
+
+#[test]
+fn not_sender_answers_before_every_other_refusal_and_stores_nothing() {
+    let faults = Fault::ALL.map(Some).into_iter().chain([None]);
+    let cases: Vec<(Option<Fault>, Option<Row>)> = faults
+        .flat_map(|fault| {
+            Row::ALL
+                .map(Some)
+                .into_iter()
+                .chain([None])
+                .map(move |row| (fault, row))
+        })
+        .collect();
+    assert_eq!(cases.len(), 40);
+    let wrong: Vec<String> = cases
+        .into_iter()
+        .filter_map(|(fault, row)| {
+            let world = World::new(verifier());
+            let envelope = arrange(&world, fault, row);
+            let before = MessageStorage::list(&world.backend);
+            let answer = world.client(
+                NOT_THE_SENDER,
+                "inbox.messaging.PostMessage",
+                &envelope.json(),
+            );
+            let after = MessageStorage::list(&world.backend);
+            let answered = outcome(&answer).to_owned();
+            let events = published(&answer).len();
+            (answered != "not-sender" || events != 0 || after != before).then(|| {
+                format!(
+                    "{fault:?} with {row:?}: answered {answered}, {events} event(s), {} row(s) \
+                     before and {} after",
+                    before.len(),
+                    after.len()
+                )
+            })
+        })
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn a_post_refused_as_not_sender_reads_no_row() {
+    let backend = Counting::default();
+    let opened = run(
+        &backend,
+        "agent:box/worker",
+        "inbox.messaging.OpenInbox",
+        r#"{"address":"agent:box/worker","adapter":"claude_code"}"#,
+    );
+    assert_eq!(opened, "opened");
+    backend.reads.store(0, Ordering::SeqCst);
+    let answered = run(
+        &backend,
+        NOT_THE_SENDER,
+        "inbox.messaging.PostMessage",
+        &Post::note(SECOND).json(),
+    );
+    assert_eq!(answered, "not-sender");
+    assert_eq!(backend.reads.load(Ordering::SeqCst), 0);
+    assert!(MessageStorage::list(&backend.inner).is_empty());
+}
+
+#[test]
+fn a_post_from_the_caller_on_behalf_of_another_is_not_refused_as_not_sender() {
+    let world = World::new(verifier());
+    open_worker(&world);
+    let mut envelope = Post::note(SECOND);
+    envelope.on_behalf_of = "human:operator".to_owned();
+    envelope.authority = Some("delegation-7".to_owned());
+    assert_eq!(outcome(&post(&world, &envelope)), "posted");
 }
 
 fn assert_pairs(cases: &[(Fault, Row)], expected: impl Fn(Fault, Row) -> &'static str) {

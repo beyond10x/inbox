@@ -366,7 +366,11 @@ commands:
       summary: "Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer."
     input:
       - {name: message_id, type: inbox.messaging.MessageId}
-      - {name: from, type: inbox.messaging.Principal}
+      # SYNTHESIS: `principal-262144` is the value ESS 0.96.0 synthesis gives the first caller's
+      # `principal`, not an address anybody holds. Without it synthesis writes no stored message
+      # under the `not-sender` guard and 49 generated scenarios leave the suite. It goes when ESS
+      # writes those scenarios without it.
+      - {name: from, type: inbox.messaging.Principal, example: principal-262144}
       - {name: on_behalf_of, type: inbox.messaging.Principal, summary: "The principal whose word this is; `from` itself when the sender speaks for nobody else."}
       - {name: authority, type: Optional<inbox.messaging.DelegationId>}
       - {name: to, type: inbox.messaging.Address}
@@ -381,6 +385,9 @@ commands:
       - {name: body, type: inbox.messaging.Body}
       - {name: signature, type: inbox.messaging.Signature}
     outcomes:
+      - name: not-sender
+        when: from != caller.principal
+        error: inbox.messaging.NotSender
       - name: no-authority
         when:
           all:
@@ -536,6 +543,9 @@ commands:
       - {name: body, type: inbox.messaging.Body}
       - {name: signature, type: inbox.messaging.Signature}
     outcomes:
+      - name: not-sender
+        when: from != caller.principal
+        error: inbox.messaging.NotSender
       - name: no-authority
         when:
           all:
