@@ -520,6 +520,115 @@ s.check("Settled", sender(), contains={
 s.exactly("Replies", thread(t), 1).empty("Replies", thread(m))
 names.append(s.write())
 
+# 8, order
+# Posts with 2 refusals of PostMessage holding at once; the comment above each such step names the
+# pair. Every post is sent by the principal its `from` names, so `not-sender` holds in none. The
+# message ids of this block are coded X*.
+NOBODY = "agent:box/nobody"
+PROBE = "Probe."
+
+
+def rows_set_up(code):
+    """WORKER's inbox open and holding the planner's note, OTHER's inbox closed and holding a note
+    of OTHER: the 5 row refusals can each hold. Returns the planner's id and OTHER's."""
+    own, taken = mid(code, 1), mid(code, 2)
+    s.open(WORKER).open(OTHER).post(own, WORKER, "note").post(taken, OTHER, "note", sender=OTHER)
+    s.close(OTHER)
+    return own, taken
+
+
+def nothing_stored(own, taken):
+    s.exactly("Pending", inbox(WORKER), 1)
+    s.check("Pending", inbox(WORKER), contains={"message_id": own, "from": PLANNER,
+                                               "body": "Build 512 is green."})
+    s.exactly("Outbox", sender(), 1).exactly("Outbox", sender(OTHER), 1)
+    s.check("Outbox", sender(OTHER), contains={"message_id": taken, "body": "Build 512 is green."})
+
+
+def before_every_row_refusal(code, outcome, error, kind="note", **probe):
+    own, taken = rows_set_up(code)
+    # `outcome` and unknown-inbox: a free id to an address no inbox has.
+    s.post(mid(code, 3), NOBODY, kind, body=PROBE, outcome=outcome, error=error, **probe)
+    # `outcome` and duplicate (id-taken holds with every duplicate): the sender's own id again,
+    # under a dedup key of no message.
+    s.post(own, WORKER, kind, body=PROBE, dedup_key=mid(code, 9), outcome=outcome, error=error,
+           **probe)
+    # `outcome` and duplicate-key: a free id under the dedup key of the sender's own message.
+    s.post(mid(code, 4), WORKER, kind, body=PROBE, dedup_key=own, outcome=outcome, error=error,
+           **probe)
+    # `outcome` and inbox-closed: a free id into OTHER's closed inbox.
+    s.post(mid(code, 5), OTHER, kind, body=PROBE, outcome=outcome, error=error, **probe)
+    # `outcome` and id-taken: OTHER's id into WORKER's open inbox.
+    s.post(taken, WORKER, kind, body=PROBE, outcome=outcome, error=error, **probe)
+    nothing_stored(own, taken)
+
+
+s = Scenario("a-bad-signature-is-refused-before-any-row-is-read",
+             "A post whose signature the SignatureVerifier port refuses is answered signature-invalid while unknown-inbox, duplicate, duplicate-key, inbox-closed or id-taken also holds; nothing is stored.")
+before_every_row_refusal("XS", "signature-invalid", "SignatureInvalid")
+names.append(s.write())
+
+s = Scenario("an-unknown-option-is-refused-before-any-row-is-read",
+             "A decision whose silence option it does not offer is answered unknown-option while unknown-inbox, duplicate, duplicate-key, inbox-closed or id-taken also holds; nothing is stored.")
+before_every_row_refusal("XN", "unknown-option", "ShapeMismatch", kind="decision", decision=ASK,
+                         default_on_silence="C")
+names.append(s.write())
+
+s = Scenario("a-refused-delegation-is-answered-before-any-row-is-read",
+             "A post naming a delegation the SignatureVerifier port does not accept is answered authority-invalid while unknown-inbox, duplicate, duplicate-key, inbox-closed or id-taken also holds.")
+before_every_row_refusal("XA", "authority-invalid", "NoAuthority", on_behalf_of=OPERATOR,
+                         authority="delegation-lapsed")
+names.append(s.write())
+
+# Synthesis refuses the row refusal as the expected outcome of each of these posts
+# (ESS-AUTHOR-041: `request-without-shape` answers it first).
+s = Scenario("a-request-without-shape-is-refused-before-any-row-is-read",
+             "A request without a reply shape is answered request-without-shape while unknown-inbox, duplicate, duplicate-key, inbox-closed or id-taken also holds; nothing is stored.")
+before_every_row_refusal("XG", "request-without-shape", "ShapeMismatch", kind="request")
+names.append(s.write())
+
+# unknown-inbox and inbox-closed never hold together: an address has an inbox or has none.
+s = Scenario("row-refusals-of-a-post-answer-in-one-order",
+             "Where 2 row refusals of a post hold, the first of unknown-inbox, duplicate, duplicate-key, inbox-closed, id-taken is answered: each pair one post can make hold. Nothing is stored.")
+own, taken = rows_set_up("XR")
+# unknown-inbox and duplicate (and id-taken): the sender's own id to an address no inbox has.
+s.post(own, NOBODY, body=PROBE, dedup_key=mid("XR", 9), outcome="unknown-inbox", error="UnknownInbox")
+# unknown-inbox and duplicate-key: a free id under the sender's own dedup key, to no inbox.
+s.post(mid("XR", 3), NOBODY, body=PROBE, dedup_key=own, outcome="unknown-inbox", error="UnknownInbox")
+# unknown-inbox and id-taken: OTHER's id to no inbox.
+s.post(taken, NOBODY, body=PROBE, outcome="unknown-inbox", error="UnknownInbox")
+# duplicate and duplicate-key (and id-taken): the sender's own id under its own dedup key.
+s.post(own, WORKER, body=PROBE, outcome="duplicate", error="Duplicate")
+# duplicate and inbox-closed (and id-taken): the sender's own id into OTHER's closed inbox.
+s.post(own, OTHER, body=PROBE, dedup_key=mid("XR", 9), outcome="duplicate", error="Duplicate")
+# duplicate and id-taken: the sender's own id under a dedup key of no message.
+s.post(own, WORKER, body=PROBE, dedup_key=mid("XR", 9), outcome="duplicate", error="Duplicate")
+# duplicate-key and inbox-closed: a free id under the sender's own dedup key into a closed inbox.
+s.post(mid("XR", 4), OTHER, body=PROBE, dedup_key=own, outcome="duplicate-key", error="Duplicate")
+# duplicate-key and id-taken: OTHER's id under the sender's own dedup key into an open inbox.
+s.post(taken, WORKER, body=PROBE, dedup_key=own, outcome="duplicate-key", error="Duplicate")
+# inbox-closed and id-taken: OTHER's id into its own closed inbox.
+s.post(taken, OTHER, body=PROBE, dedup_key=mid("XR", 9), outcome="inbox-closed",
+       error="UnknownInbox")
+nothing_stored(own, taken)
+names.append(s.write())
+
+# The rule `duplicate` reads `from`, not `on_behalf_of`: a model that compared `on_behalf_of`
+# answers the operator's post `duplicate`.
+m = mid("XD", 1)
+s = Scenario("a-relayed-message-id-is-its-senders",
+             "A delegate posts for the operator and reposts: duplicate. The operator posts under that id as itself: id-taken, the id is the delegate's message, not the operator's. Nothing more is stored.")
+s.open(WORKER)
+s.post(m, WORKER, sender=HOST_OPERATOR, on_behalf_of=OPERATOR, authority="delegation-7")
+s.post(m, WORKER, sender=HOST_OPERATOR, on_behalf_of=OPERATOR, authority="delegation-7",
+       outcome="duplicate", error="Duplicate")
+s.post(m, WORKER, sender=OPERATOR, body=PROBE, outcome="id-taken", error="MessageIdTaken")
+s.exactly("Pending", inbox(WORKER), 1)
+s.check("Pending", inbox(WORKER), contains={"message_id": m, "from": HOST_OPERATOR,
+                                           "on_behalf_of": OPERATOR, "body": "Build 512 is green."})
+s.exactly("Outbox", sender(HOST_OPERATOR), 1).empty("Outbox", sender(OPERATOR))
+names.append(s.write())
+
 # 9
 m = mid("NX", 1)
 s = Scenario("note-expires",
