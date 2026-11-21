@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5d0a606ec95b4f3d1fc798803ab374eda0253182924a6940cb5d87c35b449778
+// contract digest d43aaff41f76331aceb590e4dc67c9411ad482322f4b4f286990e94b49e5fe69
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -1701,10 +1701,6 @@ pub struct Pending {
     pub signature: Signature,
     /// `answered_by` — `Optional<inbox.messaging.AnsweredBy>`.
     pub answered_by: Option<AnsweredBy>,
-    /// `decided_option` — `Optional<inbox.messaging.OptionLetter>`.
-    pub decided_option: Option<OptionLetter>,
-    /// `reply` — `Optional<inbox.messaging.Reply>`.
-    pub reply: Option<Reply>,
     /// `refusal` — `Optional<String>`.
     pub refusal: Option<String>,
     /// `state` — `inbox.messaging.Message.State`.
@@ -1897,10 +1893,6 @@ pub struct Unanswered {
     pub signature: Signature,
     /// `answered_by` — `Optional<inbox.messaging.AnsweredBy>`.
     pub answered_by: Option<AnsweredBy>,
-    /// `decided_option` — `Optional<inbox.messaging.OptionLetter>`.
-    pub decided_option: Option<OptionLetter>,
-    /// `reply` — `Optional<inbox.messaging.Reply>`.
-    pub reply: Option<Reply>,
     /// `refusal` — `Optional<String>`.
     pub refusal: Option<String>,
     /// `state` — `inbox.messaging.Message.State`.

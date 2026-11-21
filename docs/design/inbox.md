@@ -48,7 +48,9 @@ Nine commands: `OpenInbox`, `CloseInbox`, `PostMessage`, `MarkDelivered`, `MarkR
 
 Nine views: `Pending` and `Unanswered` for the owner of an inbox, `Outbox` and `Settled` for a
 sender, `Thread` and `Replies` for a thread, `Inboxes`, and `Due` and `Messages` for the expiry
-task.
+task. The views of messages publish every field of the message and its state, except that
+`Pending` and `Unanswered` leave out `reply` and `decided_option`: they hold messages in `Sent`,
+`Delivered` or `Read`, and only an answered message carries either.
 
 When a message is removed:
 
@@ -112,18 +114,18 @@ yet.
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
   rule), and only notes once an input guard depends on `kind`. 47 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
-- **50 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
-  synthesis arranges no row. 42 are covered: `decision-answered-by-the-operator` reads an
+- **42 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
+  synthesis arranges no row. `decision-answered-by-the-operator` covers 36 of them: it reads an
   answered decision, its reply and its option in `Settled`, `Replies`, `Thread`, `Outbox`,
-  `Messages` and `Due`, and `read-decision-waits-for-its-answer` reads a read decision in
-  `Unanswered`. The other 8 are `reply` and `decided_option` of `Pending` and `Unanswered`. No
-  sequence of commands leaves a row there: those views hold a message in `Sent`, `Delivered` or
-  `Read`, and only an answered message carries a reply or a decided option. They stay uncovered
-  until the two fields leave those two views, a change to the model.
-- **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 97;
-  89 are covered by authored scenarios and 8 are not, so it exits 1 and stays out of
-  `task check`. The suite it writes runs on the interpreted target as 93 passed and reports
-  `conformance_status: inconclusive`.
+  `Messages` and `Due`. `read-decision-waits-for-its-answer` covers the other 6: it reads a
+  decision that was read and not yet answered in `Unanswered`. Until stage 2 there were 50: 8
+  more for `reply` and `decided_option` of `Pending` and `Unanswered`, where no sequence of
+  commands leaves a row with either field set. Those two fields left those two views, which is
+  a change of their wire rows against 0.1.0.
+- **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 89,
+  and authored scenarios cover all 89, so it exits 0; `task check` runs it. The suite it writes
+  runs on the interpreted target as 93 passed and reports `conformance_status: passed`.
+  `task conform` synthesizes without declared coverage, so its report stays `inconclusive`.
 
 ## Stage 1 result
 

@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:b7ac13d4505b0f002a9dcbac5be87cc980c97304c199a0ec5dd2b4aedd587e24
+# contract digest slice-sha256/2:0f04a7e78f2dfb1bd9544eb011c773614fa432748a25a9972596e4e6a8a82bfe
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:b7ac13d4505b0f002a9dcbac5be87cc980c97304c199a0ec5dd2b4aedd587e24
+    contract_digest: slice-sha256/2:0f04a7e78f2dfb1bd9544eb011c773614fa432748a25a9972596e4e6a8a82bfe
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -2680,10 +2680,6 @@ components:
           $ref: '#/components/schemas/inbox.messaging.Signature'
         answered_by:
           $ref: '#/components/schemas/inbox.messaging.AnsweredBy'
-        decided_option:
-          $ref: '#/components/schemas/inbox.messaging.OptionLetter'
-        reply:
-          $ref: '#/components/schemas/inbox.messaging.Reply'
         refusal:
           type: string
         state:
@@ -3498,10 +3494,6 @@ components:
           $ref: '#/components/schemas/inbox.messaging.Signature'
         answered_by:
           $ref: '#/components/schemas/inbox.messaging.AnsweredBy'
-        decided_option:
-          $ref: '#/components/schemas/inbox.messaging.OptionLetter'
-        reply:
-          $ref: '#/components/schemas/inbox.messaging.Reply'
         refusal:
           type: string
         state:

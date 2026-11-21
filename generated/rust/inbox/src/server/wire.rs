@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5d0a606ec95b4f3d1fc798803ab374eda0253182924a6940cb5d87c35b449778
+// contract digest d43aaff41f76331aceb590e4dc67c9411ad482322f4b4f286990e94b49e5fe69
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1359,14 +1359,6 @@ pub fn encode_view_inbox_messaging_pending(value: &crate::messaging::Pending, ou
         json::member(out, "answered_by");
         encode_inbox_messaging_answered_by(&*held0, out);
     }
-    if let Some(held0) = &value.decided_option {
-        json::member(out, "decided_option");
-        encode_inbox_messaging_option_letter(&*held0, out);
-    }
-    if let Some(held0) = &value.reply {
-        json::member(out, "reply");
-        encode_inbox_messaging_reply(&*held0, out);
-    }
     if let Some(held0) = &value.refusal {
         json::member(out, "refusal");
         json::push_text(out, &*held0);
@@ -1666,14 +1658,6 @@ pub fn encode_view_inbox_messaging_unanswered(value: &crate::messaging::Unanswer
     if let Some(held0) = &value.answered_by {
         json::member(out, "answered_by");
         encode_inbox_messaging_answered_by(&*held0, out);
-    }
-    if let Some(held0) = &value.decided_option {
-        json::member(out, "decided_option");
-        encode_inbox_messaging_option_letter(&*held0, out);
-    }
-    if let Some(held0) = &value.reply {
-        json::member(out, "reply");
-        encode_inbox_messaging_reply(&*held0, out);
     }
     if let Some(held0) = &value.refusal {
         json::member(out, "refusal");
