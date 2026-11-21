@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T20:39:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:external-refusal-order-cases",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1 (a core that asks the verifier all 3 external questions before it answers passed every case; there before the unit): not changed in the unit; held since 2d45865 by 2 of the adopted cases in crates/inbox-core/tests/adversary_w8_order.rs; no draft filed",
+    "review": "review-result:adversary-external-refusal-order-pass-1",
+    "outcome": "no-op"
+  }
+}

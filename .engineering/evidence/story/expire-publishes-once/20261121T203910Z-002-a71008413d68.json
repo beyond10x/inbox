@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T20:39:10Z",
+  "actor": "agent:inbox",
+  "artifact": "story:expire-publishes-once",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F3 (no case and no scenario swept a refused decision that names a default_on_silence; there before the unit): held since c13275e by 1 adopted case of the core, not by a scenario; the scenario is filed as story:expiry-scenarios-hold-the-remaining-cases",
+    "review": "review-result:adversary-expire-publishes-once-pass-1",
+    "outcome": "no-op"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T20:39:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:external-refusal-order-cases",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (the unit's 4 cases post a note and a decision; a core with the reverse order for a request passed them): 2d45865 adds the adversary's 9 cases, 1 of them red on that core; no source line of a crate changed; the coordinator's gate on 2d45865: task check exit 0, 382 cases passed, 8 ignored",
+    "review": "review-result:adversary-external-refusal-order-pass-1",
+    "outcome": "fixed"
+  }
+}

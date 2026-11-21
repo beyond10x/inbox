@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T20:46:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:read-decision-expires-on-silence-scenario",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1 (no scenario expires a read decision that names no silence option; there before the unit): held since e6554ff by adopted cases of the core; the scenario is filed as story:expiry-scenarios-hold-the-remaining-cases; the coordinator's gate on e6554ff: task check exit 0, 377 cases passed, 8 ignored",
+    "review": "review-result:adversary-read-decision-expires-on-silence-pass-1",
+    "outcome": "no-op"
+  }
+}

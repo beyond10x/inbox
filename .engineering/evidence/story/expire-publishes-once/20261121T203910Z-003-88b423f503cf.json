@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T20:39:10Z",
+  "actor": "agent:inbox",
+  "artifact": "story:expire-publishes-once",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F4 (the header of expire_once.rs said no step of the suite reads a field of an event Expire publishes): c13275e corrects the header: no step bounds the number of occurrences from above; the coordinator's gate on c13275e: task check exit 0, 384 cases passed, 8 ignored",
+    "review": "review-result:adversary-expire-publishes-once-pass-1",
+    "outcome": "fixed"
+  }
+}
