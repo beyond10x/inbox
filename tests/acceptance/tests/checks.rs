@@ -205,7 +205,7 @@ fn after_a_restart_two_reposts_put_the_unread_message_in_pending_once() {
     assert!(ids(&lost).is_empty(), "the restart lost the message");
 
     world.client("bob", &["open"]).ok();
-    // The first repost delivers the message again, and the outbox file records the start that
+    // The first repost delivers the message again, and the epochs file records the start that
     // said it arrived; the second, in that start, posts nothing.
     let outcomes: Vec<Vec<String>> = (0..2)
         .map(|_| {

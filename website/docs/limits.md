@@ -82,12 +82,22 @@ without them.
 
 - **No release holds the binary.** `inbox serve` and the client are on `main` since wave 4
   and are built from source ([first use](first-use.md)); release 0.1.0 has no binary.
-- **`inbox repost` delivers a read note again**
+- **`inbox repost` delivers a note once more that was read before a restart**
   (`story:repost-does-not-redeliver-a-handled-note`). A note stays in its sender's outbox
-  file until it expires, 24 hours by default. Once its recipient has read it the service
-  holds no message with that id, so `repost` posts it again and the service answers
-  `posted`. The service gives one answer for a note that was read and for one a restart
-  dropped.
+  file until it expires, 24 hours by default. Every answer of the service carries the header
+  `Inbox-Epoch`, which changes with each start, and the client records it in the epochs file
+  beside the outbox file (`<outbox>.epochs`) for each envelope whose post the service
+  held. `repost` leaves alone an envelope recorded at the epoch the service names now, so a
+  note read in the start that took it is not posted again. What stays open:
+  - The first `repost` after a restart of the service posts every kept envelope, because
+    the epoch changed. The service keeps no record of a handled note, so it answers `posted`
+    for a note its recipient read before the restart as for one the restart dropped.
+  - A service that sends no `Inbox-Epoch` (an older one) gives no epoch to compare: every
+    `repost` posts every kept envelope.
+  - An epochs file that is lost or unreadable, or a line of it that is malformed or doubled,
+    gives the envelopes concerned no epoch, and `repost` posts them. A message the service
+    still holds is answered `duplicate` and changes nothing; a note that was read is delivered
+    again.
 - **Loopback only, no TLS.** A listener on a second host and TLS belong to a later stage
   (`epic:two-hosts-and-wake`).
 - **One backend, in memory.** A restart of the service loses every message. The design has the
@@ -100,8 +110,8 @@ without them.
 
 ## What the checks do not cover
 
-- **The run over HTTP witnesses 25 of the 103 scenarios.** All 103 pass against the core in
-  process. Against a running `inbox serve`, 78 are unsupported and listed with their
+- **The run over HTTP witnesses 25 of the 105 scenarios.** All 105 pass against the core in
+  process. Against a running `inbox serve`, 80 are unsupported and listed with their
   reasons in
   [`unsupported.tsv`](https://github.com/beyond10x/inbox/blob/main/crates/inbox-conformance/unsupported.tsv)
   ([what works](status.md) names the reasons). ESS reports that run as `failed`, and the
@@ -123,16 +133,12 @@ without them.
   - `story:post-refusal-order-scenarios`: no scenario holds the order in which `PostMessage`
     refuses when two refusals apply; an implementation that reads a row before it checks the
     signature passed the suite when the gap was found (92 scenarios then).
-  - `story:external-refusal-order-cases`: no case holds the order of the three external
-    refusals of `PostMessage` (`unknown-option`, `signature-invalid`, `authority-invalid`); a
-    core that asks them in reverse order passes.
-  - `story:read-decision-expires-on-silence-scenario`: no scenario holds that a decision its
-    recipient has read is decided on silence at expiry; a core that deletes it passes.
-  - `story:silence-leaves-the-other-fields-scenario`: no scenario holds the fields `Expire`
-    leaves unchanged when it decides on silence; a core that clears `decision` afterwards
-    passes.
-  - `story:expire-publishes-once`: nothing bounds `Expire` to one occurrence of the event it
-    publishes; a core that publishes it twice passes.
+  - `story:expiry-scenarios-hold-the-remaining-cases`: 5 behaviours of `Expire` that no scenario
+    holds (cases of the core do); a core that gets one wrong passes `task conform`: a
+    read decision that names no silence option is decided on silence, a decision is decided 1
+    second before `expires`, a delivered request is decided on silence, `thread` of
+    `DecisionTakenOnSilence` is the message id, a refused decision that names a silence option
+    is counted as open.
 - ESS issues the code works around or waits for:
   - [beyond10x/ess#798](https://github.com/beyond10x/ess/issues/798): the `PLAN.md` that ESS
     writes states an order of refusals that the interpreted target does not follow. The

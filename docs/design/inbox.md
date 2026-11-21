@@ -144,6 +144,9 @@ the `ess` repository (beyond10x/ess#804).
   decides who is a party. Over HTTP the conformance run reads `unknown-message` where the
   scenario expects `foreign-message`, so the cases of `crates/inbox-server/tests/` witness that
   answer, not the suite.
+- **No step bounds the number of occurrences of an event.** A claim of an event holds it at
+  least once. The cases of `crates/inbox-core/tests/expire_once.rs` compare the whole list of
+  events `Expire` hands back, so a core that publishes one twice fails them and not the suite.
 - **A value is not testable against the elements of an input list.** "The letters name options
   of the decision" is the external refusal `unknown-option`.
 - **`{subject: <field>}` is refused beside `deletes:`**, so `MessageExpired` carries the id alone
@@ -171,9 +174,9 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 103 scenarios (30 authored) and refuses 93,
+- **`task coverage` on ESS 0.97.1**: synthesis writes 105 scenarios (32 authored) and refuses 93,
   and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 103 passed and reports `conformance_status: passed`.
+  runs on the interpreted target as 105 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 

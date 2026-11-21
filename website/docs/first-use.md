@@ -84,6 +84,13 @@ An envelope leaves the file when its answer is collected, when the service refus
 error of the specification other than `UnknownInbox`, or when it expires (24 hours after it was
 made, by default). `id-taken` is such an error, so `post` and `repost` exit 1 and drop the line.
 
-`inbox repost` posts the kept envelopes again. It is for after a restart of the service, which
-loses every message. A note its recipient already read is delivered again
-(`story:repost-does-not-redeliver-a-handled-note`).
+Every answer of the service carries the header `Inbox-Epoch`: 32 hex digits that change with each
+start of the service. When a post arrives, `inbox post` records that value in the epochs file
+beside the outbox file (`<outbox>.epochs`, one line per envelope).
+
+`inbox repost` is for after a restart of the service, which loses every message. It asks the
+service for its epoch and posts again the kept envelopes that the epochs file does not record at
+that epoch. An envelope the current start has already answered is left alone and not listed, so
+a second `repost` in the same start posts nothing. A note its recipient read before the restart
+is delivered once more by the first `repost` after it
+(`story:repost-does-not-redeliver-a-handled-note`, [limits](limits.md)).

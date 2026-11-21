@@ -13,17 +13,17 @@ findings. Release 0.1.0 holds waves 1 to 3.
 What works on `main`:
 
 - The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 30 authored scenarios.
+  their lifecycle, every refusal, and 32 authored scenarios.
 - The Rust crate ESS generates from it, the core that implements its 2 obligations, the
   in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
   library, loopback only).
 - The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
   address over the in-memory backend, and the other commands are the client. It is built
   from source; no release holds it.
-- The conformance suite: 103 scenarios pass on ESS's interpreted target and against the core,
+- The conformance suite: 105 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
   (`task coverage`: 93 of 93). ESS reports the run against the core as `passed`.
-- The same suite against a running `inbox serve` over HTTP: 25 scenarios pass, and 78
+- The same suite against a running `inbox serve` over HTTP: 25 scenarios pass, and 80
   cannot be witnessed over HTTP and are listed with their reasons
   (`crates/inbox-conformance/unsupported.tsv`).
 - 3 acceptance checks against the built binary (`task acceptance`): a signed request and
@@ -89,8 +89,9 @@ inbox has or a closed inbox (`story:post-does-not-tell-a-message-id-exists`; `du
 the sender's own message only, and `id-taken` is new).
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
-loses every message; no release holds the binary; `inbox repost` delivers a note again that
-its recipient already read; the run of the suite over HTTP witnesses 25 of the 103 scenarios;
+loses every message; no release holds the binary; the first `inbox repost` after a restart
+delivers once more a note its recipient read before it; the run of the suite over HTTP
+witnesses 25 of the 105 scenarios;
 gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
@@ -109,7 +110,7 @@ its evidence are in `.engineering/`.
 
 | Path | Contents |
 |---|---|
-| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 30 scenarios |
+| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 32 scenarios |
 | `generated/rust/inbox/` | The Rust crate ESS generates from `ess/`; never edited by hand |
 | `generated/{openapi,asyncapi,schema}/` | OpenAPI, AsyncAPI and JSON Schema projections of the specification |
 | `generated/docs/` | The specification pages ESS generates; the site shows them |
@@ -180,8 +181,12 @@ commands: `close`, `wait`, `answer`, `refuse`, `outbox`, `collect`, `thread`, `r
 (`$XDG_STATE_HOME/inbox/outbox.jsonl` by default) until it is collected, refused with a model
 error other than `UnknownInbox`, or expired; `id-taken` is such an error, so `post` and `repost`
 exit 1 and drop the line. A failed connection or a refusal of the service's
-own (`400`, `401`, `408`, `413`, `503`) keeps it. `inbox repost` posts the kept ones again after
-the service was restarted: a note its recipient already read is delivered again.
+own (`400`, `401`, `408`, `413`, `503`) keeps it. Every answer of the service carries the header
+`Inbox-Epoch`, which changes with each start, and `inbox post` records it in `<outbox>.epochs`
+beside the outbox file. `inbox repost` is for after the service was restarted: it posts again
+the kept envelopes that the current start of the service did not answer, and leaves alone those
+it did. A note its recipient read before the restart is delivered once more by the first
+`repost` after it.
 
 ## Check
 

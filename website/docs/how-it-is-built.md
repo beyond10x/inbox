@@ -8,7 +8,7 @@ description: Specification first, generated code held by a drift check, a confor
 ## The specification comes first
 
 Every behaviour is written in [ESS](https://github.com/beyond10x/ess) in `ess/` before code
-exists for it: the entities, commands, views, events, every refusal, and 30 authored scenarios.
+exists for it: the entities, commands, views, events, every refusal, and 32 authored scenarios.
 `task spec` validates it. A rule ESS 0.97.1 cannot state carries an `UNMAPPED:` marker in `ess/`
 and is listed in `docs/design/inbox.md`; it is implemented by the service and tested outside the
 suite.
@@ -28,10 +28,10 @@ fresh generation from `ess/`. The generated crate leaves two obligations (`PostM
 
 ## The conformance suite
 
-ESS synthesizes a conformance suite from `ess/`: 103 scenarios on ESS 0.97.1. `task check` runs
+ESS synthesizes a conformance suite from `ess/`: 105 scenarios on ESS 0.97.1. `task check` runs
 it three times: on ESS's interpreted target, against the core in process, and against a
 running `inbox serve` over HTTP. It fails on any failed or errored scenario. Against the core
-all 103 pass and ESS reports `passed`. Over HTTP 25 pass and 78 cannot be witnessed; they are
+all 105 pass and ESS reports `passed`. Over HTTP 25 pass and 80 cannot be witnessed; they are
 listed with their reasons, and the gate fails when the list and the run differ (see
 [what works](status.md)). `task check` also fails when a refusal of the specification is
 claimed by no authored scenario (`task coverage`), and it runs 3 acceptance checks against

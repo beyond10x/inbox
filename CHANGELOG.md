@@ -22,19 +22,41 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 - Declared coverage: every refusal of the specification is claimed by an authored scenario.
   `task coverage` exits 0 (93 refused generated scenarios, 93 covered) and is part of
   `task check`; the suite it writes reports `conformance_status: passed` on ESS's
-  interpreted target. 7 authored scenarios are new (30 authored, 103 in the suite).
+  interpreted target. 9 authored scenarios are new (32 authored, 105 in the suite).
 - `task scenarios-drift`, in `task check`: fails when `ess/scenarios/` or
   `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes.
 - `task conform` also runs the conformance suite against a running `inbox serve` over
   HTTP (`crates/inbox-conformance`, `run --target serve`): a fresh service per scenario,
   every request and envelope signed with keys made for the run, each answer held to the
-  HTTP status of the generated contract. 25 of the 103 scenarios pass there; 78 cannot be
+  HTTP status of the generated contract. 25 of the 105 scenarios pass there; 80 cannot be
   witnessed over HTTP and are listed with their reasons in
   `crates/inbox-conformance/unsupported.tsv`.
 - `task acceptance`, in `task check`: 3 checks against the built binary
   (`tests/acceptance`): a signed request and its reply between 2 keys; a read note and an
-  expired request in no view; after a restart, 2 reposts answered `posted` then
-  `duplicate`.
+  expired request in no view; after a restart, 2 reposts, the first answered `posted` and
+  the second posting nothing.
+- The response header `Inbox-Epoch` on every answer of `inbox serve`, whatever its status: 32
+  lower-case hex digits made once from the OS random source when the listener is bound. The
+  answers of one start carry one value and a new start makes a new one. It carries no time
+  and no secret.
+- The file `<outbox>.epochs` beside the outbox file, one line `<message id>\t<epoch>` per
+  kept envelope whose post the service said it holds: an accepted post, or the outcome
+  `duplicate`; `duplicate-key` records none, since the service stored nothing of that
+  envelope. `inbox repost` asks the service for its epoch when a kept envelope has one, and
+  leaves alone the envelopes recorded at that epoch: it does not post or list them. It posts
+  every other kept envelope: one recorded at another epoch, one with none, and every one when
+  the service sends no epoch. A missing epochs file, and a line of it that is malformed,
+  doubled or unreadable, mean no epoch. When the epochs file cannot be written, `post` still
+  prints the message id and exits 4, and `repost` posts every envelope, prints its report and
+  exits 4. The outbox file keeps the form it had
+  (`story:repost-does-not-redeliver-a-handled-note`).
+- Tests and scenarios: 2 authored scenarios, `read-decision-is-decided-on-silence` and
+  `silence-leaves-the-decision-as-it-was`, listed as unsupported over HTTP (a step as the
+  Sweeper); cases of `inbox-core` for the events `Expire` hands back (each list compared
+  whole, so one occurrence of each), for the order of the 3 external refusals of
+  `PostMessage`, for a read decision decided on silence and for the fields `Expire` leaves
+  as they were when it decides on silence; the acceptance case
+  `tests/acceptance/tests/adversary.rs` removes the epochs file before each repost.
 
 ### Changed
 
@@ -100,10 +122,12 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 - The input `from` of `PostMessage` carries the example value `principal-262144` in the
   OpenAPI documents and the JSON Schema of `PostMessage`. It is a value ESS synthesis
   needs until beyond10x/ess#804 is fixed, and not an address anybody holds.
-- `inbox repost` delivers a note again that its recipient already read
+- The first `inbox repost` after a restart of the service delivers once more a note its
+  recipient read before the restart. So does a `repost` against a service that sends no
+  `Inbox-Epoch`, and one whose epochs file is lost or unreadable
   (`story:repost-does-not-redeliver-a-handled-note`).
-- Over HTTP 78 of the 103 scenarios are unsupported: a caller whose principal and
-  inbox differ (68), a step as the Sweeper (36), a step as no actor (9), a claim on the
+- Over HTTP 80 of the 105 scenarios are unsupported: a caller whose principal and
+  inbox differ (68), a step as the Sweeper (38), a step as no actor (9), a claim on the
   stored `signature` (7), one delegation id for two pairs (1); a scenario can have
   several. ESS reports that run as `failed`, and the gate holds it to the list.
 - The run over HTTP and the acceptance checks send valid signatures only and read a view
