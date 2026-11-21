@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
+# contract digest slice-sha256/2:6c7efb97ffd016e1f31564de87e1cc1572bb5be4245f8e4914b5e5c0696dd502
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
+    contract_digest: slice-sha256/2:6c7efb97ffd016e1f31564de87e1cc1572bb5be4245f8e4914b5e5c0696dd502
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -2958,7 +2958,7 @@ components:
       type: object
     inbox.messaging.PostMessage.duplicate-key.Response:
       additionalProperties: false
-      description: Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `dedup_key == input.dedup_key` before the outcome, at least one row is selected.
+      description: Taken when, of the `inbox.messaging.Message` rows whose stored fields satisfy `(dedup_key == input.dedup_key and from == input.from)` before the outcome, at least one row is selected.
       properties:
         error:
           const: inbox.messaging.Duplicate

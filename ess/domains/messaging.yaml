@@ -366,7 +366,7 @@ commands:
       summary: "Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer."
     input:
       - {name: message_id, type: inbox.messaging.MessageId}
-      # SYNTHESIS: `principal-262144` is the value ESS 0.96.0 synthesis gives the first caller's
+      # SYNTHESIS: `principal-262144` is the value ESS 0.97.1 synthesis gives the first caller's
       # `principal`, not an address anybody holds. Without it synthesis writes no stored message
       # under the `not-sender` guard and 49 generated scenarios leave the suite. It goes when ESS
       # writes those scenarios without it: the fix of beyond10x/ess#804.
@@ -410,7 +410,7 @@ commands:
             - kind == decision
             - not defined(decision)
         error: inbox.messaging.ShapeMismatch
-      # UNMAPPED: "the letters name options of the decision" has no ESS 0.96.0 spelling: a guard
+      # UNMAPPED: "the letters name options of the decision" has no ESS 0.97.1 spelling: a guard
       # cannot test that a value is the `letter` of an element of an input list. It is an external
       # refusal, decided before any row is read.
       - name: unknown-option
@@ -429,7 +429,7 @@ commands:
       - name: duplicate-key
         when_related:
           entity: inbox.messaging.Message
-          where: dedup_key == input.dedup_key
+          where: {all: [dedup_key == input.dedup_key, from == input.from]}
           exists: true
         error: inbox.messaging.Duplicate
       - name: unknown-inbox
@@ -734,7 +734,7 @@ commands:
         emits: [inbox.messaging.MessageExpired]
         payload:
           # UNMAPPED: the service knows the sender and the thread of the message it removes, and a
-          # sender waits for that news. ESS 0.96.0 admits `{subject: …}` beside `moves:` and
+          # sender waits for that news. ESS 0.97.1 admits `{subject: …}` beside `moves:` and
           # `updates:` only, so the event of a `deletes:` outcome carries the id alone.
           inbox.messaging.MessageExpired: {message_id: input.message_id}
 
