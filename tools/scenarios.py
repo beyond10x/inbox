@@ -508,6 +508,22 @@ s.check("Settled", sender(), contains={"message_id": m, "state": "Answered", "an
 s.exactly("Replies", thread(m), 1).empty("Pending", inbox(OPERATOR))
 names.append(s.write())
 
+# 8, fields
+m = mid("SF", 1)
+t = mid("SF", 9)
+s = Scenario("silence-leaves-the-decision-as-it-was",
+             "A decision is answered by silence at `expires`. The row it leaves keeps the body, the thread, the options, the option silence takes and the instant it was created.")
+s.open(OPERATOR).post(m, OPERATOR, "decision", thread=t, decision=ASK, default_on_silence="B",
+                      expires=60, body="Ship release 4.2 today?")
+s.expire(m, 60, "decided-on-silence", thread=t)
+s.check("Settled", sender(), contains={
+    "message_id": m, "thread": t, "state": "Answered", "answered_by": "silence",
+    "decided_option": "B", "expires": ts(60 + 24 * 60), "body": "Ship release 4.2 today?",
+    "created": ts(0), "decision": ASK, "default_on_silence": "B",
+})
+s.exactly("Replies", thread(t), 1).empty("Replies", thread(m))
+names.append(s.write())
+
 # 9
 m = mid("NX", 1)
 s = Scenario("note-expires",

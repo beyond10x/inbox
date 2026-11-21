@@ -33,3 +33,4 @@ scenarios:
 - scenarios/reply-of-the-wrong-shape-refused.yaml
 - scenarios/repost-after-restart-arrives-once.yaml
 - scenarios/request-fanned-out-to-eleven.yaml
+- scenarios/silence-leaves-the-decision-as-it-was.yaml
