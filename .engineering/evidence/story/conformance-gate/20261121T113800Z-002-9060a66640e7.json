@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 3 (most lines of correction 1 untested): 11 cases added to tests/runner.rs; the adversary's unchanged runner_mutants.py on a tree copy: 54 mutants, 48 killed, 6 surviving, the 6 it named as equivalent",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "fixed"
+  }
+}

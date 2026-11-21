@@ -10,12 +10,13 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target and against inbox-core, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: projections-drift
       - task: drift
       - task: conform-interpreted
+      - task: conform
       - cargo fmt --check
       - cargo clippy --workspace --all-targets --locked -- -D warnings
       - cargo test --workspace --locked
@@ -60,6 +61,17 @@ tasks:
       - mkdir -p {{.OUT}}/conform
       - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
       - ess verify conform run --path ess --target interpreted --suite {{.OUT}}/conform/suite.json --report-format 2 --report-out {{.OUT}}/conform/report.json
+
+  conform:
+    desc: Synthesize the conformance suite into .out/conform, run it against inbox-core in process, write the report with ess, and fail unless the report is that suite's (digest, each scenario id once) and inbox-core's, its counts add up, its conformance_status is a passing run's, no scenario failed, errored or was skipped, and the unsupported ones are exactly those crates/inbox-conformance/unsupported.tsv lists.
+    vars:
+      IMPLEMENTATION: inbox-core
+    cmds:
+      - mkdir -p {{.OUT}}/conform
+      - ess verify conform synthesize --path ess --scenarios ess --out {{.OUT}}/conform/suite.json
+      - cargo run -q --locked -p inbox-conformance -- run --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json
+      - ess verify conform report --suite {{.OUT}}/conform/suite.json --results {{.OUT}}/conform/core-results.json --implementation {{.IMPLEMENTATION}} --runner inbox-conformance@0.1.0 --report-out {{.OUT}}/conform/core-report.json
+      - cargo run -q --locked -p inbox-conformance -- gate --suite {{.OUT}}/conform/suite.json --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.IMPLEMENTATION}}
 
   coverage:
     desc: Synthesize with declared coverage and list the generated scenarios nothing covers; exits 1 while one remains.

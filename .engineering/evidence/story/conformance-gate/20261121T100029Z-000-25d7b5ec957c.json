@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T10:00:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator claim check, task conform: base c582901 exit 200 (no task conform); unit exit 0, 92 scenarios: 92 passed, 0 failed, 0 error, 0 unsupported; a copy whose core no longer answers duplicate-key exit 201 (task -x conform exit 1), 91 passed, failed inbox.messaging/authored/repeated-dedup-key step 9; cargo test -p inbox-conformance --locked exit 0, 20 passed (4 + 16)"
+  }
+}

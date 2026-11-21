@@ -1,0 +1,321 @@
+//! The gate on the report ESS writes from the results: 0 failed, 0 errored, 0 skipped, and the
+//! unsupported scenarios exactly those `unsupported.tsv` names; the report bound to the suite
+//! (its digest, each of its scenario ids once) and, where one is given, to the implementation.
+
+use std::collections::BTreeMap;
+
+use inbox::server::json::{self, Value};
+
+/// The scenarios the runner is known not to interpret, by id, each with its reason.
+pub type Listed = BTreeMap<String, String>;
+
+/// Reads `unsupported.tsv`: one line per scenario, its id, a tab, and the reason. An empty file
+/// lists none.
+///
+/// # Errors
+///
+/// A line with no tab, an empty id or reason, or an id named twice.
+pub fn read_listed(text: &str) -> Result<Listed, String> {
+    let mut listed = Listed::new();
+    for (at, line) in text.lines().enumerate() {
+        let number = at + 1;
+        let Some((id, reason)) = line.split_once('\t') else {
+            return Err(format!(
+                "line {number}: expected `<scenario id>\\t<reason>`, found {line:?}"
+            ));
+        };
+        if id.trim().is_empty() || reason.trim().is_empty() {
+            return Err(format!(
+                "line {number}: the id and the reason are both required"
+            ));
+        }
+        if listed.insert(id.to_owned(), reason.to_owned()).is_some() {
+            return Err(format!("line {number}: `{id}` is listed twice"));
+        }
+    }
+    Ok(listed)
+}
+
+/// What a report/2 says, as far as the gate reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Report {
+    /// `counts.total`.
+    pub total: u64,
+    /// `counts.passed`.
+    pub passed: u64,
+    /// `outcomes.failed`.
+    pub failed: Vec<String>,
+    /// `outcomes.error`.
+    pub error: Vec<String>,
+    /// `outcomes.skipped`.
+    pub skipped: Vec<String>,
+    /// `outcomes.unsupported`.
+    pub unsupported: Vec<String>,
+}
+
+/// Reads an `ess-conformance-report/2`.
+///
+/// # Errors
+///
+/// A document that is not JSON, not a report/2, whose counts disagree with its lists (passed
+/// included), or whose total is not the sum of its outcomes.
+pub fn read_report(text: &str) -> Result<Report, String> {
+    let document = json::parse_written(text).map_err(|error| format!("the report: {error}"))?;
+    match document.member("format") {
+        Some(Value::Text(format)) if format == "ess-conformance-report/2" => {}
+        _ => return Err("the report is not an `ess-conformance-report/2`".to_owned()),
+    }
+    let counts = document
+        .member("counts")
+        .ok_or("the report has no `counts`")?;
+    let outcomes = document
+        .member("outcomes")
+        .ok_or("the report has no `outcomes`")?;
+    let count = |name: &str| -> Result<u64, String> {
+        match counts.member(name) {
+            Some(Value::Number(spelling)) => spelling
+                .parse::<u64>()
+                .map_err(|_| format!("`counts.{name}` is not a count")),
+            _ => Err(format!("the report has no `counts.{name}`")),
+        }
+    };
+    let ids = |name: &str| -> Result<Vec<String>, String> {
+        let listed = match outcomes.member(name) {
+            Some(Value::Array(items)) => items
+                .iter()
+                .map(|item| match item {
+                    Value::Text(id) => Ok(id.clone()),
+                    _ => Err(format!("`outcomes.{name}` holds a value that is no id")),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            None => Vec::new(),
+            Some(_) => return Err(format!("`outcomes.{name}` is not a list")),
+        };
+        if listed.len() as u64 != count(name)? {
+            return Err(format!(
+                "the report counts {} `{name}` and lists {}",
+                count(name)?,
+                listed.len()
+            ));
+        }
+        Ok(listed)
+    };
+    let passed = ids("passed")?;
+    let report = Report {
+        total: count("total")?,
+        passed: passed.len() as u64,
+        failed: ids("failed")?,
+        error: ids("error")?,
+        skipped: ids("skipped")?,
+        unsupported: ids("unsupported")?,
+    };
+    if report.total != accounted(&report) {
+        return Err(format!(
+            "the report counts {} scenarios and accounts for {}",
+            report.total,
+            accounted(&report)
+        ));
+    }
+    Ok(report)
+}
+
+/// The scenarios a report accounts for: its passed count and every listed id.
+fn accounted(report: &Report) -> u64 {
+    report.passed
+        + (report.failed.len()
+            + report.error.len()
+            + report.skipped.len()
+            + report.unsupported.len()) as u64
+}
+
+/// What binds a report/2 to a run: its verdict and the suite it was made for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    /// `conformance_status`.
+    pub conformance_status: String,
+    /// `suite.digest`: `sha256:<hex>` of the suite's bytes.
+    pub suite_digest: String,
+    /// `implementation`, where the report names one.
+    pub implementation: Option<String>,
+    /// Every id of the outcome lists (passed, failed, error, skipped, unsupported), in that
+    /// order, as often as the lists name it.
+    pub ids: Vec<String>,
+}
+
+/// The outcome lists of a report/2, in the order [`Binding::ids`] reads them.
+const OUTCOMES: [&str; 5] = ["passed", "failed", "error", "skipped", "unsupported"];
+
+/// Reads the [`Binding`] of an `ess-conformance-report/2`.
+///
+/// # Errors
+///
+/// A document that is not JSON, carries no `conformance_status` or `suite.digest`, an
+/// `implementation` that is not text, or an outcome list holding something other than ids.
+pub fn read_binding(text: &str) -> Result<Binding, String> {
+    let document = json::parse_written(text).map_err(|error| format!("the report: {error}"))?;
+    let Some(Value::Text(conformance_status)) = document.member("conformance_status") else {
+        return Err("the report has no `conformance_status`".to_owned());
+    };
+    let Some(Value::Text(suite_digest)) = document
+        .member("suite")
+        .and_then(|suite| suite.member("digest"))
+    else {
+        return Err("the report has no `suite.digest`".to_owned());
+    };
+    let implementation = match document.member("implementation") {
+        None => None,
+        Some(Value::Text(name)) => Some(name.clone()),
+        Some(_) => return Err("the report's `implementation` is not text".to_owned()),
+    };
+    let mut ids = Vec::new();
+    for name in OUTCOMES {
+        let listed = document
+            .member("outcomes")
+            .and_then(|outcomes| outcomes.member(name));
+        match listed {
+            None => {}
+            Some(Value::Array(items)) => {
+                for item in items {
+                    let Value::Text(id) = item else {
+                        return Err(format!("`outcomes.{name}` holds a value that is no id"));
+                    };
+                    ids.push(id.clone());
+                }
+            }
+            Some(_) => return Err(format!("`outcomes.{name}` is not a list")),
+        }
+    }
+    Ok(Binding {
+        conformance_status: conformance_status.clone(),
+        suite_digest: suite_digest.clone(),
+        implementation,
+        ids,
+    })
+}
+
+/// Holds the ids a report accounts for to the scenario ids of its suite: each of `scenarios`
+/// named exactly once, and no other. One problem per id that breaks it.
+pub fn accounts(binding: &Binding, scenarios: &[String]) -> Vec<String> {
+    let mut named: BTreeMap<&str, usize> = BTreeMap::new();
+    for id in &binding.ids {
+        *named.entry(id.as_str()).or_default() += 1;
+    }
+    let mut problems = Vec::new();
+    for scenario in scenarios {
+        match named.get(scenario.as_str()) {
+            None => problems.push(format!("the report does not account for {scenario}")),
+            Some(1) => {}
+            Some(times) => problems.push(format!("the report names {scenario} {times} times")),
+        }
+    }
+    problems.extend(
+        named
+            .keys()
+            .filter(|id| !scenarios.iter().any(|scenario| scenario == *id))
+            .map(|id| format!("the report names {id}, which is no scenario of the suite")),
+    );
+    problems
+}
+
+/// Holds a report to the implementation it should be written for: a problem where its
+/// `implementation` is another or absent.
+pub fn implemented(binding: &Binding, expected: &str) -> Option<String> {
+    match &binding.implementation {
+        Some(name) if name == expected => None,
+        Some(name) => Some(format!(
+            "the report is for the implementation `{name}`, not `{expected}`"
+        )),
+        None => Some(format!(
+            "the report names no implementation; `{expected}` was expected"
+        )),
+    }
+}
+
+/// The `conformance_status` ESS 0.96.0 gives a run this gate passes: `inconclusive` where every
+/// scenario passed (the suite declares no coverage), and `failed` where the only scenarios that
+/// did not pass are unsupported ones the list names (ESS fails any unsupported scenario).
+pub fn passing_status(report: &Report) -> &'static str {
+    if report.unsupported.is_empty() {
+        "inconclusive"
+    } else {
+        "failed"
+    }
+}
+
+/// Holds a report's binding to the suite the task synthesized (`suite_digest`) and to the status
+/// a passing run carries; one problem per mismatch.
+pub fn bound(report: &Report, binding: &Binding, suite_digest: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if binding.suite_digest != suite_digest {
+        problems.push(format!(
+            "the report is for the suite {}, not for {suite_digest}, the suite this run synthesized",
+            binding.suite_digest
+        ));
+    }
+    let expected = passing_status(report);
+    if binding.conformance_status != expected {
+        problems.push(format!(
+            "conformance_status is `{}`; a passing run carries `{expected}`",
+            binding.conformance_status
+        ));
+    }
+    problems
+}
+
+/// The gate's answer: the result line, and every reason it fails; none where it passes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Verdict {
+    /// `<total> scenarios: <passed> passed, <failed> failed, <error> error, <unsupported>
+    /// unsupported`, the shape of the interpreted run's line.
+    pub line: String,
+    /// Why the gate fails, one entry per scenario or condition.
+    pub problems: Vec<String>,
+}
+
+impl Verdict {
+    /// Whether the gate passes.
+    pub fn passes(&self) -> bool {
+        self.problems.is_empty()
+    }
+}
+
+/// Holds `report` to `listed`: no scenario failed, errored or skipped, something ran and passed,
+/// and the unsupported scenarios are exactly the listed ones.
+pub fn verdict(report: &Report, listed: &Listed) -> Verdict {
+    let line = format!(
+        "{} scenarios: {} passed, {} failed, {} error, {} unsupported",
+        report.total,
+        report.passed,
+        report.failed.len(),
+        report.error.len(),
+        report.unsupported.len()
+    );
+    let mut problems = Vec::new();
+    if report.total != accounted(report) {
+        problems.push(format!(
+            "the report counts {} scenarios and accounts for {}",
+            report.total,
+            accounted(report)
+        ));
+    }
+    if report.total == 0 || report.passed == 0 {
+        problems.push("the run passed no scenario: the suite did not run".to_owned());
+    }
+    problems.extend(report.failed.iter().map(|id| format!("failed: {id}")));
+    problems.extend(report.error.iter().map(|id| format!("error: {id}")));
+    problems.extend(report.skipped.iter().map(|id| format!("skipped: {id}")));
+    problems.extend(
+        report
+            .unsupported
+            .iter()
+            .filter(|id| !listed.contains_key(*id))
+            .map(|id| format!("unsupported and not listed in unsupported.tsv: {id}")),
+    );
+    problems.extend(
+        listed
+            .keys()
+            .filter(|id| !report.unsupported.contains(id))
+            .map(|id| format!("listed in unsupported.tsv and not unsupported in the run: {id}")),
+    );
+    Verdict { line, problems }
+}

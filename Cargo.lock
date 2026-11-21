@@ -313,6 +313,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inbox-conformance"
+version = "0.1.0"
+dependencies = [
+ "inbox",
+ "inbox-core",
+ "sha2",
+]
+
+[[package]]
 name = "inbox-core"
 version = "0.1.0"
 dependencies = [

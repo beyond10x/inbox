@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 6 (Expire publishing its event twice passes): pre-existing, no scenario bounds the occurrences; draft story:expire-publishes-once",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "no-op"
+  }
+}

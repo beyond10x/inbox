@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 2 (the gate binds a report to the suite's bytes only): the gate fails unless the report's outcome lists name each scenario id of the suite once and no other, and, with --implementation, unless the report's implementation is that name; the Taskfile passes inbox-core to ess verify conform report and to the gate from one var",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "fixed"
+  }
+}

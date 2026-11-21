@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 1 (satisfies passes on a view with no rows): satisfies fails when the view holds no rows, as the ESS runner does; task conform stays at 92 passed on the unchanged core; tests/adversary2.rs 4 passed",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "fixed"
+  }
+}

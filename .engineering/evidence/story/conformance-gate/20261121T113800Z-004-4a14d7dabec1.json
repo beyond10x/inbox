@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 5 (fields stored wrongly after Expire decides on silence pass every scenario): pre-existing, a scenario the suite lacks; draft story:silence-leaves-the-other-fields-scenario",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "no-op"
+  }
+}

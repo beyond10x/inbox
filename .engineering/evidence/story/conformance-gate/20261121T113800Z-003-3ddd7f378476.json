@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T11:38:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:conformance-gate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Finding 4 (a member stated twice in a step is ignored): suite::read refuses a suite in which an object at any depth states a member name twice, exit 2, member and place named",
+    "review": "review-result:adversary-conformance-gate-pass-2",
+    "outcome": "fixed"
+  }
+}
