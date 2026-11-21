@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest d43aaff41f76331aceb590e4dc67c9411ad482322f4b4f286990e94b49e5fe69
+// contract digest 0a2da28a6e37f94b47091f75899b04f8a6a9194da7ebcd009d45179245cbb97f
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -652,8 +652,6 @@ where
                 dedup_key: held.data.dedup_key,
                 body: held.data.body,
                 signature: held.data.signature,
-                answered_by: held.data.answered_by,
-                refusal: held.data.refusal,
                 state: held.state,
             })
             .collect())
@@ -798,8 +796,6 @@ where
                 dedup_key: held.data.dedup_key,
                 body: held.data.body,
                 signature: held.data.signature,
-                answered_by: held.data.answered_by,
-                refusal: held.data.refusal,
                 state: held.state,
             })
             .collect())

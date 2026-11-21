@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest d43aaff41f76331aceb590e4dc67c9411ad482322f4b4f286990e94b49e5fe69
+// contract digest 0a2da28a6e37f94b47091f75899b04f8a6a9194da7ebcd009d45179245cbb97f
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! HTTP/1.1, as much of it as a synthesised surface needs and no more.

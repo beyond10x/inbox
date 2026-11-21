@@ -69,7 +69,7 @@ timeline:
     on_behalf_of: agent:ws/planner
     to: human:operator
     kind: decision
-    thread: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
     decision: &id001
       options:
       - letter: A
@@ -92,7 +92,7 @@ timeline:
       message_id: 01JGT0DC000000000000000001
       to: human:operator
       from: agent:ws/planner
-      thread: 01JGT0DC000000000000000001
+      thread: 01JGT0DC000000000000000009
       kind: decision
 - at: '2026-01-05T09:02:00Z'
   command: inbox.messaging.Answer
@@ -119,7 +119,7 @@ timeline:
       message_id: 01JGT0DC000000000000000001
       reply_id: 01JGT0DC000000000000000002
       to: agent:ws/planner
-      thread: 01JGT0DC000000000000000001
+      thread: 01JGT0DC000000000000000009
 - at: '2026-01-05T09:03:00Z'
   command: inbox.messaging.Answer
   actor: inbox.messaging.Client
@@ -163,6 +163,7 @@ assert:
     sender: agent:ws/planner
   contains:
     message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
     state: Answered
     answered_by: principal
     decided_option: A
@@ -177,29 +178,29 @@ assert:
       signature:
         key_id: key-2
         value: c2lnbmF0dXJl
-    thread: 01JGT0DC000000000000000001
     body: Ship release 4.2 today?
     decision: *id001
     default_on_silence: B
 - view: inbox.messaging.Replies
   params:
-    thread: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
   contains:
     message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
     state: Answered
     answered_by: principal
     decided_option: A
     expires: '2026-01-05T11:00:00Z'
     reply: *id002
-    thread: 01JGT0DC000000000000000001
     body: Ship release 4.2 today?
     decision: *id001
     default_on_silence: B
 - view: inbox.messaging.Thread
   params:
-    thread: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
   contains: &id003
     message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
     state: Answered
     answered_by: principal
     decided_option: A

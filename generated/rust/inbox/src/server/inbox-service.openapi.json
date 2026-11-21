@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:0f04a7e78f2dfb1bd9544eb011c773614fa432748a25a9972596e4e6a8a82bfe"
+      "contract_digest": "slice-sha256/2:06542b6935cff37ab08114d450b0952602d568ae7396de7f6f9013fef74a1c11"
     },
     "x-ess-reached-by": "network"
   },
@@ -3862,12 +3862,6 @@
           "signature": {
             "$ref": "#/components/schemas/inbox.messaging.Signature"
           },
-          "answered_by": {
-            "$ref": "#/components/schemas/inbox.messaging.AnsweredBy"
-          },
-          "refusal": {
-            "type": "string"
-          },
           "state": {
             "$ref": "#/components/schemas/inbox.messaging.Message.State"
           }
@@ -4956,12 +4950,6 @@
           },
           "signature": {
             "$ref": "#/components/schemas/inbox.messaging.Signature"
-          },
-          "answered_by": {
-            "$ref": "#/components/schemas/inbox.messaging.AnsweredBy"
-          },
-          "refusal": {
-            "type": "string"
           },
           "state": {
             "$ref": "#/components/schemas/inbox.messaging.Message.State"
