@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:c290173c98795b1062a1aa4ebcaba2ce42b1cd3fc691e40f73e8144d0544249e
+# contract digest slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:c290173c98795b1062a1aa4ebcaba2ce42b1cd3fc691e40f73e8144d0544249e
+    contract_digest: slice-sha256/2:d70324414abdce123d92d67d16e5c4bef757a4292fe17d33d550c8144a78f238
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -50,18 +50,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/inbox.messaging.Answer.answered.Response'
         '403':
-          description: 'Outcomes `not-sender` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `not-sender`, `foreign-message` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
                 - discriminator:
                     mapping:
+                      foreign-message: '#/components/schemas/inbox.messaging.Answer.foreign-message.Response'
                       not-recipient: '#/components/schemas/inbox.messaging.Answer.not-recipient.Response'
                       not-sender: '#/components/schemas/inbox.messaging.Answer.not-sender.Response'
                     propertyName: outcome
                   oneOf:
                   - $ref: '#/components/schemas/inbox.messaging.Answer.not-sender.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.Answer.foreign-message.Response'
                   - $ref: '#/components/schemas/inbox.messaging.Answer.not-recipient.Response'
                 - additionalProperties: false
                   properties:
@@ -231,6 +233,7 @@ paths:
       x-ess-may-invoke:
       - inbox.messaging.Client
       x-ess-caller:
+      - inbox
       - principal
       requestBody:
         description: The input `inbox.messaging.Collect` declares.
@@ -247,12 +250,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/inbox.messaging.Collect.collected.Response'
         '403':
-          description: 'Outcome `not-sender`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `foreign-message` and `not-sender`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
-                - $ref: '#/components/schemas/inbox.messaging.Collect.not-sender.Response'
+                - discriminator:
+                    mapping:
+                      foreign-message: '#/components/schemas/inbox.messaging.Collect.foreign-message.Response'
+                      not-sender: '#/components/schemas/inbox.messaging.Collect.not-sender.Response'
+                    propertyName: outcome
+                  oneOf:
+                  - $ref: '#/components/schemas/inbox.messaging.Collect.foreign-message.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.Collect.not-sender.Response'
                 - additionalProperties: false
                   properties:
                     actor:
@@ -389,6 +399,7 @@ paths:
       - inbox.messaging.Client
       x-ess-caller:
       - inbox
+      - principal
       requestBody:
         description: The input `inbox.messaging.MarkDelivered` declares.
         required: true
@@ -411,12 +422,19 @@ paths:
                 - $ref: '#/components/schemas/inbox.messaging.MarkDelivered.delivered.Response'
                 - $ref: '#/components/schemas/inbox.messaging.MarkDelivered.already-delivered.Response'
         '403':
-          description: 'Outcome `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `foreign-message` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
-                - $ref: '#/components/schemas/inbox.messaging.MarkDelivered.not-recipient.Response'
+                - discriminator:
+                    mapping:
+                      foreign-message: '#/components/schemas/inbox.messaging.MarkDelivered.foreign-message.Response'
+                      not-recipient: '#/components/schemas/inbox.messaging.MarkDelivered.not-recipient.Response'
+                    propertyName: outcome
+                  oneOf:
+                  - $ref: '#/components/schemas/inbox.messaging.MarkDelivered.foreign-message.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.MarkDelivered.not-recipient.Response'
                 - additionalProperties: false
                   properties:
                     actor:
@@ -656,6 +674,7 @@ paths:
       - inbox.messaging.Client
       x-ess-caller:
       - inbox
+      - principal
       requestBody:
         description: The input `inbox.messaging.MarkRead` declares.
         required: true
@@ -680,12 +699,19 @@ paths:
                 - $ref: '#/components/schemas/inbox.messaging.MarkRead.read.Response'
                 - $ref: '#/components/schemas/inbox.messaging.MarkRead.already-read.Response'
         '403':
-          description: 'Outcome `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `foreign-message` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
-                - $ref: '#/components/schemas/inbox.messaging.MarkRead.not-recipient.Response'
+                - discriminator:
+                    mapping:
+                      foreign-message: '#/components/schemas/inbox.messaging.MarkRead.foreign-message.Response'
+                      not-recipient: '#/components/schemas/inbox.messaging.MarkRead.not-recipient.Response'
+                    propertyName: outcome
+                  oneOf:
+                  - $ref: '#/components/schemas/inbox.messaging.MarkRead.foreign-message.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.MarkRead.not-recipient.Response'
                 - additionalProperties: false
                   properties:
                     actor:
@@ -736,6 +762,7 @@ paths:
       - inbox.messaging.Client
       x-ess-caller:
       - inbox
+      - principal
       requestBody:
         description: The input `inbox.messaging.Refuse` declares.
         required: true
@@ -751,12 +778,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/inbox.messaging.Refuse.refused.Response'
         '403':
-          description: 'Outcome `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
+          description: 'Outcomes `foreign-message` and `not-recipient`: the caller is not one this branch admits: its guard compares the authenticated caller with the input or the record. The same request from an admitted caller is accepted. Or: the standard refusal for an actor no grant admits: the request was authenticated as no actor, or as one `x-ess-may-invoke` does not list. It is checked before the command runs, so nothing was read, written or published, and the same request from a granted actor is decided by the command. Its body carries `refused` and `actor`, never the `outcome` and `error` a declared branch carries.'
           content:
             application/json:
               schema:
                 oneOf:
-                - $ref: '#/components/schemas/inbox.messaging.Refuse.not-recipient.Response'
+                - discriminator:
+                    mapping:
+                      foreign-message: '#/components/schemas/inbox.messaging.Refuse.foreign-message.Response'
+                      not-recipient: '#/components/schemas/inbox.messaging.Refuse.not-recipient.Response'
+                    propertyName: outcome
+                  oneOf:
+                  - $ref: '#/components/schemas/inbox.messaging.Refuse.foreign-message.Response'
+                  - $ref: '#/components/schemas/inbox.messaging.Refuse.not-recipient.Response'
                 - additionalProperties: false
                   properties:
                     actor:
@@ -1355,6 +1389,26 @@ components:
       - published
       - error
       type: object
+    inbox.messaging.Answer.foreign-message.Response:
+      additionalProperties: false
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      properties:
+        error:
+          const: inbox.messaging.UnknownMessage
+          description: 'No live message has this id: it was never posted, it was handled, or it expired.'
+          type: string
+        outcome:
+          const: foreign-message
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     inbox.messaging.Answer.no-authority.Response:
       additionalProperties: false
       description: 'Taken when `(on_behalf_of != {fact: from} and not (defined(authority)))` holds of the input.'
@@ -1648,6 +1702,26 @@ components:
       required:
       - outcome
       - published
+      type: object
+    inbox.messaging.Collect.foreign-message.Response:
+      additionalProperties: false
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      properties:
+        error:
+          const: inbox.messaging.UnknownMessage
+          description: 'No live message has this id: it was never posted, it was handled, or it expired.'
+          type: string
+        outcome:
+          const: foreign-message
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
       type: object
     inbox.messaging.Collect.not-sender.Response:
       additionalProperties: false
@@ -2099,6 +2173,26 @@ components:
       - outcome
       - published
       type: object
+    inbox.messaging.MarkDelivered.foreign-message.Response:
+      additionalProperties: false
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      properties:
+        error:
+          const: inbox.messaging.UnknownMessage
+          description: 'No live message has this id: it was never posted, it was handled, or it expired.'
+          type: string
+        outcome:
+          const: foreign-message
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
     inbox.messaging.MarkDelivered.not-recipient.Response:
       additionalProperties: false
       description: Taken when the existing subject's stored fields satisfy `to != caller.inbox`.
@@ -2165,6 +2259,26 @@ components:
       required:
       - outcome
       - published
+      type: object
+    inbox.messaging.MarkRead.foreign-message.Response:
+      additionalProperties: false
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      properties:
+        error:
+          const: inbox.messaging.UnknownMessage
+          description: 'No live message has this id: it was never posted, it was handled, or it expired.'
+          type: string
+        outcome:
+          const: foreign-message
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
       type: object
     inbox.messaging.MarkRead.handled.Response:
       additionalProperties: false
@@ -3094,6 +3208,26 @@ components:
       - published
       - error
       - payload
+      type: object
+    inbox.messaging.Refuse.foreign-message.Response:
+      additionalProperties: false
+      description: The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+      properties:
+        error:
+          const: inbox.messaging.UnknownMessage
+          description: 'No live message has this id: it was never posted, it was handled, or it expired.'
+          type: string
+        outcome:
+          const: foreign-message
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
       type: object
     inbox.messaging.Refuse.not-recipient.Response:
       additionalProperties: false

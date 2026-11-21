@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Static fallback for paths outside a served route table.

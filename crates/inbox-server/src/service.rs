@@ -140,8 +140,43 @@ fn once<B: Backend>(
     });
     if request.method != "GET" {
         shared.signals.command_answered();
+        return readable(as_unknown(answered), caller);
     }
     readable(answered, caller)
+}
+
+/// The outcome the model names for a caller that is neither party to the stored message.
+const FOREIGN: &str = "foreign-message";
+
+/// The outcome of an id no message carries, and its status.
+const UNKNOWN: (&str, u16) = ("unknown-message", 404);
+
+/// The one answer of this service that differs from the generated one: an answer of the outcome
+/// `foreign-message` is given the status and the body of `unknown-message`, its `outcome` member
+/// renamed and every other member written back as it was. The model decides who is a party; this
+/// compares no caller with no message.
+fn as_unknown(answer: http::Response) -> http::Response {
+    if answer.content_type != http::JSON {
+        return answer;
+    }
+    let Ok(Value::Object(members)) = json::parse_written(&answer.body) else {
+        return answer;
+    };
+    if !members.iter().any(|(name, value)| {
+        name == "outcome" && matches!(value, Value::Text(text) if text == FOREIGN)
+    }) {
+        return answer;
+    }
+    let mut body = String::from("{");
+    for (name, value) in &members {
+        json::member(&mut body, name);
+        match name.as_str() {
+            "outcome" => json::push_text(&mut body, UNKNOWN.0),
+            _ => write_value(&mut body, value),
+        }
+    }
+    body.push('}');
+    http::Response::new(UNKNOWN.1, http::JSON, body)
 }
 
 /// `Pending` held open: read, and while it has no row for the caller, wait for the next command

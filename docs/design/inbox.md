@@ -92,9 +92,19 @@ Each can be changed; the alternative is named where there is one.
    whose `from` is not the caller's `principal` is refused `not-sender` (`NotSender`) before every
    other refusal of the command, so a principal that holds another's signed envelope cannot send
    it again as its own request, and learns nothing about a stored message from the answer. With
-   a delegation the caller is still `from`; `on_behalf_of` is not compared.
+   a delegation the caller is still `from`; `on_behalf_of` is not compared. A caller that is
+   neither the owner of the inbox in `to` nor the sender in `from` of a stored message gets
+   `foreign-message` (error `UnknownMessage`) from `MarkDelivered`, `MarkRead`, `Answer`,
+   `Refuse` and `Collect`, after `unknown-message` and before `not-recipient`, `not-sender` and
+   every refusal of the message's state; the service answers it as `unknown-message`
+   (`docs/design/service.md`), so from these 5 commands a third principal cannot tell a message
+   between others from no message; `PostMessage` still can tell it (decision 6). The sender
+   still gets `not-recipient` from the 4 commands of the owner, and the owner `not-sender` from
+   `Collect`: each of them knows the message exists. A message id is a ULID and not a secret.
 6. **Dedup holds among live messages only**, by `message_id` and by `dedup_key`. A refused post
-   stores nothing.
+   stores nothing. Open: a post answers `duplicate` for a message id that is stored, whoever
+   sent it, so a client that knows or guesses a message id still learns from a post whether it
+   is in use (`story:post-does-not-tell-a-message-id-exists`).
 7. **`on_behalf_of` is always present** and equals `from` when the sender speaks for nobody else.
    A reply is the input of `Answer`, not a stored kind. `Body` is at most 65536 bytes.
 8. **The wire API is the one ESS derives**: `POST /messaging/commands/<wire>` and
@@ -110,6 +120,13 @@ yet.
 - **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
   answered to the owner of the inbox in `to` or to the sender in `from`.
 - **No blocking read.** `inbox wait` is the `Pending` view held open until it has a row.
+- **Two outcomes cannot share one answer** without an `ess-http/1` binding. A second outcome
+  named `unknown-message` is refused (`ESS-COMMAND-006`), `alike:` needs a binding this
+  repository does not have, and the generated surface answers `foreign-message` `403` under its
+  own name. The service gives it the status and the body of `unknown-message`; the model alone
+  decides who is a party. Over HTTP the conformance run reads `unknown-message` where the
+  scenario expects `foreign-message`, so the cases of `crates/inbox-server/tests/` witness that
+  answer, not the suite.
 - **A value is not testable against the elements of an input list.** "The letters name options
   of the decision" is the external refusal `unknown-option`.
 - **`{subject: <field>}` is refused beside `deletes:`**, so `MessageExpired` carries the id alone
@@ -118,7 +135,7 @@ yet.
   and refuses one that is not the caller's.
 - **Synthesis arranges no caller for a guard over a stored field** that was not set from the
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
-  rule), and only notes once an input guard depends on `kind`. 48 generated scenarios are
+  rule), and only notes once an input guard depends on `kind`. 53 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
 - **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
@@ -135,9 +152,9 @@ yet.
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.96.0**: synthesis writes 96 scenarios (26 authored) and refuses 90,
-  and authored scenarios cover all 90, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 96 passed and reports `conformance_status: passed`.
+- **`task coverage` on ESS 0.96.0**: synthesis writes 97 scenarios (27 authored) and refuses 95,
+  and authored scenarios cover all 95, so it exits 0; `task check` runs it. The suite it writes
+  runs on the interpreted target as 97 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 

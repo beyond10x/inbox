@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab60867d1f6317f8c5efd0d4356af7961995e57473578f829d0b63851c76c2f5
+// contract digest f974a7042441839061b42b2201828df3cfcf740db00e9af6bee32902f1e9c6da
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -910,6 +910,13 @@ pub enum AnswerOutcome {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
     },
+    /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+    ///
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
+    ForeignMessage {
+        /// Why it was refused: `inbox.messaging.UnknownMessage`.
+        error: UnknownMessage,
+    },
     /// `not-recipient` — when the existing subject's stored fields satisfy `to != caller.inbox`.
     NotRecipient {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
@@ -997,6 +1004,13 @@ pub enum CollectOutcome {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
     },
+    /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+    ///
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
+    ForeignMessage {
+        /// Why it was refused: `inbox.messaging.UnknownMessage`.
+        error: UnknownMessage,
+    },
     /// `not-sender` — when the existing subject's stored fields satisfy `from != caller.principal`.
     NotSender {
         /// Why it was refused: `inbox.messaging.NotSender`.
@@ -1081,6 +1095,13 @@ pub enum MarkDeliveredOutcome {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
     },
+    /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+    ///
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
+    ForeignMessage {
+        /// Why it was refused: `inbox.messaging.UnknownMessage`.
+        error: UnknownMessage,
+    },
     /// `not-recipient` — when the existing subject's stored fields satisfy `to != caller.inbox`.
     NotRecipient {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
@@ -1115,6 +1136,13 @@ pub struct MarkRead {
 pub enum MarkReadOutcome {
     /// `unknown-message` — for an identity no record carries.
     UnknownMessage {
+        /// Why it was refused: `inbox.messaging.UnknownMessage`.
+        error: UnknownMessage,
+    },
+    /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+    ///
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
+    ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
     },
@@ -1315,6 +1343,13 @@ pub struct Refuse {
 pub enum RefuseOutcome {
     /// `unknown-message` — for an identity no record carries.
     UnknownMessage {
+        /// Why it was refused: `inbox.messaging.UnknownMessage`.
+        error: UnknownMessage,
+    },
+    /// `foreign-message` — when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`.
+    ///
+    /// The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message.
+    ForeignMessage {
         /// Why it was refused: `inbox.messaging.UnknownMessage`.
         error: UnknownMessage,
     },
