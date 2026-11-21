@@ -15,7 +15,7 @@ scope:
   path: Taskfile.yml
 - confidence: inferred
   path: crates/inbox-conformance
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
@@ -24,11 +24,15 @@ transitions:
 
 `crates/inbox-conformance` interprets the synthesized `ess-conformance` suite against a `Target`
 and has one target: the generated `handle` over the 2 obligations of `inbox-core` and
-`MemoryBackend`, in process. The target supplies the generated context port (`TryContext`)
-itself: the caller is the step's caller, and each `external:` branch is answered as the step's
-expected outcome says. The context of `inbox-core`, which computes `unknown-option` and
-`shape-mismatch` and asks a verifier, is not on this path: its own tests check it, and the wire
-target of story:service-acceptance runs it.
+`MemoryBackend`, in process. The target supplies both ports that answer an `external:` branch
+itself: the generated context port (`TryContext`) for the 3 branches of `Answer`, and the
+`PostExternals` trait of `inbox-core` for the 3 branches of `PostMessage`. The caller is the
+step's caller, and each of the 6 branches is answered as the step's expected outcome says.
+Every other rule of `PostMessage` and `Expire` on this path is the obligation code of
+`inbox-core`. The answers `inbox-core` itself gives to the 6 branches (`unknown-option` and
+`shape-mismatch` computed, the other 4 asked of a verifier) are not on this path: the tests of
+story:core-and-memory-backend check them, and the wire target of story:service-acceptance
+runs them.
 
 `task conform` synthesizes the suite, runs it,
 writes the report with `ess verify conform report`, and fails unless 0 scenarios failed, 0

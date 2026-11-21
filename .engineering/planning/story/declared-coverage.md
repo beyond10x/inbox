@@ -20,7 +20,7 @@ scope:
   path: ess/scenarios
 - confidence: inferred
   path: tools/scenarios.py
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
@@ -29,7 +29,8 @@ transitions:
 
 `ess verify conform synthesize --suite-format 5` exits 0 on `ess/`: each of the generated
 scenarios synthesis refuses is claimed by an authored scenario's `covers:` list. The story
-changes scenarios only. `task check` runs `task coverage`.
+changes scenarios only: it adds them and makes `task check` run `task coverage`, and it changes
+no file under `ess/domains/`.
 
 ## Acceptance
 

@@ -5,7 +5,7 @@ kind: epic
 status: active
 title: 'Stage 2: `inbox serve` with the in-memory backend, and the CLI client'
 summary: The service of the specification, its own non-persistent backend, the signature verifier and the `inbox` CLI.
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:03Z", actor: "agent:inbox", revision: 4}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:03Z", actor: "agent:inbox", revision: 5}
@@ -16,7 +16,8 @@ One Rust service, `inbox serve`, that holds every rule of `ess/domains/messaging
 messages in its own in-memory backend behind one backend contract, and one CLI, `inbox`, that is
 its only client. The rules are the crate `ess generate synthesize` writes (85 of 87 capabilities
 on ESS 0.96.0); hand-written code supplies the 2 obligations it leaves, its ports, the listener
-and the client. A message is removed when it is handled or when `expires` passes. Nothing
+and the client. A message is removed when it is handled or when `expires` passes; a decision answered by
+silence at `expires` stays until its `keep_until`. Nothing
 survives a restart of the service; the sender keeps each message until it is handled and posts it
 again.
 

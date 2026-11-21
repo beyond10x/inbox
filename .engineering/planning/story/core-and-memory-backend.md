@@ -11,7 +11,7 @@ relations:
 scope:
 - confidence: inferred
   path: crates/inbox-core
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:04Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
@@ -19,17 +19,26 @@ transitions:
 ## Outcome
 
 `crates/inbox-core` completes the generated crate into a working system and writes none of its
-rules a second time. It supplies three things:
+rules a second time. It supplies four things:
 
 - The 2 obligations synthesis leaves: the behaviours of `PostMessage` and `Expire`, against their
-  generated contracts (`PostMessageBehavior`, `ExpireBehavior`).
+  generated contracts (`PostMessageBehavior`, `ExpireBehavior`). The generated crate asks its
+  context port nothing about `PostMessage`, so this obligation decides the 3 `external:`
+  branches of `PostMessage` itself (`unknown-option`, `signature-invalid`,
+  `authority-invalid`): it asks a trait this crate declares, `PostExternals`, one question per
+  branch.
 - The generated context port (`TryContext`): the caller's `principal` and `inbox`, handed in by
-  the embedding code, and the answer to each `external:` branch. `unknown-option` and
-  `shape-mismatch` are computed here from the envelope and the stored message.
-  `signature-invalid` and `authority-invalid` are asked of a `SignatureVerifier` trait this crate
-  declares. This context is built from a caller and a verifier and takes nothing else: no
-  outside code sets an external answer on it. A harness that must force one
-  (story:conformance-gate) supplies the generated context port itself.
+  the embedding code, and the answer to the 3 `external:` branches of `Answer`
+  (`signature-invalid`, `authority-invalid`, `shape-mismatch`), the only command the generated
+  crate asks it about.
+- One implementation behind both ports, which answers those 6 branches. `unknown-option` is
+  computed from the envelope and `shape-mismatch` from the reply and the stored message.
+  The 2 `signature-invalid` and the 2 `authority-invalid` branches are asked of a
+  `SignatureVerifier` trait this crate declares. It is built from a caller, a verifier and the
+  backend it reads the answered message from, and takes nothing else: no outside code sets
+  an answer on it. The tests of this crate run each of the 6 branches twice: once taken, once
+  not taken. A harness that must force a branch (story:conformance-gate) supplies both ports
+  itself: the generated context port and `PostExternals`.
 - `MemoryBackend`, the first backend. It implements both storage ports, its clones share one
   store, and it is `Send`, so the listener of story:http-service moves it to another thread.
   The generated `MemoryInboxStorage` and `MemoryMessageStorage` keep their rows in an
@@ -53,6 +62,11 @@ where before this story the behaviour of `PostMessage` is an unmet obligation an
 A message leaves the backend in the three places the specification deletes it: `MarkRead` of a
 note and `Collect` (generated behaviours) and `Expire` (obligation). `Expire` takes the clock
 reading as input, as the specification models it; the task that sends it is story:http-service.
+
+The generated `InboxService` owns its behaviours and gives no access to them after
+construction. An embedding with another caller per request either builds the generated system
+per request over a clone of `MemoryBackend` or keeps a shared handle to the caller its context
+reads; story:http-service chooses.
 
 The tests use a verifier double that accepts or refuses by key id. The real verifier is
 story:signature-verifier, a crate that does not depend on this one; story:http-service adapts it
