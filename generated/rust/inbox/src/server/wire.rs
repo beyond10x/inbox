@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 5d0a606ec95b4f3d1fc798803ab374eda0253182924a6940cb5d87c35b449778
+// contract digest 0a2da28a6e37f94b47091f75899b04f8a6a9194da7ebcd009d45179245cbb97f
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1355,22 +1355,6 @@ pub fn encode_view_inbox_messaging_pending(value: &crate::messaging::Pending, ou
     encode_inbox_messaging_body(&value.body, out);
     json::member(out, "signature");
     encode_inbox_messaging_signature(&value.signature, out);
-    if let Some(held0) = &value.answered_by {
-        json::member(out, "answered_by");
-        encode_inbox_messaging_answered_by(&*held0, out);
-    }
-    if let Some(held0) = &value.decided_option {
-        json::member(out, "decided_option");
-        encode_inbox_messaging_option_letter(&*held0, out);
-    }
-    if let Some(held0) = &value.reply {
-        json::member(out, "reply");
-        encode_inbox_messaging_reply(&*held0, out);
-    }
-    if let Some(held0) = &value.refusal {
-        json::member(out, "refusal");
-        json::push_text(out, &*held0);
-    }
     json::member(out, "state");
     encode_inbox_messaging_message_state(&value.state, out);
     out.push('}');
@@ -1663,22 +1647,6 @@ pub fn encode_view_inbox_messaging_unanswered(value: &crate::messaging::Unanswer
     encode_inbox_messaging_body(&value.body, out);
     json::member(out, "signature");
     encode_inbox_messaging_signature(&value.signature, out);
-    if let Some(held0) = &value.answered_by {
-        json::member(out, "answered_by");
-        encode_inbox_messaging_answered_by(&*held0, out);
-    }
-    if let Some(held0) = &value.decided_option {
-        json::member(out, "decided_option");
-        encode_inbox_messaging_option_letter(&*held0, out);
-    }
-    if let Some(held0) = &value.reply {
-        json::member(out, "reply");
-        encode_inbox_messaging_reply(&*held0, out);
-    }
-    if let Some(held0) = &value.refusal {
-        json::member(out, "refusal");
-        json::push_text(out, &*held0);
-    }
     json::member(out, "state");
     encode_inbox_messaging_message_state(&value.state, out);
     out.push('}');

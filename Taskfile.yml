@@ -10,11 +10,12 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold generated/ to it, run the conformance suite on the interpreted target and against inbox-core, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, hold generated/ to it, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target and against inbox-core, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: projections-drift
       - task: drift
+      - task: coverage
       - task: conform-interpreted
       - task: conform
       - cargo fmt --check
@@ -74,7 +75,7 @@ tasks:
       - cargo run -q --locked -p inbox-conformance -- gate --suite {{.OUT}}/conform/suite.json --report {{.OUT}}/conform/core-report.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.IMPLEMENTATION}}
 
   coverage:
-    desc: Synthesize with declared coverage and list the generated scenarios nothing covers; exits 1 while one remains.
+    desc: Synthesize with declared coverage into .out/coverage and fail on a generated scenario no authored scenario covers.
     cmds:
       - mkdir -p {{.OUT}}/coverage
       - ess verify conform synthesize --path ess --scenarios ess --suite-format 5 --out {{.OUT}}/coverage/suite.json

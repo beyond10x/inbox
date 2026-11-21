@@ -1,11 +1,47 @@
 type: ess-scenario/7
 covers:
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Due/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Messages/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Outbox/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Replies/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Settled/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant-wrapped/at/inbox.messaging.Thread/reply/6f225dcb81a1756258e5c80e589dcff62c29e6e19a7a5f6ccdce295dc91c5680
+- inbox.messaging.Body/invariant/at/inbox.messaging.Replies/body
+- inbox.messaging.Body/invariant/at/inbox.messaging.Settled/body
 - inbox.messaging.Message/state/Answered/refuses/inbox.messaging.Answer
 - inbox.messaging.Message/state/Answered/refuses/inbox.messaging.Refuse
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Due/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Messages/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Outbox/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Replies/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Settled/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant-wrapped/at/inbox.messaging.Thread/reply/2a59efac4c3ac205ca937cd02a066886cbd43648835cc56ca35246776dabd9bb
+- inbox.messaging.MessageId/invariant/at/inbox.messaging.Replies/message_id
+- inbox.messaging.MessageId/invariant/at/inbox.messaging.Settled/message_id
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Due/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Due/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Messages/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Messages/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Outbox/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Outbox/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Replies/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Replies/decision/5fc40af03c03b2190846fd86e4dc7b3694f364228b490834f133211ec5ee2e25
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Replies/decision/c9e38459e74269aef672d56a96584e08784681471855f791bed107fca2f65578
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Replies/default_on_silence/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Replies/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Settled/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Settled/decision/5fc40af03c03b2190846fd86e4dc7b3694f364228b490834f133211ec5ee2e25
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Settled/decision/c9e38459e74269aef672d56a96584e08784681471855f791bed107fca2f65578
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Settled/default_on_silence/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Settled/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Thread/decided_option/5a5de3e7ecffe323b37c180756920d594f1df48d3d00a5289072b4349e37fef4
+- inbox.messaging.OptionLetter/invariant-wrapped/at/inbox.messaging.Thread/reply/86a88b3f3da7e2830b7ed86ff27a235c8c2aa1b8b1ec906e031cf4f3f20680cc
+- inbox.messaging.ThreadId/invariant/at/inbox.messaging.Replies/thread
+- inbox.messaging.ThreadId/invariant/at/inbox.messaging.Settled/thread
 domain: inbox.messaging
 scenario: decision-answered-by-the-operator
-summary: The operator answers a decision with option A before `expires`. The message records the option
-  and that a principal answered, not silence.
+summary: The operator answers a decision with option A before `expires`. Every view that holds the message
+  shows the reply, its option, and that a principal answered, not silence.
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -33,8 +69,8 @@ timeline:
     on_behalf_of: agent:ws/planner
     to: human:operator
     kind: decision
-    thread: 01JGT0DC000000000000000001
-    decision:
+    thread: 01JGT0DC000000000000000009
+    decision: &id001
       options:
       - letter: A
         text: Ship the release today.
@@ -56,7 +92,7 @@ timeline:
       message_id: 01JGT0DC000000000000000001
       to: human:operator
       from: agent:ws/planner
-      thread: 01JGT0DC000000000000000001
+      thread: 01JGT0DC000000000000000009
       kind: decision
 - at: '2026-01-05T09:02:00Z'
   command: inbox.messaging.Answer
@@ -83,7 +119,7 @@ timeline:
       message_id: 01JGT0DC000000000000000001
       reply_id: 01JGT0DC000000000000000002
       to: agent:ws/planner
-      thread: 01JGT0DC000000000000000001
+      thread: 01JGT0DC000000000000000009
 - at: '2026-01-05T09:03:00Z'
   command: inbox.messaging.Answer
   actor: inbox.messaging.Client
@@ -127,7 +163,62 @@ assert:
     sender: agent:ws/planner
   contains:
     message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
     state: Answered
     answered_by: principal
     decided_option: A
     expires: '2026-01-05T11:00:00Z'
+    reply: &id002
+      reply_id: 01JGT0DC000000000000000002
+      from: human:operator
+      on_behalf_of: human:operator
+      created: '2026-01-05T09:10:00Z'
+      option: A
+      body: A. Ship it.
+      signature:
+        key_id: key-2
+        value: c2lnbmF0dXJl
+    body: Ship release 4.2 today?
+    decision: *id001
+    default_on_silence: B
+- view: inbox.messaging.Replies
+  params:
+    thread: 01JGT0DC000000000000000009
+  contains:
+    message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
+    state: Answered
+    answered_by: principal
+    decided_option: A
+    expires: '2026-01-05T11:00:00Z'
+    reply: *id002
+    body: Ship release 4.2 today?
+    decision: *id001
+    default_on_silence: B
+- view: inbox.messaging.Thread
+  params:
+    thread: 01JGT0DC000000000000000009
+  contains: &id003
+    message_id: 01JGT0DC000000000000000001
+    thread: 01JGT0DC000000000000000009
+    state: Answered
+    answered_by: principal
+    decided_option: A
+    expires: '2026-01-05T11:00:00Z'
+    reply: *id002
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  contains: *id003
+- view: inbox.messaging.Messages
+  params: {}
+  contains: *id003
+- view: inbox.messaging.Due
+  params:
+    now: '2026-01-05T11:00:00Z'
+  contains: *id003
+- view: inbox.messaging.Due
+  params:
+    now: '2026-01-05T10:59:00Z'
+  counts:
+    at_most: 0
