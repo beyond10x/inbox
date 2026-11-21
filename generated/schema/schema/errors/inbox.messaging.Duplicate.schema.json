@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Duplicate payload",
-  "description": "A live message already carries this id or this dedup key; nothing was stored.",
+  "description": "A live message of this sender already carries this id or this dedup key; nothing was stored.",
   "x-ess-name": "inbox.messaging.Duplicate",
   "x-ess-kind": "error-payload",
   "type": "object",
@@ -9,7 +9,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:a61db15fabacb4439d7b24f396d70f5e970fb324b8b020ece6f3c20460e3e54f",
+    "contract_digest": "slice-sha256/2:4d29bd68329770cd5877e1591508231fd2c4c6fefaf7f13a38e216e8cf3fe963",
     "regenerate": "ess generate"
   }
 }

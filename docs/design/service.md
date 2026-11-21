@@ -92,9 +92,16 @@ own name, and the service answers it with the status and the body of `unknown-me
 byte what an id no message carries gets from the same route: `404`
 `{"outcome":"unknown-message","published":[],"error":"inbox.messaging.UnknownMessage"}`. So from
 these 5 commands a third principal cannot tell a message between others from no message, in any
-state of the message. It still can from a `post`: a post answers `duplicate` for a message id
-that is stored, whoever sent it, so a client that knows or guesses a message id learns from a
-post whether it is in use (`story:post-does-not-tell-a-message-id-exists`). ESS 0.96.0 can give
+state of the message. A `post` to an address no inbox has, or into a closed inbox, answers alike
+for the id of another sender's message and a free id: `409` with the body of `unknown-inbox` or
+of `inbox-closed`. The row refusals of a post come in the order `unknown-inbox`, `duplicate`
+(the sender's own stored message), `duplicate-key`, `inbox-closed`, `id-taken` (decision 6 of
+`docs/design/inbox.md`); `id-taken` is `409`
+`{"outcome":"id-taken","published":[],"error":"inbox.messaging.MessageIdTaken"}`, the status of
+the other 4. Into an open inbox a principal that holds a message id still learns whether it is
+live (`id-taken` against `posted`), and can take a free id first
+(`story:post-does-not-tell-a-message-id-exists`; `story:message-id-per-sender` removes it). ESS
+0.96.0 can give
 two outcomes one answer only through an `ess-http/1` binding this repository does not have. The
 listener renames the outcome and nothing else: it compares no caller with no message, and who is
 a party is decided in the model. The headers depend only on the status and the body, and the

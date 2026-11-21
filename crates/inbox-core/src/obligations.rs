@@ -5,9 +5,9 @@ use inbox::messaging::obligations::{ExpireBehavior, PostMessageBehavior};
 use inbox::messaging::{
     Address, AlreadyExpired, AnsweredBy, AnyMessage, DecisionTakenOnSilence, Duplicate, Expire,
     ExpireOutcome, InboxSnapshot, InboxState, Kind, Message, MessageData, MessageExpired,
-    MessageId, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue, NotSender,
-    PostMessage, PostMessageOutcome, Principal, ShapeMismatch, SignatureInvalid, UnknownInbox,
-    UnknownMessage,
+    MessageId, MessageIdTaken, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue,
+    NotSender, PostMessage, PostMessageOutcome, Principal, ShapeMismatch, SignatureInvalid,
+    UnknownInbox, UnknownMessage,
 };
 use inbox::obligation::UnmetObligation;
 use inbox::primitives::Timestamp;
@@ -120,7 +120,7 @@ fn instants(
 const POST_MESSAGE: &str = "inbox.messaging.PostMessage";
 const EXPIRE: &str = "inbox.messaging.Expire";
 
-/// `inbox.messaging.PostMessage`, in the order the ESS 0.96.0 interpreter and synthesizer select
+/// `inbox.messaging.PostMessage`, in the order the ESS 0.97.1 interpreter and synthesizer select
 /// its outcomes:
 ///
 /// 1. the input-guarded refusals in declaration order: `not-sender` (`from` is not the caller's
@@ -129,17 +129,23 @@ const EXPIRE: &str = "inbox.messaging.Expire";
 /// 2. the external branches in declaration order, each asked of [`PostExternals`] before any row
 ///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `unknown-option`,
 ///    `signature-invalid`, `authority-invalid`;
-/// 3. the row refusals: `duplicate` (`existing_instance`), `unknown-inbox` (`exists: false`),
-///    `duplicate-key` (over `list`: a stored message with the post's `dedup_key` and the post's
-///    `from`; the key of one sender refuses no post of another), `inbox-closed`;
+/// 3. the row refusals: `unknown-inbox` (`exists: false`), `duplicate` (a stored message with the
+///    post's `message_id` and the post's `from`, read by `get`), `duplicate-key` (over `list`: a
+///    stored message with the post's `dedup_key` and the post's `from`; the key of one sender
+///    refuses no post of another), `inbox-closed`, `id-taken` (a stored message with the post's
+///    `message_id` and another `from`);
 /// 4. `posted`.
 ///
-/// Where the contract text in `PLAN.md` differs (it puts `duplicate` and `unknown-inbox` before
-/// the input-guarded refusals and the external branches after every row refusal), this follows
-/// the interpreter, which the conformance suite runs against. The order inside step 3 is
-/// measured on the interpreted target too, pair by pair: `duplicate` before `unknown-inbox`,
-/// `unknown-inbox` before `duplicate-key`, `duplicate-key` before `inbox-closed`, `duplicate`
-/// before `inbox-closed` (`tests/adversary.rs` holds each pair).
+/// Where the contract text in `PLAN.md` differs (it puts `unknown-inbox` before the input-guarded
+/// refusals and the external branches after every row refusal), this follows the interpreter,
+/// which the conformance suite runs against. The order inside step 3 is measured on the
+/// interpreted target too, pair by pair: the model declares `duplicate` first, but the
+/// interpreter answers `unknown-inbox` (`exists: false`) before every row refusal with `where`,
+/// so `unknown-inbox` comes before `duplicate` and `duplicate-key`; then `duplicate` before
+/// `duplicate-key` and before `inbox-closed`, `duplicate-key` before `inbox-closed`, and
+/// `id-taken` after all of them (`tests/adversary.rs` and `tests/post_message_id.rs` hold each
+/// pair). A post under a message id another sender holds is therefore answered as one under a
+/// free id wherever the inbox is unknown or closed or the caller's own dedup key refuses it.
 ///
 /// Read-then-write, like every generated behaviour: two posts over one store at once are told
 /// apart only where the backend's [`crate::Exclusive`] section runs them one at a time, which
@@ -186,16 +192,18 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
             return Ok(PostMessageOutcome::AuthorityInvalid { error: NoAuthority });
         }
 
-        // The row refusals, in the order of step 3 above. `duplicate` is the first of them and
-        // is decided by `message_id` alone; `duplicate-key` is decided per sender.
-        if MessageStorage::get(&self.backend, &input.message_id).is_some() {
-            return Ok(PostMessageOutcome::Duplicate { error: Duplicate });
-        }
+        // The row refusals, in the order of step 3 above. `duplicate` and `duplicate-key` are
+        // decided among the stored messages of the post's `from`; `id-taken` by `message_id`
+        // alone, after every other refusal.
         let Some(inbox) = InboxStorage::get(&self.backend, &input.to) else {
             return Ok(PostMessageOutcome::UnknownInbox {
                 error: UnknownInbox,
             });
         };
+        let held = MessageStorage::get(&self.backend, &input.message_id);
+        if held.as_ref().is_some_and(|row| row.data.from == input.from) {
+            return Ok(PostMessageOutcome::Duplicate { error: Duplicate });
+        }
         if MessageStorage::list(&self.backend)
             .iter()
             .any(|row| row.data.dedup_key == input.dedup_key && row.data.from == input.from)
@@ -205,6 +213,11 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
         if inbox.state == InboxState::Closed {
             return Ok(PostMessageOutcome::InboxClosed {
                 error: UnknownInbox,
+            });
+        }
+        if held.is_some() {
+            return Ok(PostMessageOutcome::IdTaken {
+                error: MessageIdTaken,
             });
         }
 

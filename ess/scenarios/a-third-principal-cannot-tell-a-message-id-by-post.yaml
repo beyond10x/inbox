@@ -1,0 +1,231 @@
+type: ess-scenario/7
+domain: inbox.messaging
+scenario: a-third-principal-cannot-tell-a-message-id-by-post
+summary: 'A principal posts under the id of a message between two others and under a free id, to an address
+  no inbox has and into its own closed inbox: answered alike, nothing stored.'
+timeline:
+- at: '2026-01-05T09:00:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    address: agent:box/worker
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/worker
+- at: '2026-01-05T09:01:00Z'
+  command: inbox.messaging.OpenInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    address: agent:box/other
+    adapter: claude_code
+  outcome: opened
+  events:
+  - event: inbox.messaging.InboxOpened
+    payload:
+      address: agent:box/other
+- at: '2026-01-05T09:02:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0TQ000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: note
+    thread: 01JGT0TQ000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: posted
+  events:
+  - event: inbox.messaging.MessagePosted
+    payload:
+      message_id: 01JGT0TQ000000000000000001
+      to: agent:box/worker
+      from: agent:ws/planner
+      thread: 01JGT0TQ000000000000000001
+      kind: note
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    message_id: 01JGT0TQ000000000000000001
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    to: agent:box/nobody
+    kind: note
+    thread: 01JGT0TQ000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000001
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-inbox
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    message_id: 01JGT0TQ000000000000000002
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    to: agent:box/nobody
+    kind: note
+    thread: 01JGT0TQ000000000000000002
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000002
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-inbox
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0TQ000000000000000001
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/nobody
+    kind: note
+    thread: 01JGT0TQ000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000001
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-inbox
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:06:00Z'
+  command: inbox.messaging.CloseInbox
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    address: agent:box/other
+  outcome: closed
+  events:
+  - event: inbox.messaging.InboxClosed
+    payload:
+      address: agent:box/other
+- at: '2026-01-05T09:07:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    message_id: 01JGT0TQ000000000000000001
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    to: agent:box/other
+    kind: note
+    thread: 01JGT0TQ000000000000000001
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000001
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: inbox-closed
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:08:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/other
+    inbox: agent:box/other
+  input:
+    message_id: 01JGT0TQ000000000000000002
+    from: agent:box/other
+    on_behalf_of: agent:box/other
+    to: agent:box/other
+    kind: note
+    thread: 01JGT0TQ000000000000000002
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0TQ000000000000000002
+    body: Probe.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: inbox-closed
+  error:
+    name: inbox.messaging.UnknownInbox
+  no_events:
+  - inbox.messaging.MessagePosted
+assert:
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  counts:
+    at_least: 1
+    at_most: 1
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/worker
+  contains:
+    message_id: 01JGT0TQ000000000000000001
+    from: agent:ws/planner
+    body: Build 512 is green.
+- view: inbox.messaging.Pending
+  params:
+    inbox: agent:box/other
+  counts:
+    at_most: 0
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:box/other
+  counts:
+    at_most: 0
+- view: inbox.messaging.Outbox
+  params:
+    sender: agent:ws/planner
+  counts:
+    at_least: 1
+    at_most: 1
