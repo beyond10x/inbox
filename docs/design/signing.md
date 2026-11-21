@@ -46,6 +46,12 @@ JCS. Consequences:
   is bound to the envelope through the check that the key's principal is `from` (below).
 - A post and a reply share the context string; their members differ (`message_id`, `to`, `kind`
   against `in_reply_to`, `reply_id`), so the canonical bytes of one are never those of the other.
+- **A receiver refuses a text in which any object, at any depth, carries a member name twice,
+  before it decodes the text**, with `inbox_verify::duplicate_member` over the value the generated
+  reader (`json::parse`) returns. That reader keeps every member, duplicates included, and the
+  generated decoders take the first: without the check, a post carrying `body` twice decodes to
+  the first `body`, verifies, and one signature covers two texts that differ to a reader that
+  keeps the last.
 
 **Numbers.** The only number in either envelope is `reply_shape.value` of a `lines` reply shape,
 an `Integer`. No type of either envelope holds a number that is not an integer. JCS writes a
@@ -136,17 +142,23 @@ The caller is then the key entry's principal.
 
 ### The key file
 
-The key file is read through the generated codecs (`decode_inbox_messaging_key_file`). A file that
-is not JSON or does not decode is refused whole. Of a decoded file, an entry is ignored, with its
-id and the reason kept for the operator, when:
+The key file is read through the generated codecs (`decode_inbox_messaging_key_file`). It is
+refused whole when it is not JSON, when any object in it, at any depth, carries a member name
+twice (`duplicate_member`, checked before decoding), or when it does not decode.
 
-- its `operator_signature` is not a canonical signature encoding, or does not verify under the
-  pinned operator public key over the entry's signed bytes;
-- (key entry) its `public_key` is refused as above;
-- its `valid_until` is not an RFC 3339 instant (the decoder already refuses such a file; this
-  reaches only a key file built in code);
-- its id is carried by more than one entry that passed the checks above: an ambiguous id is
-  ignored in every entry that carries it, never resolved by order.
+Of a decoded file, each list (`keys`, `delegations`) is read in three steps, and an ignored entry
+is kept with its id and the reason for the operator:
+
+1. An entry whose `operator_signature` is not a canonical signature encoding, or does not verify
+   under the pinned operator public key over the entry's signed bytes, is ignored. It counts for
+   nothing after this step: an entry without the operator's signature cannot make the id of a
+   held entry ambiguous, so nobody without the operator key can knock an id out.
+2. An id carried by more than one entry left after step 1 is ambiguous, and every entry that
+   carries it is ignored, whatever step 3 would say about each (one with a refused public key
+   still makes the other ignored). It is never resolved by order.
+3. Of the rest, an entry is ignored when (key entry) its `public_key` is refused as above, or its
+   `valid_until` is not an RFC 3339 instant (the decoder already refuses such a file; this reaches
+   only a key file built in code).
 
 The verifier holds only the entries left. It reads no clock and drops no entry for being lapsed:
 lapse is decided at the instant of each check.

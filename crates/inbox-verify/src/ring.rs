@@ -3,12 +3,13 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use inbox::messaging::{DelegationEntry, DelegationId, KeyFile, Principal};
+use inbox::messaging::{DelegationEntry, DelegationId, KeyEntry, KeyFile, Principal};
 use inbox::server::{json, wire};
 
 use crate::canonical::{
     Envelope, Request, delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes,
 };
+use crate::duplicate::duplicate_member;
 use crate::instant::Instant;
 use crate::keys::{EncodingError, PublicKey, signature_from_base64};
 
@@ -98,7 +99,7 @@ pub enum IgnoreReason {
     PublicKey(EncodingError),
     /// Its `valid_until` is not an instant this library can read.
     ValidUntil,
-    /// Its id is carried by more than one signed entry.
+    /// Its id is carried by more than one entry whose operator signature verifies.
     AmbiguousId,
 }
 
@@ -127,6 +128,8 @@ pub struct Ignored {
 pub enum LoadError {
     /// The text is not JSON.
     Parse(String),
+    /// An object of the text carries a member name twice; the path of the first.
+    DuplicateMember(String),
     /// The JSON is not a key file.
     Decode(String),
 }
@@ -135,6 +138,9 @@ impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Parse(reason) => write!(f, "the key file is not JSON: {reason}"),
+            Self::DuplicateMember(path) => {
+                write!(f, "the key file carries the member `{path}` twice")
+            }
             Self::Decode(reason) => write!(f, "the key file does not decode: {reason}"),
         }
     }
@@ -176,92 +182,101 @@ fn verifies(key: &PublicKey, bytes: &[u8], text: &str) -> Result<(), IgnoreReaso
     }
 }
 
-/// Keeps the entries whose id only one of them carries; records the others as ambiguous.
-fn unambiguous<T>(
-    candidates: Vec<(String, T)>,
+/// Reads one list of the key file in three steps. First the entries whose operator signature
+/// verifies are kept. Of those, every entry whose id more than one of them carries is ignored,
+/// whatever the later checks say about each, so a malformed re-signing of an id cannot leave the
+/// other entry live. Of the rest, an entry is held when `read` accepts it. An entry the operator
+/// did not sign never counts towards an ambiguous id, so nobody without the operator key can
+/// knock an id out.
+fn admit<E, T>(
+    entries: &[E],
     kind: EntryKind,
+    id: impl Fn(&E) -> &str,
+    signed: impl Fn(&E) -> Result<(), IgnoreReason>,
+    read: impl Fn(&E) -> Result<T, IgnoreReason>,
     ignored: &mut Vec<Ignored>,
 ) -> HashMap<String, T> {
-    let mut count: HashMap<String, usize> = HashMap::new();
-    for (id, _) in &candidates {
-        *count.entry(id.clone()).or_default() += 1;
+    let mut ignore = |entry: &E, reason| {
+        ignored.push(Ignored {
+            kind,
+            id: id(entry).to_owned(),
+            reason,
+        });
+    };
+    let mut candidates = Vec::new();
+    for entry in entries {
+        match signed(entry) {
+            Ok(()) => candidates.push(entry),
+            Err(reason) => ignore(entry, reason),
+        }
+    }
+    let mut count: HashMap<&str, usize> = HashMap::new();
+    for entry in &candidates {
+        *count.entry(id(entry)).or_default() += 1;
+    }
+    let (unique, ambiguous): (Vec<&E>, Vec<&E>) = candidates
+        .into_iter()
+        .partition(|entry| count[id(entry)] == 1);
+    for entry in ambiguous {
+        ignore(entry, IgnoreReason::AmbiguousId);
     }
     let mut held = HashMap::new();
-    for (id, entry) in candidates {
-        if count[&id] == 1 {
-            held.insert(id, entry);
-        } else {
-            ignored.push(Ignored {
-                kind,
-                id,
-                reason: IgnoreReason::AmbiguousId,
-            });
+    for entry in unique {
+        match read(entry) {
+            Ok(value) => {
+                held.insert(id(entry).to_owned(), value);
+            }
+            Err(reason) => ignore(entry, reason),
         }
     }
     held
 }
 
-fn held_delegation(
-    entry: &DelegationEntry,
-    operator: &PublicKey,
-) -> Result<HeldDelegation, IgnoreReason> {
-    verifies(
-        operator,
-        &delegation_entry_bytes(entry),
-        &entry.operator_signature,
-    )?;
-    let valid_until =
-        Instant::try_from(&entry.valid_until).map_err(|_| IgnoreReason::ValidUntil)?;
-    Ok(HeldDelegation {
-        agent: entry.agent.clone(),
-        on_behalf_of: entry.on_behalf_of.clone(),
-        valid_until,
-    })
+fn valid_until(timestamp: &inbox::primitives::Timestamp) -> Result<Instant, IgnoreReason> {
+    Instant::try_from(timestamp).map_err(|_| IgnoreReason::ValidUntil)
 }
 
 impl KeyRing {
-    /// Holds the entries of `file` that `operator` signed; every other entry is ignored and listed
-    /// in [`KeyRing::ignored`].
+    /// Holds the entries of `file` that `operator` signed and whose id no other signed entry
+    /// carries; every other entry is ignored and listed in [`KeyRing::ignored`].
     #[must_use]
     pub fn new(file: &KeyFile, operator: &PublicKey) -> Self {
         let mut ignored = Vec::new();
-        let mut keys = Vec::new();
-        for entry in &file.keys {
-            let held = verifies(operator, &key_entry_bytes(entry), &entry.operator_signature)
-                .and_then(|()| {
-                    PublicKey::from_base64(&entry.public_key).map_err(IgnoreReason::PublicKey)
+        let keys = admit(
+            &file.keys,
+            EntryKind::Key,
+            |entry: &KeyEntry| entry.key_id.as_str(),
+            |entry| verifies(operator, &key_entry_bytes(entry), &entry.operator_signature),
+            |entry| {
+                Ok(HeldKey {
+                    principal: entry.principal.clone(),
+                    public_key: PublicKey::from_base64(&entry.public_key)
+                        .map_err(IgnoreReason::PublicKey)?,
+                    valid_until: valid_until(&entry.valid_until)?,
                 })
-                .and_then(|public_key| {
-                    let valid_until = Instant::try_from(&entry.valid_until)
-                        .map_err(|_| IgnoreReason::ValidUntil)?;
-                    Ok(HeldKey {
-                        principal: entry.principal.clone(),
-                        public_key,
-                        valid_until,
-                    })
-                });
-            match held {
-                Ok(held) => keys.push((entry.key_id.clone(), held)),
-                Err(reason) => ignored.push(Ignored {
-                    kind: EntryKind::Key,
-                    id: entry.key_id.clone(),
-                    reason,
-                }),
-            }
-        }
-        let mut delegations = Vec::new();
-        for entry in &file.delegations {
-            match held_delegation(entry, operator) {
-                Ok(held) => delegations.push((entry.delegation_id.0.clone(), held)),
-                Err(reason) => ignored.push(Ignored {
-                    kind: EntryKind::Delegation,
-                    id: entry.delegation_id.0.clone(),
-                    reason,
-                }),
-            }
-        }
-        let keys = unambiguous(keys, EntryKind::Key, &mut ignored);
-        let delegations = unambiguous(delegations, EntryKind::Delegation, &mut ignored);
+            },
+            &mut ignored,
+        );
+        let delegations = admit(
+            &file.delegations,
+            EntryKind::Delegation,
+            |entry: &DelegationEntry| entry.delegation_id.0.as_str(),
+            |entry| {
+                verifies(
+                    operator,
+                    &delegation_entry_bytes(entry),
+                    &entry.operator_signature,
+                )
+            },
+            |entry| {
+                Ok(HeldDelegation {
+                    agent: entry.agent.clone(),
+                    on_behalf_of: entry.on_behalf_of.clone(),
+                    valid_until: valid_until(&entry.valid_until)?,
+                })
+            },
+            &mut ignored,
+        );
         Self {
             keys,
             delegations,
@@ -273,9 +288,14 @@ impl KeyRing {
     ///
     /// # Errors
     ///
-    /// [`LoadError`] when the text is not JSON or does not decode as a key file.
+    /// [`LoadError`] when the text is not JSON, when an object in it carries a member name twice
+    /// (refused before decoding: the generated decoder would take the first), or when it does
+    /// not decode as a key file.
     pub fn parse(text: &str, operator: &PublicKey) -> Result<Self, LoadError> {
         let value = json::parse(text).map_err(|error| LoadError::Parse(error.to_string()))?;
+        if let Some(path) = duplicate_member(&value) {
+            return Err(LoadError::DuplicateMember(path));
+        }
         let file = wire::decode_inbox_messaging_key_file(&value, "")
             .map_err(|error| LoadError::Decode(error.to_string()))?;
         Ok(Self::new(&file, operator))

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T09:22:09Z",
+  "actor": "agent:inbox",
+  "artifact": "story:signature-verifier",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F1 (a reply's key belongs to from): the adversary's case stays and a post has the same case; tests/adversary.rs 5 passed, tests/cases.rs 34 passed",
+    "review": "review-result:adversary-signature-verifier-pass-1",
+    "outcome": "fixed"
+  }
+}

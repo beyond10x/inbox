@@ -7,6 +7,7 @@
 //! reads no clock. A failed check refuses; nothing is accepted unverified.
 
 mod canonical;
+mod duplicate;
 mod instant;
 pub mod jcs;
 mod keys;
@@ -17,6 +18,7 @@ pub use canonical::{
     Request, delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes,
     sign_delegation_entry, sign_envelope, sign_key_entry, sign_request,
 };
+pub use duplicate::duplicate_member;
 pub use instant::{Instant, InstantError};
 pub use keys::{EncodingError, PublicKey, RandomError, SecretKey};
 pub use ring::{

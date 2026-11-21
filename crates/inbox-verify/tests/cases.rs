@@ -12,8 +12,8 @@ use inbox::messaging::{
 use inbox_verify::{
     CanonicalError, ENTRY_CONTEXT, ENVELOPE_CONTEXT, EncodingError, EntryKind, IgnoreReason,
     Ignored, KeyRing, LoadError, MAX_SAFE_INTEGER, REQUEST_CONTEXT, Refusal, RefusalKind, Request,
-    delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes, sign_envelope,
-    sign_request,
+    delegation_entry_bytes, duplicate_member, envelope_bytes, key_entry_bytes, request_bytes,
+    sign_envelope, sign_request,
 };
 
 /// One agent key, signed by the operator, valid until `LATER`; the ring holds it.
@@ -154,6 +154,41 @@ fn a_key_that_belongs_to_another_principal_is_refused() {
     sign_envelope(&mut envelope, "agent-key", &fixture.agent).unwrap();
     assert_eq!(
         fixture.ring.verify_envelope(&envelope, now()),
+        Err(Refusal::KeyNotFrom)
+    );
+}
+
+/// The key must belong to `from`, not to `on_behalf_of`: a post sent `from` one principal
+/// `on_behalf_of` the key's principal, under a live delegation for that pair, is refused.
+#[test]
+fn a_post_from_another_principal_on_behalf_of_the_key_principal_is_refused() {
+    let operator = generate();
+    let agent = generate();
+    let file = KeyFile {
+        keys: vec![signed_key_entry(
+            "agent-key",
+            AGENT,
+            &agent,
+            LATER,
+            &operator,
+        )],
+        delegations: vec![signed_delegation("d", OTHER, AGENT, LATER, &operator)],
+    };
+    let ring = ring(&file, &operator);
+    let mut envelope = post(OTHER, AGENT, "a body");
+    envelope.authority = Some(DelegationId("d".to_owned()));
+    sign_envelope(&mut envelope, "agent-key", &agent).unwrap();
+    assert_eq!(
+        ring.check_delegation(
+            &DelegationId("d".to_owned()),
+            &envelope.from,
+            &envelope.on_behalf_of,
+            now()
+        ),
+        Ok(())
+    );
+    assert_eq!(
+        ring.verify_envelope(&envelope, now()),
         Err(Refusal::KeyNotFrom)
     );
 }
@@ -911,4 +946,167 @@ fn a_key_file_holds_no_private_key() {
         assert!(!text.contains(&inbox_verify_base64(key.to_seed().as_ref())));
     }
     assert!(text.contains(&agent.public_key().to_base64()));
+}
+
+#[test]
+fn a_key_file_with_a_member_twice_at_any_depth_is_refused_whole() {
+    let operator = generate();
+    let agent = generate();
+    let file = KeyFile {
+        keys: vec![signed_key_entry("k", AGENT, &agent, LATER, &operator)],
+        delegations: vec![signed_delegation("d", AGENT, HUMAN, LATER, &operator)],
+    };
+    let text = key_file_text(&file);
+    let public = operator.public_key();
+    assert!(KeyRing::parse(&text, &public).is_ok());
+    let agent_member = format!("\"agent\":\"{AGENT}\"");
+    let cases = [
+        (
+            text.replacen("\"keys\":[", "\"keys\":[],\"keys\":[", 1),
+            "keys",
+        ),
+        (
+            text.replacen(
+                &agent_member,
+                &format!("{agent_member},\"agent\":\"{OTHER}\""),
+                1,
+            ),
+            "delegations.0.agent",
+        ),
+        (
+            text.replacen("\"key_id\":\"k\"", "\"key_id\":\"k\",\"key_id\":\"k\"", 1),
+            "keys.0.key_id",
+        ),
+    ];
+    for (duplicated, path) in cases {
+        assert_ne!(duplicated, text);
+        assert_eq!(
+            KeyRing::parse(&duplicated, &public).err(),
+            Some(LoadError::DuplicateMember(path.to_owned())),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn a_duplicate_member_is_found_at_any_depth_and_named_by_its_path() {
+    let found = |text: &str| duplicate_member(&inbox::server::json::parse(text).unwrap());
+    assert_eq!(found(r#"{"a":1,"b":[{"c":1},{"c":2}]}"#), None);
+    assert_eq!(found(r#"[1,{"x":{}},"x"]"#), None);
+    assert_eq!(found(r#"{"a":1,"a":1}"#), Some("a".to_owned()));
+    assert_eq!(
+        found(r#"{"a":[0,{"b":{"c":1,"c":2}}]}"#),
+        Some("a.1.b.c".to_owned())
+    );
+    assert_eq!(found(r#"[{"k":1},{"k":1,"k":2}]"#), Some("1.k".to_owned()));
+    // The first in document order.
+    assert_eq!(found(r#"{"x":{"y":1,"y":2},"x":3}"#), Some("x".to_owned()));
+    assert_eq!(
+        found(r#"{"p":{"y":1,"y":2},"q":{"z":1,"z":2}}"#),
+        Some("p.y".to_owned())
+    );
+    // A value nested deeper than the caller-facing reader admits is walked to the bottom.
+    let deep = format!(
+        "{}{{\"a\":1,\"a\":2}}{}",
+        "[".repeat(1_000),
+        "]".repeat(1_000)
+    );
+    let deep = inbox::server::json::parse_written(&deep).unwrap();
+    assert_eq!(
+        duplicate_member(&deep),
+        Some(format!("{}a", "0.".repeat(1_000)))
+    );
+}
+
+#[test]
+fn an_entry_without_the_operator_signature_does_not_knock_out_a_held_id() {
+    let operator = generate();
+    let impostor = generate();
+    let agent = generate();
+    let mut unsigned = key_entry("agent-key", OTHER, &impostor, LATER);
+    unsigned.operator_signature = String::new();
+    let file = KeyFile {
+        keys: vec![
+            signed_key_entry("agent-key", AGENT, &agent, LATER, &operator),
+            signed_key_entry("agent-key", OTHER, &impostor, LATER, &impostor),
+            unsigned,
+        ],
+        delegations: vec![
+            signed_delegation("d", AGENT, HUMAN, LATER, &operator),
+            signed_delegation("d", OTHER, HUMAN, LATER, &impostor),
+        ],
+    };
+    let ring = ring(&file, &operator);
+    let reasons: Vec<(EntryKind, &str, IgnoreReason)> = ring
+        .ignored()
+        .iter()
+        .map(|ignored| (ignored.kind, ignored.id.as_str(), ignored.reason))
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            (
+                EntryKind::Key,
+                "agent-key",
+                IgnoreReason::NotSignedByOperator
+            ),
+            (EntryKind::Key, "agent-key", IgnoreReason::SignatureEncoding),
+            (
+                EntryKind::Delegation,
+                "d",
+                IgnoreReason::NotSignedByOperator
+            ),
+        ]
+    );
+    assert_eq!(
+        ring.principal("agent-key", now()),
+        Ok(&Principal(AGENT.to_owned()))
+    );
+    assert_eq!(
+        ring.check_delegation(
+            &DelegationId("d".to_owned()),
+            &Principal(AGENT.to_owned()),
+            &Principal(HUMAN.to_owned()),
+            now()
+        ),
+        Ok(())
+    );
+}
+
+#[test]
+fn an_id_two_operator_signed_entries_carry_is_ignored_whatever_the_later_checks_say() {
+    let operator = generate();
+    let agent = generate();
+    let mut late = key_entry("bad-time", AGENT, &agent, LATER);
+    late.valid_until.0 = "not an instant".to_owned();
+    inbox_verify::sign_key_entry(&mut late, &operator);
+    let mut weak = key_entry("bad-key", AGENT, &agent, LATER);
+    let mut identity = [0_u8; 32];
+    identity[0] = 1;
+    weak.public_key = inbox_verify_base64(&identity);
+    inbox_verify::sign_key_entry(&mut weak, &operator);
+    let file = KeyFile {
+        keys: vec![
+            signed_key_entry("bad-time", AGENT, &agent, LATER, &operator),
+            late,
+            signed_key_entry("bad-key", AGENT, &agent, LATER, &operator),
+            weak,
+        ],
+        delegations: vec![],
+    };
+    // Built in code: the decoder would refuse the `valid_until` that is not an instant.
+    let ring = KeyRing::new(&file, &operator.public_key());
+    assert!(
+        ring.ignored()
+            .iter()
+            .all(|ignored| ignored.reason == IgnoreReason::AmbiguousId)
+    );
+    assert_eq!(ring.ignored().len(), 4);
+    for key_id in ["bad-time", "bad-key"] {
+        assert_eq!(
+            ring.principal(key_id, now()),
+            Err(Refusal::UnknownKey),
+            "{key_id}"
+        );
+    }
 }
