@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T22:53:43Z",
+  "actor": "agent:inbox",
+  "artifact": "story:repost-does-not-redeliver-a-handled-note",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1 (repost stopped at the first envelope whose epoch it could not write): a9bd783 records the epochs once after every envelope was posted and exits 4 after the report; the adversary's case repost_posts_every_dropped_envelope_when_the_epochs_file_cannot_be_written, red on e8266d5, passes; one pool job on a9bd783: cargo test -p inbox-cli -p inbox-server --locked exit 0, 80 and 53 cases passed, 0 failed, 2 ignored",
+    "review": "review-result:adversary-repost-does-not-redeliver-pass-1",
+    "outcome": "fixed"
+  }
+}

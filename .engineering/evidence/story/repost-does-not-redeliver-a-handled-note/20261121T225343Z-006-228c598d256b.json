@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T22:53:43Z",
+  "actor": "agent:inbox",
+  "artifact": "story:repost-does-not-redeliver-a-handled-note",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F7 (the stand-in of crates/inbox-cli/tests/support/mod.rs accepts without a bound and its cases join it; there before the unit): not changed in the unit; in the scope of story:test-step-enforces-its-budget (a draft), which names the stand-ins of that file",
+    "review": "review-result:adversary-repost-does-not-redeliver-pass-1",
+    "outcome": "no-op"
+  }
+}

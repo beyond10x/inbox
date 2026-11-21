@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T22:46:00Z",
+  "actor": "agent:inbox",
+  "artifact": "story:silence-leaves-the-other-fields-scenario",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F2 (the new scenario decides from Sent only; 6 cores that change a claimed member only from Delivered or Read passed task conform): 0ece50d adds the adversary's cases for Delivered and Read, each red on the 6 cores in the adversary's copy; no source line of a crate and no scenario changed; the same claim in scenarios is filed as story:silence-scenarios-claim-the-whole-message",
+    "review": "review-result:adversary-silence-leaves-the-other-fields-pass-1",
+    "outcome": "fixed"
+  }
+}
