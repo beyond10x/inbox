@@ -785,21 +785,45 @@ m = mid("KS", 1)
 m2 = mid("KS", 2)
 m3 = mid("KS", 3)
 m4 = mid("KS", 4)
+m5 = mid("KS", 5)
+m6 = mid("KS", 6)
+m7 = mid("KS", 7)
+m8 = mid("KS", 8)
 key = "deploy-2026-11-21"
+key2 = "release-4.2"
 s = Scenario("dedup-key-is-the-senders",
-             "A dedup key refuses only a second post of its own sender, to any inbox. A third principal's key in its own inbox refuses no post of another sender.")
+             "A dedup key refuses only a second post of its sender, to any inbox, for whoever it speaks. Another sender's key, in the same inbox or for the same principal, refuses no post.")
 s.open(WORKER).open(OTHER)
 s.post(m, OTHER, "note", sender=OTHER, dedup_key=key)
 s.post(m2, WORKER, "note", dedup_key=key)
 s.post(m3, WORKER, "note", dedup_key=key, outcome="duplicate-key", error="Duplicate")
 s.post(m4, OTHER, "note", dedup_key=key, outcome="duplicate-key", error="Duplicate")
-s.exactly("Pending", inbox(OTHER), 1)
+# Another sender into the inbox that holds m2 under the key: posted. A key scoped by `to` refuses it.
+s.post(m5, WORKER, "note", sender=HOST_OPERATOR, dedup_key=key)
+# Two senders that speak for one principal, under one key: both posted. A key scoped by
+# `on_behalf_of` refuses m7.
+s.post(m6, WORKER, "note", sender=HOST_OPERATOR, on_behalf_of=OPERATOR, authority="delegation-7",
+       dedup_key=key2)
+s.post(m7, OTHER, "note", sender=OTHER, on_behalf_of=OPERATOR, authority="delegation-8",
+       dedup_key=key2)
+# The sender of m6 under its key again, on its own behalf: refused. A key scoped by `on_behalf_of`
+# posts it.
+s.post(m8, OTHER, "note", sender=HOST_OPERATOR, dedup_key=key2, outcome="duplicate-key",
+       error="Duplicate")
+s.exactly("Pending", inbox(OTHER), 2)
 s.check("Pending", inbox(OTHER), contains={"message_id": m, "from": OTHER, "dedup_key": key})
-s.exactly("Pending", inbox(WORKER), 1)
+s.check("Pending", inbox(OTHER), contains={"message_id": m7, "from": OTHER, "on_behalf_of": OPERATOR,
+                                          "dedup_key": key2})
+s.exactly("Pending", inbox(WORKER), 3)
 s.check("Pending", inbox(WORKER), contains={"message_id": m2, "from": PLANNER, "dedup_key": key})
+s.check("Pending", inbox(WORKER), contains={"message_id": m5, "from": HOST_OPERATOR, "dedup_key": key})
+s.check("Pending", inbox(WORKER), contains={"message_id": m6, "from": HOST_OPERATOR,
+                                           "on_behalf_of": OPERATOR, "dedup_key": key2})
 s.exactly("Outbox", sender(), 1)
 s.check("Outbox", sender(), excludes={"message_id": m3})
 s.check("Outbox", sender(), excludes={"message_id": m4})
+s.exactly("Outbox", sender(HOST_OPERATOR), 2)
+s.check("Outbox", sender(HOST_OPERATOR), excludes={"message_id": m8})
 names.append(s.write())
 
 for name in COVERS:
