@@ -117,6 +117,12 @@ waves 1 to 3 are delivered. Release 0.1.0 is the state of `main` after wave 3. S
 - A revision of an accepted story that changes scope, wave order or a settled decision, or adds a
   wave, goes to the host operator first and waits for the answer: silence is not acceptance. Any
   other revision is reported in the wave report.
+- A member of a view that no sequence of commands can set, found before the next release, is
+  removed from the view in the same unreleased window without asking first: change `ess/`,
+  regenerate, name the view and the field in the changelog as a change of the wire rows, and
+  report it in the wave report (the host operator's standing decision, 2026-11-21). The argument
+  that no row can carry the member goes into the story text. A regeneration that changes more
+  than the rows of that view stops the work and goes to the host operator.
 - A reason given for declining a review finding is measured before it is written down.
 - Three backlog drafts are the first work after wave 5 of stage 2: story:post-from-is-the-caller,
   story:foreign-message-id-answers-as-unknown and story:dedup-key-scope. They land before any of:

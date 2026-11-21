@@ -24,7 +24,7 @@ scope:
   path: generated
 - confidence: inferred
   path: tools/scenarios.py
-revision: 14
+revision: 15
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:05Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
@@ -34,8 +34,8 @@ transitions:
 `ess verify conform synthesize --suite-format 5` exits 0 on `ess/`: each of the generated
 scenarios synthesis refuses is claimed by an authored scenario's `covers:` list. The story adds
 scenarios, makes `task check` run `task coverage`, and makes one change to the model: the views
-`Pending` and `Unanswered` no longer carry the fields `reply` and `decided_option` (the host
-operator's decision of 2026-11-21, under Context).
+`Pending` and `Unanswered` no longer carry the fields `reply`, `decided_option`, `answered_by`
+and `refusal` (the host operator's 2 decisions of 2026-11-21, under Context).
 
 ## Acceptance
 
@@ -84,11 +84,30 @@ the regeneration changes anything beyond the rows of these 2 views, the story st
 host operator is told. Before the merge the unit shows `task coverage` at exit 0 and a
 `conformance_status` other than `inconclusive` for the suite that task writes.
 
+The host operator's second decision of 2026-11-21, on the adversary's first pass
+(review-result:adversary-declared-coverage-pass-1, finding 3): `answered_by` and `refusal` leave
+the views `Pending` and `Unanswered` too, in the same unreleased change and under the same
+conditions. The argument is the same. `answered_by` is set only by `Answer/answered` and
+`Expire/decided-on-silence`, which move the message to `Answered`; `refusal` is set only by
+`Refuse/refused`, which moves it to `Refused`; `PostMessage/posted` creates the message with
+both empty. The lifecycle has no transition out of `Answered` or `Refused`, and the filters of
+the 2 views admit only `Sent`, `Delivered` and `Read`. So no row of either view can carry any
+of the 4 fields. Neither field caused a refusal of synthesis: they leave because a member no
+row can carry does not belong in the row, and because removing them after the next release
+would be a second change of the wire rows. The changelog names the 2 views and the 4 fields as
+one change of the wire rows against 0.1.0; the regeneration stays inside the rows of the 2
+views or the story stops and the host operator is told; story:cli-client is checked against the
+regenerated crate at the merge.
+
+The host operator's standing rule from the same answer: a member of a view that no sequence of
+commands can set, found before the next release, is removed in the same window without asking
+first, and the wave report says so.
+
 ## Scope
 
 - `ess/scenarios/`, `ess/ess-inputs.yaml`
-- `ess/domains/messaging.yaml`: the fields `reply` and `decided_option` leave the views `Pending`
-  and `Unanswered`
+- `ess/domains/messaging.yaml`: the fields `reply`, `decided_option`, `answered_by` and `refusal`
+  leave the views `Pending` and `Unanswered`
 - `generated/`: as `task generate` and `task projections` rewrite it
 - `tools/scenarios.py`
 - `Taskfile.yml`: `check` gains `coverage`

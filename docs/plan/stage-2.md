@@ -352,6 +352,13 @@ can carry. The story's scope gains `ess/domains/messaging.yaml` (the 2 fields le
 than `inconclusive`; story:cli-client is checked against the regenerated crate at the merge; a
 regeneration that changes more than the rows of the 2 views stops the unit. No release with it.
 
+Second revision, decided by the host operator on 2026-11-21 on the adversary's first pass on
+story:declared-coverage: `answered_by` and `refusal` are always absent in the views `Pending` and
+`Unanswered` for the same reason, and leave them in the same change (4 more lines of
+`ess/domains/messaging.yaml`), under the same conditions. The changelog names 2 views and 4
+fields. Standing from that answer: a member of a view that no sequence of commands can set,
+found before the next release, is removed in the same window and reported in the wave report.
+
 Commits this wave makes: the opening commit (this section, the store, the ruleset state in
 `AGENTS.md` and `docs/releasing.md`), 1 commit per unit (more if a correction round runs), 2
 merges, the closing commit with the Layout row, the numbers and the store, the fast-forward of
