@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 0a2da28a6e37f94b47091f75899b04f8a6a9194da7ebcd009d45179245cbb97f
+// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1427,10 +1427,6 @@ pub fn encode_view_inbox_messaging_replies(value: &crate::messaging::Replies, ou
     if let Some(held0) = &value.reply {
         json::member(out, "reply");
         encode_inbox_messaging_reply(&*held0, out);
-    }
-    if let Some(held0) = &value.refusal {
-        json::member(out, "refusal");
-        json::push_text(out, &*held0);
     }
     json::member(out, "state");
     encode_inbox_messaging_message_state(&value.state, out);

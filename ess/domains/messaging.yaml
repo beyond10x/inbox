@@ -915,7 +915,6 @@ views:
       - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
       - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
       - {name: reply, type: Optional<inbox.messaging.Reply>}
-      - {name: refusal, type: Optional<String>}
       - {name: state, type: inbox.messaging.Message.State}
     naming:
       wire: replies

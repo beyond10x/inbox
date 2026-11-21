@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 0a2da28a6e37f94b47091f75899b04f8a6a9194da7ebcd009d45179245cbb97f
+// contract digest 5ec9077bac2384dff5421cd00c333d549b3b54b0165bb4a449fdd5c5adc0fd61
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -688,7 +688,6 @@ where
                 answered_by: held.data.answered_by,
                 decided_option: held.data.decided_option,
                 reply: held.data.reply,
-                refusal: held.data.refusal,
                 state: held.state,
             })
             .collect())

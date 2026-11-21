@@ -1,12 +1,17 @@
 """Writes the authored scenarios of the inbox specification and the manifest that lists them.
 
-usage: scenarios.py <ess directory>
+usage: scenarios.py <ess directory> [--check]
 
-It writes <ess directory>/scenarios/<name>.yaml for every scenario below and
-<ess directory>/ess-inputs.yaml. It removes no file: delete the file of a scenario taken out here.
+It builds every scenario below and the manifest, runs every assertion, and only then writes
+<ess directory>/scenarios/<name>.yaml for each scenario and <ess directory>/ess-inputs.yaml, so a
+failed assertion changes no file. It removes no file: delete the file of a scenario taken out here.
+With --check it writes nothing and exits 1 when a file differs from what it would write, printing
+one line per path: `edited:`, `missing:`, or `not written by the script:` for a scenario file it
+does not write.
 COVERS maps a scenario name to the generated scenario ids it claims with `covers:`.
 """
 
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -14,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 import yaml
 
 ESS = sys.argv[1]
+CHECK = sys.argv[2:] == ["--check"]
+assert sys.argv[2:] in ([], ["--check"]), __doc__
 D = "inbox.messaging."
 
 
@@ -349,15 +356,15 @@ class Scenario:
         document["summary"] = self.summary
         document["timeline"] = self.steps
         document["assert"] = self.asserts
-        text = yaml.safe_dump(document, sort_keys=False, default_flow_style=False, width=100,
-                              allow_unicode=True)
-        with open(f"{ESS}/scenarios/{self.name}.yaml", "w", encoding="utf-8") as out:
-            out.write(text)
+        OUTPUTS[f"scenarios/{self.name}.yaml"] = yaml.safe_dump(
+            document, sort_keys=False, default_flow_style=False, width=100, allow_unicode=True)
         ASSERTS[self.name] = self.asserts
         return self.name
 
 
 ASSERTS = {}
+# Every file the script writes, by its path under the ess directory; written only after the checks.
+OUTPUTS = {}
 
 
 def inbox(address):
@@ -723,6 +730,25 @@ manifest = {
     "specification": ["system.yaml", "components.yaml", "domains/messaging.yaml"],
     "scenarios": [f"scenarios/{name}.yaml" for name in sorted(names)],
 }
-with open(f"{ESS}/ess-inputs.yaml", "w", encoding="utf-8") as out:
-    out.write(yaml.safe_dump(manifest, sort_keys=False, default_flow_style=False))
+OUTPUTS["ess-inputs.yaml"] = yaml.safe_dump(manifest, sort_keys=False, default_flow_style=False)
+
+if CHECK:
+    drift = []
+    for rel, text in sorted(OUTPUTS.items()):
+        path = os.path.join(ESS, rel)
+        if not os.path.exists(path):
+            drift.append(f"missing: {path}")
+        elif open(path, encoding="utf-8").read() != text:
+            drift.append(f"edited: {path}")
+    for entry in sorted(os.listdir(os.path.join(ESS, "scenarios"))):
+        if f"scenarios/{entry}" not in OUTPUTS:
+            drift.append(f"not written by the script: {os.path.join(ESS, 'scenarios', entry)}")
+    for line in drift:
+        print(line)
+    print(len(names), "scenarios,", len(drift), "path(s) differ from tools/scenarios.py")
+    sys.exit(1 if drift else 0)
+
+for rel, text in OUTPUTS.items():
+    with open(os.path.join(ESS, rel), "w", encoding="utf-8") as out:
+        out.write(text)
 print(len(names), "scenarios")
