@@ -51,7 +51,8 @@ sender, `Thread` and `Replies` for a thread, `Inboxes`, and `Due` and `Messages`
 task. The views of messages publish every field of the message and its state, except that
 `Pending` and `Unanswered`, which hold messages in `Sent`, `Delivered` or `Read`, leave out 4:
 `reply` and `decided_option`, which only an answered message carries, and `answered_by` and
-`refusal`, which only an answered or a refused message carries.
+`refusal`, which only an answered or a refused message carries. `Replies`, which holds answered
+messages only, leaves out `refusal`, which only a refused message carries.
 
 When a message is removed:
 
@@ -122,8 +123,8 @@ yet.
   decision that was read and not yet answered in `Unanswered`. Until stage 2 there were 50: 8
   more for `reply` and `decided_option` of `Pending` and `Unanswered`, where no sequence of
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
-  which are as absent there and caused no refusal, left those 2 views in one change of their
-  wire rows against 0.1.0.
+  which are as absent there and caused no refusal, left those 2 views, and `refusal` left
+  `Replies`, in one change of their wire rows against 0.1.0.
 - **`task coverage` on ESS 0.96.0**: synthesis writes 93 scenarios (24 authored) and refuses 89,
   and authored scenarios cover all 89, so it exits 0; `task check` runs it. The suite it writes
   runs on the interpreted target as 93 passed and reports `conformance_status: passed`.

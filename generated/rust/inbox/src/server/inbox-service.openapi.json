@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:06542b6935cff37ab08114d450b0952602d568ae7396de7f6f9013fef74a1c11"
+      "contract_digest": "slice-sha256/2:e8091e4a202f15110291225050f3426fe5dfd78929230c471fa45f7cd8b25dc9"
     },
     "x-ess-reached-by": "network"
   },
@@ -4510,9 +4510,6 @@
           },
           "reply": {
             "$ref": "#/components/schemas/inbox.messaging.Reply"
-          },
-          "refusal": {
-            "type": "string"
           },
           "state": {
             "$ref": "#/components/schemas/inbox.messaging.Message.State"
