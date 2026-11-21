@@ -81,8 +81,11 @@ value, and a new start makes a new one, so a caller that compares the value with
 earlier answer carried tells whether the service was started again since. The memory backend
 loses every message on a restart; that is what the client's `inbox repost` reads it for: it posts
 again only the kept envelopes that the epochs file beside its outbox file (`<outbox>.epochs`, one
-line `<message id>\t<epoch>` per envelope whose post arrived) records at another epoch, or at
-none.
+line `<message id>\t<epoch>` per envelope the service was said to hold) records at another epoch,
+or at none. An envelope records the epoch of an answer that accepted its post or refused it as
+`duplicate` (the message id is stored); `duplicate-key` records none, since the service stored
+nothing of that envelope. When the epochs file cannot be written, `repost` still posts every
+envelope, prints its report and exits 4 with the local failure.
 
 The value is not made from the `Clock` of `Config` (a clock a test sets does not move between two
 starts) and carries no time and no secret. It is written in the one function that writes the head
