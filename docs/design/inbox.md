@@ -140,9 +140,14 @@ Each can be changed; the alternative is named where there is one.
    neither the owner of the inbox in `to` nor the sender in `from` of a stored message gets
    `foreign-message` (error `UnknownMessage`) from `MarkDelivered`, `MarkRead`, `Answer`,
    `Refuse` and `Collect`, after `unknown-message` and before `not-recipient`, `not-sender` and
-   every refusal of the message's state; the service answers it as `unknown-message`
-   (`docs/design/service.md`), so from these 5 commands a third principal cannot tell a message
-   between others from no message. `PostMessage` tells it only into an open inbox (decision 6).
+   every refusal of the message's state; the core answers it as `unknown-message`
+   (`inbox_core::as_unknown`, applied by `handle` and `handle_with_events` and called by the HTTP
+   service, `docs/design/service.md`), so from these 5 commands a third principal cannot tell a
+   message between others from no message, through an embedding or over HTTP. A client an
+   embedding hands in without its inbox or its principal is held to the same: where the model
+   cannot decide one of these 5 commands on a stored message without the attribute (an unmet
+   obligation), the core answers `unknown-message` as well. `PostMessage`
+   tells it only into an open inbox (decision 6).
    The sender
    still gets `not-recipient` from the 4 commands of the owner, and the owner `not-sender` from
    `Collect`: each of them knows the message exists. A message id is a ULID and not a secret.
@@ -277,16 +282,31 @@ synthesis generates that guard.
   reproduction is a newtype with that invariant as the type of an input and of a response field
   of one `returns: true` command, and one authored scenario that runs it.
 
-- **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
-  answered to the owner of the inbox in `to` or to the sender in `from`.
+- **No per-caller filter on a view.** Who may read which rows is a rule of the core: a row of
+  `Pending`, `Unanswered`, `Outbox`, `Settled`, `Thread` or `Replies` is answered to a client
+  only when its `to` is the caller's `inbox` or its `from` is the caller's `principal`. A view
+  `filter:` that reads the caller (`{any: [to == caller.inbox, from == caller.principal]}`) is
+  refused by `ess specify validate` on ESS 0.97.3 (`ESS-VIEW-003`, `unobservable_fact`: "`caller`
+  ... is not a declared observable root"), so the rule is `inbox_core::readable`: `handle` and
+  `handle_with_events` apply it to every answer of a view, and the HTTP service calls the same
+  function, so an embedding and `inbox serve` give one caller the same rows. It binds every
+  caller but the `Sweeper`, whose `Due` and `Messages` stay whole; a row without `to` and `from`
+  (`Inboxes`) is answered whole. `inbox_core::system` alone applies no read rule. The suite's
+  reads name no caller, so the conformance runner reads each view as every caller of the
+  scenario and compares the union; the cases of `crates/inbox-core/tests/read_rule.rs` and
+  `crates/inbox-server/tests/read_rule.rs` hold the rule, not the suite.
 - **No blocking read.** `inbox wait` is the `Pending` view held open until it has a row.
 - **Two outcomes cannot share one answer** without an `ess-http/1` binding. A second outcome
   named `unknown-message` is refused (`ESS-COMMAND-006`), `alike:` needs a binding this
   repository does not have, and the generated surface answers `foreign-message` `403` under its
-  own name. The service gives it the status and the body of `unknown-message`; the model alone
-  decides who is a party. Over HTTP the conformance run reads `unknown-message` where the
-  scenario expects `foreign-message`, so the cases of `crates/inbox-server/tests/` witness that
-  answer, not the suite.
+  own name. The core renames it once (`inbox_core::as_unknown`): `handle` and
+  `handle_with_events` answer it with the members of `unknown-message`, and the HTTP service
+  calls the same function and gives the answer the status `404`; the model alone decides who is
+  a party. The conformance run against the core goes through `inbox_core::handle_as_specified`,
+  the entry without the rename, so it judges the model's `foreign-message` and its place in the
+  order of refusals. Over HTTP the run reads `unknown-message` where the scenario expects
+  `foreign-message`, so the cases of `crates/inbox-core/tests/foreign_unknown.rs` and
+  `crates/inbox-server/tests/` witness the renamed answer, not the suite.
 - **No step bounds the number of occurrences of an event.** A claim of an event holds it at
   least once. The cases of `crates/inbox-core/tests/expire_once.rs` compare the whole list of
   events `Expire` hands back, so a core that publishes one twice fails them and not the suite.

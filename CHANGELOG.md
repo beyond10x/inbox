@@ -55,6 +55,29 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   escapes as well (C0 was escaped already); a JSON reader gets the same values. Text without
   control characters is printed byte for byte as before. The stored message, its signature and
   the service are unchanged.
+- The core applies the read rule. `inbox_core::handle` and `handle_with_events` answer a
+  client only the rows of `Pending`, `Unanswered`, `Outbox`, `Settled`, `Thread` and
+  `Replies` whose `to` is its inbox or whose `from` is its principal, whatever parameter it
+  sends; the new `inbox_core::readable` is the rule, and the HTTP service calls it in place of
+  its own copy. In 0.2.0 only `inbox serve` filtered the rows: an embedding of `inbox-core`
+  that handed the core's answer on gave a third principal the bodies, replies and signatures
+  of messages between others. `Due` and `Messages` stay whole for the expiry task, and a
+  client is still refused both (story:the-core-applies-the-read-rule).
+- The core answers a message between others as unknown. `inbox_core::handle` and
+  `handle_with_events` answer a client that is neither the recipient nor the sender of a
+  message, from `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` and `Collect`, with the answer
+  of an id no message carries (`unknown-message`, error `UnknownMessage`, nothing published),
+  member for member. The new `inbox_core::as_unknown` is the rename, and the HTTP service
+  calls it in place of its own copy; the bytes of every HTTP answer are unchanged. In 0.2.0
+  only `inbox serve` renamed the model's `foreign-message`: an embedding of `inbox-core` that
+  handed the core's answer on told a third principal that a message id exists. The new entry
+  `inbox_core::handle_as_specified` answers the model's `foreign-message`; the conformance run
+  against the core uses it, and an embedding does not. A client an embedding hands in without
+  its inbox or its principal (or with a context that cannot read one) got an unmet obligation
+  for a message between others and `unknown-message` for no message; `handle` and
+  `handle_with_events` now answer such a refusal of the 5 commands as `unknown-message`, with
+  no event. `inbox serve` hands in both attributes and is not changed by it
+  (story:the-core-answers-a-foreign-message-as-unknown).
 
 ### Known limits
 

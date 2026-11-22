@@ -28,7 +28,8 @@
 //! - [`CoreTarget`], the implementation `inbox-core`, list `unsupported-core.tsv` (empty): the
 //!   generated `handle` over the 3 obligations of `inbox-core` and its `MemoryBackend`, with a
 //!   [`StepContext`] that carries the step's caller and answers each of the 5 `external:`
-//!   branches as the step's expected outcome says;
+//!   branches as the step's expected outcome says; a read as a client is sent as every caller
+//!   of a client step so far and the rows joined, since the core answers each caller its own;
 //! - [`WireTarget`], the implementation `inbox-serve`, list `unsupported.tsv`: a running `inbox
 //!   serve`, started afresh for each scenario and driven over HTTP with the generated route
 //!   table and wire codec, every request and envelope signed with keys made at run time, each

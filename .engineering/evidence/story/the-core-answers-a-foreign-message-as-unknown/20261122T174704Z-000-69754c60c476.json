@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T17:47:04Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-core-answers-a-foreign-message-as-unknown",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

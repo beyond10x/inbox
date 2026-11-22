@@ -22,11 +22,15 @@ const MESSAGE: &str = "01JGT0AD000000000000000001";
 const REPLY: &str = "01JGT0AD000000000000000050";
 const COLLECT: &str = "inbox.messaging.Collect";
 
+/// One request as a `Client` carrying exactly `caller`: through `inbox_core::handle_as_specified`
+/// (the model's own answer) when `specified`, else through `inbox_core::handle` (the answer an
+/// embedding hands on).
 fn run_as(
     world: &World,
     caller: CallerAttributes,
     name: &str,
     input: &str,
+    specified: bool,
 ) -> Result<Value, Refused> {
     let context = ServiceContext::new(
         caller,
@@ -35,15 +39,14 @@ fn run_as(
         crate::support::clock(),
     );
     let input = json::parse(input).expect("the case writes JSON");
-    inbox_core::handle(
-        &world.backend,
-        context,
-        Some(&Caller {
-            actor: Actor::Client,
-        }),
-        name,
-        input,
-    )
+    let client = Caller {
+        actor: Actor::Client,
+    };
+    if specified {
+        inbox_core::handle_as_specified(&world.backend, context, Some(&client), name, input).0
+    } else {
+        inbox_core::handle(&world.backend, context, Some(&client), name, input)
+    }
 }
 
 fn held(world: &World, id: &str) -> bool {
@@ -80,9 +83,12 @@ const EXPECTED: [(Option<&str>, Option<&str>, &str); 9] = [
 ];
 
 /// Every mix of an absent, the matching and another `inbox` and `principal`, in each of the 5
-/// states: the outcome is the one the base's generated `Collect` decided, a guard left Unknown
-/// is an unmet obligation, only `collected` carries a record, and only `collected` removes the
-/// row.
+/// states. Through `handle_as_specified` the outcome is the one the base's generated `Collect`
+/// decided, and a guard left Unknown is an unmet obligation. Through `handle` the two answers
+/// that tell a client that is no party of the message that it exists (`foreign-message`, and
+/// the unmet obligation of a client without an attribute) are `unknown-message`, and every other
+/// answer is the same. On both entries only `collected` carries a record, and only `collected`
+/// removes the row.
 #[test]
 fn every_mix_of_caller_attributes_in_every_state_gets_the_outcome_of_the_base() {
     let states = [
@@ -95,39 +101,44 @@ fn every_mix_of_caller_attributes_in_every_state_gets_the_outcome_of_the_base() 
     let mut wrong = Vec::new();
     for (state, settled) in states {
         for (inbox, principal, expected) in EXPECTED {
-            let world = stored_in(state);
-            let caller = CallerAttributes {
-                principal: principal.map(|who| Principal(who.to_owned())),
-                inbox: inbox.map(|who| Address(who.to_owned())),
-            };
-            let expected = match expected {
-                "settled" if settled => "collected",
-                "settled" => "not-settled",
-                other => other,
-            };
-            let answered = run_as(
-                &world,
-                caller,
-                COLLECT,
-                &format!("{{\"message_id\":{}}}", quoted(MESSAGE)),
-            );
-            let got = match &answered {
-                Ok(answer) => outcome(answer).to_owned(),
-                Err(Refused::Unmet(_)) => "unmet".to_owned(),
-                Err(other) => format!("refused: {other}"),
-            };
-            let record = answered
-                .as_ref()
-                .ok()
-                .and_then(|answer| answer.member("response"))
-                .is_some();
-            let kept = held(&world, MESSAGE);
-            let collected = expected == "collected";
-            if got != expected || record != collected || kept == collected {
-                wrong.push(format!(
-                    "{state:?}, inbox {inbox:?}, principal {principal:?}: {got} (record {record}, \
-                     row kept {kept}); the base: {expected}"
-                ));
+            for specified in [true, false] {
+                let world = stored_in(state);
+                let caller = CallerAttributes {
+                    principal: principal.map(|who| Principal(who.to_owned())),
+                    inbox: inbox.map(|who| Address(who.to_owned())),
+                };
+                let expected = match (expected, specified) {
+                    ("settled", _) if settled => "collected",
+                    ("settled", _) => "not-settled",
+                    ("unmet" | "foreign-message", false) => "unknown-message",
+                    (other, _) => other,
+                };
+                let answered = run_as(
+                    &world,
+                    caller,
+                    COLLECT,
+                    &format!("{{\"message_id\":{}}}", quoted(MESSAGE)),
+                    specified,
+                );
+                let got = match &answered {
+                    Ok(answer) => outcome(answer).to_owned(),
+                    Err(Refused::Unmet(_)) => "unmet".to_owned(),
+                    Err(other) => format!("refused: {other}"),
+                };
+                let record = answered
+                    .as_ref()
+                    .ok()
+                    .and_then(|answer| answer.member("response"))
+                    .is_some();
+                let kept = held(&world, MESSAGE);
+                let collected = expected == "collected";
+                if got != expected || record != collected || kept == collected {
+                    wrong.push(format!(
+                        "{state:?}, inbox {inbox:?}, principal {principal:?}, specified \
+                         {specified}: {got} (record {record}, row kept {kept}); expected: \
+                         {expected}"
+                    ));
+                }
             }
         }
     }

@@ -294,9 +294,9 @@ fn a_third_principal_still_finds_no_message_after_the_deadline() {
         "inbox.messaging.Answer",
         &own,
     );
-    assert_eq!(outcome(&answered), "foreign-message", "{answered:?}");
+    assert_eq!(outcome(&answered), "unknown-message", "{answered:?}");
     let (refused, _) = refuse(&backend, THIRD, AFTER);
-    assert_eq!(outcome(&refused), "foreign-message", "{refused:?}");
+    assert_eq!(outcome(&refused), "unknown-message", "{refused:?}");
     // The sender is no recipient, and is told that first.
     let (refused, _) = refuse(&backend, PLANNER, AFTER);
     assert_eq!(outcome(&refused), "not-recipient", "{refused:?}");

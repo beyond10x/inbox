@@ -3,6 +3,10 @@
 //! that is neither party, then `not-recipient` (or `not-sender` of `Collect`) for the other
 //! party, then the refusals of the message's state. A third principal changes nothing and
 //! publishes nothing.
+//!
+//! The order is the model's, so every case runs through `inbox_core::handle_as_specified`, the
+//! entry that answers the model's outcome `foreign-message`; `handle` answers it as
+//! `unknown-message` (`tests/foreign_unknown.rs`).
 
 use inbox::actor::{Actor, Caller};
 use inbox::behaviour::MessageStorage;
@@ -39,7 +43,7 @@ impl SignatureVerifier for Accepting {
 fn as_client(backend: &MemoryBackend, who: &str, name: &str, input: &str) -> Value {
     let caller = CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned()));
     let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
-    inbox_core::handle(
+    inbox_core::handle_as_specified(
         backend,
         context,
         Some(&Caller {
@@ -48,6 +52,7 @@ fn as_client(backend: &MemoryBackend, who: &str, name: &str, input: &str) -> Val
         name,
         json::parse(input).expect("the case writes JSON"),
     )
+    .0
     .unwrap_or_else(|refused| panic!("{name} as {who}: {refused}"))
 }
 

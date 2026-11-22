@@ -8,7 +8,8 @@ disagree on a signature, `signing.md` holds.
 `generated/rust/inbox`. The generated route table, JSON codecs and `dispatch` answer every command
 and view; this crate writes no second route table and no second codec. It adds what the generated
 surface leaves out by decision (concurrency, authentication) and what the specification leaves to
-the service (the read rule, the wait, the expiry task, the limits). The binary `inbox serve` that
+the service (the wait, the expiry task, the limits); the read rule, which the specification
+cannot state either, is the core's, and the listener applies it. The binary `inbox serve` that
 starts it is story:cli-client.
 
 ## One request, in order
@@ -25,7 +26,7 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | 4. A body that is JSON: `inbox_verify::duplicate_member` | an object, at any depth, carries a member name twice | `400` | `{"refused": "duplicate member", "member": "<dotted path>"}` |
 | 5. A post: the message count, inside the backend's section | the store holds `max_messages` messages or more | `503` | `{"refused": "message limit", "limit": <max_messages>}` |
 | 6. The generated `dispatch`, inside the backend's section | everything the generated surface answers: `404`, `405`, `400`, `403` (not granted), the declared outcomes, `501` | as generated | as generated |
-| 6a. A command answer of the outcome `foreign-message` | the caller is neither party to the message (the model's guard) | `404` | the generated body with `outcome` `unknown-message` |
+| 6a. A command answer of the outcome `foreign-message`: the core's rename, `inbox_core::as_unknown` | the caller is neither party to the message (the model's guard) | `404` | the generated body with `outcome` `unknown-message` |
 | 6b. `PostMessage`, `Answer`, `Refuse`: the deadline, at the clock reading inside the same section | a post whose `expires` is at or before the reading (`expired-on-arrival`, error `AlreadyExpired`); an answer or refusal of a message in `Sent`, `Delivered` or `Read` whose stored `expires` is at or before the reading (`deadline-passed`, error `Expired`); a reply to such a message whose own `expires` is at or before the reading (`expired-on-arrival` of `Answer`, error `AlreadyExpired`) | `502`, the status the generated contract gives an external outcome | the generated body |
 | 7. A view answer: the read rule | rows the caller may not see are removed | `200` | the generated body without them |
 
@@ -111,9 +112,9 @@ signature is refused, whether or not the first message is still held.
 A caller that is neither the owner of the inbox in `to` nor the sender in `from` of a stored
 message gets the model's `foreign-message` from `mark-delivered`, `read`, `answer`, `refuse` and
 `collect` (decision 5 of `docs/design/inbox.md`). Step 6a is the one place where this service's
-answer differs from the generated one: the generated surface answers that outcome `403` under its
-own name, and the service answers it with the status and the body of `unknown-message`, byte for
-byte what an id no message carries gets from the same route: `404`
+answer to a command differs from the generated one: the generated surface answers that outcome
+`403` under its own name, and the service answers it with the status and the body of
+`unknown-message`, byte for byte what an id no message carries gets from the same route: `404`
 `{"outcome":"unknown-message","published":[],"error":"inbox.messaging.UnknownMessage"}`. So from
 these 5 commands a third principal cannot tell a message between others from no message, in any
 state of the message. A `post` to an address no inbox has, or into a closed inbox, answers alike
@@ -128,8 +129,17 @@ live (`id-taken` against `posted`), and can take a free id first
 (`story:post-does-not-tell-a-message-id-exists`; `story:message-id-per-sender` removes it). ESS
 0.96.0 can give
 two outcomes one answer only through an `ess-http/1` binding this repository does not have. The
-listener renames the outcome and nothing else: it compares no caller with no message, and who is
-a party is decided in the model. The headers of the answer depend only on the status, the body
+rename is the core's, once: `inbox_core::as_unknown`, which `inbox_core::handle` and
+`handle_with_events` apply too, so an embedding of the core answers a third principal alike. An
+embedding may hand in a client without an inbox or a principal, or with a context that cannot
+read one; the model cannot decide such a command on a stored message without the attribute and
+refuses it as an unmet obligation, and `handle` and `handle_with_events` answer that refusal of
+the 5 commands as `unknown-message` too, with no event, so an id is answered alike whether a
+message carries it or not (`handle` in `crates/inbox-core/src/lib.rs` states the rule). The
+listener hands in both attributes for every client and never meets it. The listener calls
+`as_unknown` on each command answer and writes a renamed answer back with the status `404`;
+it holds no copy of the rename. The rename changes the outcome and nothing else: it compares no
+caller with no message, and who is a party is decided in the model. The headers of the answer depend only on the status, the body
 and the start of the service (the epoch, above), and the outcome publishes nothing and changes no
 row. Like every answer to a request that is not a
 `GET`, it wakes the held-open waits, the same way an `unknown-message` answer does.
@@ -137,7 +147,9 @@ The sender still gets `not-recipient` (`403`) from the 4 commands of the owner a
 `not-sender` (`403`) from `collect`. Over HTTP the conformance run reads `unknown-message` where a
 scenario expects `foreign-message`; the scenario that expects it,
 `a-third-principal-finds-no-message`, is unsupported there (it has a step as the Sweeper), and
-`crates/inbox-server/tests/foreign_message.rs` witnesses the answer.
+`crates/inbox-server/tests/foreign_message.rs` witnesses the answer. The run against the core
+judges that scenario through `inbox_core::handle_as_specified`, the core's entry without the
+rename.
 
 `collect` answers `collected` with `200` and the settled record under `response` (the
 generated contract; `Collect` declares a typed response): every member of the message's
@@ -190,10 +202,15 @@ the answer before its sender could collect it, and with it the option a decision
 
 A row of a message view (every row that carries `to` or `from`) is answered only to the owner of
 the inbox in `to` or to the sender in `from`: the row stays when its `to` is the caller's `inbox`
-or its `from` is the caller's `principal`. The generated answer is filtered; no view is written a
-second time. `Inboxes` rows carry neither (`address`, `owner`, `adapter`, `state`) and are answered
+or its `from` is the caller's `principal`. The rule is the core's, `inbox_core::readable`, which
+`inbox_core::handle` applies for an embedding; the listener runs the generated `dispatch` and
+hands the view's answer to that same function, so it holds no copy of the rule and both entries
+give one caller the same rows. The generated answer is filtered; no view is written a second
+time. `Inboxes` rows carry neither (`address`, `owner`, `adapter`, `state`) and are answered
 whole: the list of addresses a sender posts to. `Due` and `Messages` are not served to a client at
-all (the generated grant, above).
+all (the generated grant, above); the expiry task reads `Due` as the `Sweeper`, which the rule
+does not bind. ESS 0.97.3 refuses a view filter over the caller (`docs/design/inbox.md`, what the
+specification cannot say).
 
 ## The wait
 

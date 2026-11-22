@@ -13,11 +13,11 @@ Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cas
 |---|---|---|---|
 | The specification | The domain `inbox.messaging`: inboxes, messages, their lifecycle, every refusal | 2 entities, 9 commands, 9 views, 10 events, 15 errors, 2 actors; 42 authored scenarios | [`ess/`](../ess), `task spec` |
 | The generated crate | Model types, command behaviours, view queries, storage and context ports, route table and JSON codecs, written by ESS from `ess/` | 87 of 90 capabilities generated; 3 obligations left to hand-written code (`PostMessage`, `Collect`, `Expire`) | [`generated/rust/inbox/`](../generated/rust/inbox), `task drift` |
-| The core | The 3 obligations over a backend; one command at a time per store | 164 cases | [`crates/inbox-core/`](../crates/inbox-core) |
-| The in-memory backend | Both storage ports in memory; part of the core crate (`MemoryBackend`) | in the 164 cases above, and in the test kit's | [`crates/inbox-core/`](../crates/inbox-core) |
+| The core | The 3 obligations over a backend; one command at a time per store; the read rule of every view answer; the answer of `unknown-message` to a client that is no party of a message, or that lacks an attribute the model needs | 186 cases | [`crates/inbox-core/`](../crates/inbox-core) |
+| The in-memory backend | Both storage ports in memory; part of the core crate (`MemoryBackend`) | in the 186 cases above, and in the test kit's | [`crates/inbox-core/`](../crates/inbox-core) |
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
-| The HTTP listener | A library: request signatures, the read rule, the wait on `Pending`, the expiry task, the limits; loopback only | 74 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
+| The HTTP listener | A library: request signatures, the core's read rule on each view answer and its rename of `foreign-message` on each command answer, the wait on `Pending`, the expiry task, the limits; loopback only | 78 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
 | The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 112 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
@@ -157,6 +157,35 @@ Not released yet.
   before a line end dropped again, the `outbox` case. The stored message, the signature check
   and the service are unchanged. The part that stays: a line end in such a value is printed
   as a line end, so a value can still start a line that looks like one of the client's own.
+- **The core gave a client the rows of messages between others**
+  (`story:the-core-applies-the-read-rule`). The read rule was in the HTTP listener only:
+  `inbox_core::handle`, the entry for an embedding with another caller per request, ran
+  `Outbox`, `Settled`, `Pending`, `Unanswered`, `Thread` and `Replies` by the parameter the
+  caller sent and compared no row with the caller. The rule is now `inbox_core::readable`,
+  applied by `handle` and `handle_with_events` and called by the listener, which holds no copy
+  of it; ESS 0.97.3 refuses a view filter over the caller (`ESS-VIEW-003`). The case
+  `a_third_principal_reads_no_row_of_a_message_between_two_others_through_handle` in
+  `crates/inbox-core/tests/read_rule.rs` and
+  `handle_and_the_service_answer_each_party_and_a_third_the_same_rows` in
+  `crates/inbox-server/tests/read_rule.rs` run in `task check`.
+- **The core told a third principal that a message id exists**
+  (`story:the-core-answers-a-foreign-message-as-unknown`). Only the HTTP listener renamed the
+  model's `foreign-message`: through `inbox_core::handle` a client that is no party of a
+  message got `foreign-message` from `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` and
+  `Collect`, and `unknown-message` for an id no message carries. The rename is now
+  `inbox_core::as_unknown`, applied by `handle` and `handle_with_events` and called by the
+  listener, which holds no copy of it; the model keeps `foreign-message`, and the conformance
+  run against the core judges it through `inbox_core::handle_as_specified`, the entry without
+  the rename. A client an embedding hands in without its inbox or its principal got an unmet
+  obligation for a message between others and `unknown-message` for no message; `handle` and
+  `handle_with_events` answer that refusal of the 5 commands as `unknown-message` too. The cases
+  `each_command_answers_a_client_that_is_no_party_as_a_missing_id_in_every_state`,
+  `the_parties_get_from_handle_what_the_model_answers`,
+  `a_client_whose_context_cannot_read_an_attribute_gets_the_answer_of_no_message` and
+  `a_sender_without_an_inbox_gets_the_models_answer_where_it_decides_and_no_message_elsewhere`
+  in `crates/inbox-core/tests/foreign_unknown.rs`, and
+  `adv_a_client_with_one_attribute_absent_cannot_tell_a_message_between_others_from_none` in
+  `crates/inbox-core/tests/adversary_foreign_unknown.rs`, run in `task check`.
 
 ## Security findings, closed in release 0.2.0
 
@@ -200,7 +229,10 @@ without them.
   gate holds it to the list.
 - **The run over HTTP and the 3 acceptance checks do not exercise every rule of the
   listener.** Every request they send is validly signed, with keys and delegations that
-  do not lapse, and the run reads a view as every key and joins the rows. A service
+  do not lapse, and the run reads a view as every key and joins the rows (the run against the
+  core reads as every caller of the scenario and joins the rows too, so neither run witnesses
+  the read rule; `crates/inbox-core/tests/read_rule.rs` and
+  `crates/inbox-server/tests/read_rule.rs` do). A service
   without the read rule, without the check of the request signature or its 60 s window,
   without the lapse of a key or a delegation, without the binding of a key to `from` or
   of a delegation to its pair, or one that serves `Messages` and `Due` to a client,

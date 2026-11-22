@@ -153,38 +153,26 @@ fn once<B: Backend>(
     readable(answered, caller)
 }
 
-/// The outcome the model names for a caller that is neither party to the stored message.
-const FOREIGN: &str = "foreign-message";
+/// The status the generated writer gives the outcome `unknown-message`.
+const UNKNOWN_STATUS: u16 = 404;
 
-/// The outcome of an id no message carries, and its status.
-const UNKNOWN: (&str, u16) = ("unknown-message", 404);
-
-/// The one answer of this service that differs from the generated one: an answer of the outcome
-/// `foreign-message` is given the status and the body of `unknown-message`, its `outcome` member
-/// renamed and every other member written back as it was. The model decides who is a party; this
-/// compares no caller with no message.
+/// A command answer held to the core's rename ([`inbox_core::as_unknown`], the one copy of it):
+/// an answer it renames is written back as the generated writers write one, with the status of
+/// `unknown-message`. Any other answer is handed on as it is.
 fn as_unknown(answer: http::Response) -> http::Response {
     if answer.content_type != http::JSON {
         return answer;
     }
-    let Ok(Value::Object(members)) = json::parse_written(&answer.body) else {
+    let Ok(value) = json::parse_written(&answer.body) else {
         return answer;
     };
-    if !members.iter().any(|(name, value)| {
-        name == "outcome" && matches!(value, Value::Text(text) if text == FOREIGN)
-    }) {
+    let renamed = inbox_core::as_unknown(value.clone());
+    if renamed == value {
         return answer;
     }
-    let mut body = String::from("{");
-    for (name, value) in &members {
-        json::member(&mut body, name);
-        match name.as_str() {
-            "outcome" => json::push_text(&mut body, UNKNOWN.0),
-            _ => write_value(&mut body, value),
-        }
-    }
-    body.push('}');
-    http::Response::new(UNKNOWN.1, http::JSON, body)
+    let mut body = String::new();
+    write_value(&mut body, &renamed);
+    http::Response::new(UNKNOWN_STATUS, http::JSON, body)
 }
 
 /// `Pending` held open: read, and while it has no row for the caller, wait for the next command
@@ -222,59 +210,25 @@ fn has_rows(answer: &http::Response) -> bool {
         .unwrap_or(false)
 }
 
-/// The read rule: of a view answer, the message rows the caller is neither the owner of the inbox
-/// in `to` of nor the sender in `from` of are removed. A row that carries neither member
-/// (`Inboxes`) stays. Any other answer is handed on as it is.
+/// A view answer held to the core's read rule ([`inbox_core::readable`], the one copy of it) for
+/// this client, and written back as the generated writers write it. Any other answer is handed on
+/// as it is.
 fn readable(answer: http::Response, caller: &CallerAttributes) -> http::Response {
     if answer.status != 200 || answer.content_type != http::JSON {
         return answer;
     }
-    let Ok(Value::Object(members)) = json::parse_written(&answer.body) else {
+    let Ok(value) = json::parse_written(&answer.body) else {
         return answer;
     };
-    if !matches!(answer_rows(&members), Some(Value::Array(_))) {
+    if !matches!(value.member("rows"), Some(Value::Array(_))) {
         return answer;
     }
-    let mut body = String::from("{");
-    for (name, value) in &members {
-        json::member(&mut body, name);
-        match (name.as_str(), value) {
-            ("rows", Value::Array(rows)) => {
-                let kept: Vec<Value> = rows
-                    .iter()
-                    .filter(|row| visible(row, caller))
-                    .cloned()
-                    .collect();
-                write_value(&mut body, &Value::Array(kept));
-            }
-            _ => write_value(&mut body, value),
-        }
-    }
-    body.push('}');
+    let mut body = String::new();
+    write_value(
+        &mut body,
+        &inbox_core::readable(Some(&CLIENT), caller, value),
+    );
     http::Response::new(200, http::JSON, body)
-}
-
-fn answer_rows(members: &[(String, Value)]) -> Option<&Value> {
-    members
-        .iter()
-        .find(|(name, _)| name == "rows")
-        .map(|(_, value)| value)
-}
-
-fn visible(row: &Value, caller: &CallerAttributes) -> bool {
-    let (to, from) = (row.member("to"), row.member("from"));
-    if to.is_none() && from.is_none() {
-        return true;
-    }
-    let is = |member: Option<&Value>, mine: Option<&str>| matches!((member, mine), (Some(Value::Text(text)), Some(mine)) if text == mine);
-    is(to, caller.inbox.as_ref().map(|inbox| inbox.0.as_str()))
-        || is(
-            from,
-            caller
-                .principal
-                .as_ref()
-                .map(|principal| principal.0.as_str()),
-        )
 }
 
 /// Writes a value back as the generated writers write one: no whitespace, members in the order

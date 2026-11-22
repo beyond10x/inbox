@@ -147,7 +147,7 @@ fn a_third_principal_and_the_recipient_get_no_record() {
         outcome(&answer(&world, &Reply::to(REQUEST, REPLY))),
         "answered"
     );
-    for (who, expected) in [(OTHER, "foreign-message"), (WORKER, "not-sender")] {
+    for (who, expected) in [(OTHER, "unknown-message"), (WORKER, "not-sender")] {
         let refused = collect(&world, who, REQUEST);
         assert_eq!(outcome(&refused), expected, "{who}");
         assert!(refused.member("response").is_none(), "{who}: {refused:?}");
@@ -229,13 +229,14 @@ fn the_record_holds_every_member_of_the_outbox_row_of_the_moment_before() {
     assert!(!held(&world, DECISION));
 }
 
-/// The contract orders `foreign-message` and `not-sender` before `collected` and `not-settled`:
+/// The contract orders `foreign-message` (which `handle` answers as `unknown-message`) and
+/// `not-sender` before `collected` and `not-settled`:
 /// on a message that is not settled, a third principal and the recipient get their refusal, not
 /// `not-settled`, which would tell them the message exists and is still open.
 #[test]
 fn on_an_unsettled_message_the_caller_refusals_come_before_not_settled() {
     let world = requested();
-    for (who, expected) in [(OTHER, "foreign-message"), (WORKER, "not-sender")] {
+    for (who, expected) in [(OTHER, "unknown-message"), (WORKER, "not-sender")] {
         let refused = collect(&world, who, REQUEST);
         assert_eq!(outcome(&refused), expected, "{who}: {refused:?}");
         assert!(refused.member("response").is_none(), "{who}: {refused:?}");

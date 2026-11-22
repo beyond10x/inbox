@@ -394,7 +394,7 @@ fn the_expired_reply_answers_after_the_party_checks_and_before_the_shape() {
     };
     assert_eq!(
         answer(&backend, THIRD, READING, &third).0,
-        "foreign-message"
+        "unknown-message"
     );
     assert_eq!(
         answer(&backend, THIRD, READING, &third_to_missing).0,

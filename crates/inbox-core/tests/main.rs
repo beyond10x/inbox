@@ -7,6 +7,8 @@ mod adversary_collect_record;
 mod adversary_collect_record_2;
 mod adversary_deadline;
 mod adversary_deadline_2;
+mod adversary_foreign_unknown;
+mod adversary_read_rule;
 mod adversary_w6_from;
 mod adversary_w7_id;
 mod adversary_w7_key;
@@ -23,6 +25,7 @@ mod deadline;
 mod dedup_key_scope;
 mod expire_once;
 mod foreign_message;
+mod foreign_unknown;
 #[path = "core/obligations.rs"]
 mod obligations;
 mod post_message_id;
@@ -30,6 +33,7 @@ mod post_message_id;
 mod post_read_answer;
 #[path = "core/precedence.rs"]
 mod precedence;
+mod read_rule;
 #[path = "core/section.rs"]
 mod section;
 #[path = "core/support.rs"]

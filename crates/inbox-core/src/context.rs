@@ -13,7 +13,11 @@ use inbox::server::json;
 
 /// The attributes of the authenticated caller, as the embedding code hands them in.
 ///
-/// A `Client` carries both; the `Sweeper` carries none.
+/// A `Client` carries both; the `Sweeper` carries none. [`crate::handle`] answers a `Client`
+/// that carries one or none the answer of an id no message carries wherever the model cannot
+/// decide `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` or `Collect` on a stored message
+/// without the absent attribute, so such a client cannot tell a message between others from no
+/// message either.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CallerAttributes {
     /// `principal`: who the request was authenticated as.

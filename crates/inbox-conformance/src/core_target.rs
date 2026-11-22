@@ -1,5 +1,5 @@
 //! The one target: the generated `handle` over the obligations of `inbox-core` and its
-//! `MemoryBackend`, in process, through `inbox_core::handle_with_events`.
+//! `MemoryBackend`, in process, through `inbox_core::handle_as_specified`.
 
 use inbox::actor::{Actor, Caller, may_read};
 use inbox::behaviour::{ExternalCommand, TryContext};
@@ -12,15 +12,25 @@ use inbox::system::SystemEvent;
 use inbox_core::{MemoryBackend, PostExternals};
 
 use crate::runner::{Answer, Command, Event, Executed, Read, Reader, Target};
+use crate::value::exact_equal;
 
 /// `inbox-core` over a fresh [`MemoryBackend`] per scenario.
 ///
-/// Each step is one call of [`inbox_core::handle_with_events`] with a [`StepContext`]: the caller
+/// Each step is one call of [`inbox_core::handle_as_specified`] with a [`StepContext`]: the caller
 /// is the step's actor and attributes, and each of the 9 `external:` branches is answered as the
-/// step's expected outcome says. Every other rule is the generated crate's and the core's.
+/// step's expected outcome says. Every other rule is the generated crate's and the core's. That
+/// entry is `handle_with_events` without the rename of `foreign-message` to `unknown-message`
+/// ([`inbox_core::as_unknown`]), so the run judges the model's own outcome and its place in the
+/// order of refusals; an embedding gets the renamed answer.
+///
+/// A read of the suite names no caller, and the core answers a client only the rows it is a
+/// party of ([`inbox_core::readable`]). So a read as a client is sent as every caller of a
+/// client step so far, and the rows are joined, each listed once, as [`crate::WireTarget`]
+/// joins the rows of every key: a core that hides a row from both its parties fails the read.
 #[derive(Debug, Default)]
 pub struct CoreTarget {
     backend: MemoryBackend,
+    readers: Vec<StepContext>,
 }
 
 impl CoreTarget {
@@ -33,6 +43,7 @@ impl CoreTarget {
 impl Target for CoreTarget {
     fn reset(&mut self) {
         self.backend = MemoryBackend::new();
+        self.readers.clear();
     }
 
     fn execute(&mut self, command: &Command<'_>) -> Executed {
@@ -48,7 +59,13 @@ impl Target for CoreTarget {
             Ok(context) => context,
             Err(reason) => return broken(reason),
         };
-        let (answered, published) = inbox_core::handle_with_events(
+        if caller.is_some_and(|caller| matches!(caller.actor, Actor::Client)) {
+            let reader = context.reader();
+            if !self.readers.contains(&reader) {
+                self.readers.push(reader);
+            }
+        }
+        let (answered, published) = inbox_core::handle_as_specified(
             &self.backend,
             context,
             caller.as_ref(),
@@ -79,8 +96,41 @@ impl Target for CoreTarget {
                 Err(reason) => return Read::Broken(reason),
             },
         };
-        let context = StepContext::reading();
-        match inbox_core::handle(&self.backend, context, caller.as_ref(), view, params) {
+        let client = caller.is_some_and(|caller| matches!(caller.actor, Actor::Client));
+        let readers = if client && !self.readers.is_empty() {
+            self.readers.clone()
+        } else {
+            vec![StepContext::reading()]
+        };
+        let mut union: Option<Vec<Value>> = None;
+        for reader in readers {
+            let read = self.read_as(reader, caller.as_ref(), view, params.clone());
+            match (read, &mut union) {
+                (Read::Rows(rows), Some(kept)) => {
+                    for row in rows {
+                        if !kept.iter().any(|held| exact_equal(held, &row)) {
+                            kept.push(row);
+                        }
+                    }
+                }
+                (Read::Rows(rows), None) => union = Some(rows),
+                (other, _) => return other,
+            }
+        }
+        Read::Rows(union.unwrap_or_default())
+    }
+}
+
+impl CoreTarget {
+    /// One read through the entry as one caller.
+    fn read_as(
+        &self,
+        reader: StepContext,
+        caller: Option<&Caller>,
+        view: &str,
+        params: Value,
+    ) -> Read {
+        match inbox_core::handle(&self.backend, reader, caller, view, params) {
             Ok(value) => match value.member("rows") {
                 Some(Value::Array(rows)) => Read::Rows(rows.clone()),
                 _ => Read::Broken(format!("`{view}` answered no `rows` array")),
@@ -203,6 +253,14 @@ impl StepContext {
     /// The context of a read: no attribute, no branch taken.
     pub fn reading() -> Self {
         Self::default()
+    }
+
+    /// The context of a read as this step's caller: its attributes, no branch taken.
+    pub fn reader(&self) -> Self {
+        Self {
+            expected: None,
+            ..self.clone()
+        }
     }
 
     /// Whether the branch named `outcome` is taken.

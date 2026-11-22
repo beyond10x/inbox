@@ -93,9 +93,31 @@ impl World {
             .unwrap_or_else(|refused| panic!("{name} as the sweeper refused: {refused}"))
     }
 
-    /// The rows of a view a `Client` reads.
+    /// The rows of a view as the clients read it together: a third principal, then each
+    /// principal a stored message names in `from` or `to` (read in `Messages` by the `Sweeper`),
+    /// each through the entry, every row listed once in the order first read. The entry answers
+    /// each client only the rows it is a party of (`inbox_core::readable`); a case that holds
+    /// that rule reads as one caller (`tests/read_rule.rs`).
     pub fn rows(&self, view: &str, params: &str) -> Vec<Value> {
-        rows_of(&self.client("agent:ws/reader", view, params))
+        let mut readers = vec!["agent:ws/reader".to_owned()];
+        for row in self.sweeper_rows("inbox.messaging.Messages", "{}") {
+            for member in ["from", "to"] {
+                if let Some(Value::Text(party)) = row.member(member)
+                    && !readers.contains(party)
+                {
+                    readers.push(party.clone());
+                }
+            }
+        }
+        let mut rows: Vec<Value> = Vec::new();
+        for reader in &readers {
+            for row in rows_of(&self.client(reader, view, params)) {
+                if !rows.contains(&row) {
+                    rows.push(row);
+                }
+            }
+        }
+        rows
     }
 
     /// The rows of a view the `Sweeper` reads.
