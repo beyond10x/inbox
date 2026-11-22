@@ -112,6 +112,7 @@ fn outcome(value: &Value) -> Answer {
     Answer::Outcome {
         outcome: outcome.clone(),
         error,
+        response: value.member("response").cloned(),
     }
 }
 

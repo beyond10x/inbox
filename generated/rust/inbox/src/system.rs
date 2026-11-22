@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `inbox` system, v1: its components assembled, its bindings wired, and its one transport.

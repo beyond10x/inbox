@@ -3,10 +3,15 @@
 mod acceptance;
 mod adversary;
 mod adversary2;
+mod adversary_collect_record;
+mod adversary_collect_record_2;
+mod adversary_control_sequences;
 mod adversary_deadline;
 mod adversary_w8_repost;
 mod adversary_w8_repost2;
 mod cases;
+mod collect_record;
+mod control_sequences;
 mod epoch;
 mod id_taken;
 mod support;

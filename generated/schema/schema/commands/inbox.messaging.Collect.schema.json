@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Collect input",
-  "description": "The sender takes the answer or the refusal of its message. The message is handled by that and is removed.",
+  "description": "The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its `Outbox` row, among them the envelope, its state, who answered, the decided option, the reply with the `expires` its signature covers, and the refusal.",
   "x-ess-name": "inbox.messaging.Collect",
   "x-ess-kind": "command-input",
   "type": "object",
@@ -17,7 +17,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:5ea95406799d21f8958a1f51a93f4c1283820d67bddce65607e8312453d2afb1",
+    "contract_digest": "slice-sha256/2:369d51b22590f4b3f57a7e0800b49c14998eafc0609c53fd8c575ef24c0fe962",
     "regenerate": "ess generate"
   },
   "$defs": {

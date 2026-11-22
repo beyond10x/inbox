@@ -5,8 +5,10 @@ use std::collections::HashMap;
 
 use inbox::server::json::Value;
 
-use crate::invariants::Observed;
-use crate::suite::{Expectation, Fields, Predicate, Ref, Scenario, Shape, Step, Suite};
+use crate::invariants::{Observed, occurrences, shape};
+use crate::suite::{
+    Expectation, Fields, Predicate, Ref, ResponseCheck, Scenario, Shape, Step, Suite,
+};
 use crate::value::{brief, exact_equal, field_matches, render};
 
 /// What a target answered a command with.
@@ -18,6 +20,8 @@ pub enum Answer {
         outcome: String,
         /// The error's qualified name.
         error: Option<String>,
+        /// The typed response the outcome returned (`response` of the answer), if any.
+        response: Option<Value>,
     },
     /// Refused before it ran: the caller is no actor (`None`) or one not granted the command.
     NotGranted(Option<String>),
@@ -507,6 +511,27 @@ impl Run {
                     render(now)
                 ))
             }
+            Step::ExpectResponse(check) => {
+                let sent = self.sent(&check.command)?;
+                match &sent.executed.answer {
+                    Answer::Outcome {
+                        outcome,
+                        error: None,
+                        response,
+                    } if *outcome == check.outcome => match responds(check, response.as_ref()) {
+                        Ok(()) => Ok(()),
+                        Err(reason) => {
+                            failed(format!("the response of `{}` {reason}", check.command))
+                        }
+                    },
+                    other => failed(format!(
+                        "`{}` should answer `{}` with its response; it answered {}",
+                        check.command,
+                        check.outcome,
+                        describe(other)
+                    )),
+                }
+            }
         }
     }
 
@@ -737,6 +762,78 @@ fn satisfies(row: &Value, predicate: &Predicate) -> Result<(), String> {
     ))
 }
 
+/// `Ok` where `response` satisfies what `expect_direct_response` declares: an object that states
+/// no member twice at any depth (a reader takes one of the two, and which one is not fixed), no
+/// member the response does not declare, each declared field of its type (an `Optional` one may
+/// be absent or `null`), each value of a constrained newtype within its alphabet and prefix and
+/// satisfying its invariants, and each stated literal, by dotted path, exactly equal.
+fn responds(check: &ResponseCheck, response: Option<&Value>) -> Result<(), String> {
+    let Some(response) = response else {
+        return Err("is missing: the answer carries no `response`".to_owned());
+    };
+    let Value::Object(members) = response else {
+        return Err(format!("is {}, not an object", render(response)));
+    };
+    if let Some(path) = inbox_verify::duplicate_member(response) {
+        return Err(format!("states `{path}` twice"));
+    }
+    if let Some((undeclared, _)) = members
+        .iter()
+        .find(|(name, _)| !check.fields.iter().any(|(field, _)| field == name))
+    {
+        return Err(format!(
+            "carries `{undeclared}`, which the response does not declare"
+        ));
+    }
+    let mut found = Vec::new();
+    for (field, type_ref) in &check.fields {
+        let value = response.member(field);
+        shape(&check.types, type_ref, value, &format!("`{field}`"))?;
+        occurrences(
+            &check.types,
+            type_ref,
+            value,
+            &format!("`{field}`"),
+            &mut found,
+        );
+    }
+    for (name, location, value) in found {
+        let Some(counts) = check.counts.get(&name) else {
+            continue;
+        };
+        let Value::Text(text) = value else {
+            return Err(format!(
+                "holds {} at {location}, of which the invariants of `{name}` cannot be decided",
+                render(value)
+            ));
+        };
+        let scalars = text.chars().count() as f64;
+        for (statement, op, bound) in counts {
+            if !op.holds(scalars, *bound) {
+                return Err(format!(
+                    "holds {text:?} at {location}, and `{statement}` of `{name}` does not hold of it"
+                ));
+            }
+        }
+    }
+    for (path, literal) in &check.expected {
+        let held = path
+            .split('.')
+            .try_fold(response, |at, step| at.member(step));
+        match held {
+            Some(value) if exact_equal(value, literal) => {}
+            other => {
+                return Err(format!(
+                    "should hold {} at `{path}`; it holds {}",
+                    render(literal),
+                    other.map_or("nothing".to_owned(), render)
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// `Ok` where the event's payload holds exactly the shape's members, each of its declared type.
 fn conforms(event: &Event, shape: &[(String, Shape)]) -> Result<(), Halt> {
     let Value::Object(members) = &event.payload else {
@@ -783,10 +880,12 @@ fn describe(answer: &Answer) -> String {
         Answer::Outcome {
             outcome,
             error: Some(error),
+            ..
         } => format!("`{outcome}` with the error `{error}`"),
         Answer::Outcome {
             outcome,
             error: None,
+            ..
         } => format!("`{outcome}`"),
         Answer::NotGranted(actor) => format!("not granted to {}", actor_name(actor.as_deref())),
         Answer::Refused(reason) => format!("a refusal with no declared outcome ({reason})"),

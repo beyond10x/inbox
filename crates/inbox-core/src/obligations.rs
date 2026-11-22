@@ -1,12 +1,13 @@
-//! The 2 obligations of `PLAN.md`: the behaviours of `PostMessage` and `Expire`.
+//! The 3 obligations of `PLAN.md`: the behaviours of `PostMessage`, `Collect` and `Expire`.
 
 use inbox::behaviour::{ExternalCommand, InboxStorage, MessageStorage, TryContext};
-use inbox::messaging::obligations::{ExpireBehavior, PostMessageBehavior};
+use inbox::messaging::obligations::{CollectBehavior, ExpireBehavior, PostMessageBehavior};
 use inbox::messaging::{
-    Address, AlreadyExpired, AnsweredBy, AnyMessage, DecisionTakenOnSilence, Duplicate, Expire,
-    ExpireOutcome, InboxSnapshot, InboxState, Kind, Message, MessageData, MessageExpired,
-    MessageId, MessageIdTaken, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue,
-    NotSender, OptionLetter, PostMessage, PostMessageOutcome, Principal, ShapeMismatch,
+    Address, AlreadyExpired, AnsweredBy, AnyMessage, Collect, CollectOutcome, CollectResponse,
+    CollectedReply, DecisionTakenOnSilence, Duplicate, Expire, ExpireOutcome, InboxSnapshot,
+    InboxState, Kind, Message, MessageData, MessageExpired, MessageHandled, MessageId,
+    MessageIdTaken, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue, NotSender,
+    NotSettled, OptionLetter, PostMessage, PostMessageOutcome, Principal, ShapeMismatch,
     SignatureInvalid, UnknownInbox, UnknownMessage,
 };
 use inbox::obligation::UnmetObligation;
@@ -16,7 +17,7 @@ use inbox::primitives::invariant::{self, Fact, Op};
 use crate::context::PostExternals;
 
 /// The ports [`inbox::behaviour::Generated`] runs over: a backend `B`, a context `C`, and the
-/// behaviours of `PostMessage` and `Expire`, which read and write through `B`.
+/// behaviours of `PostMessage`, `Collect` and `Expire`, which read and write through `B`.
 ///
 /// `B` implements both storage ports. `C` implements the generated context port and
 /// [`PostExternals`]: [`crate::ServiceContext`] in the service, a harness's own type where a test
@@ -118,6 +119,7 @@ fn instants(
 }
 
 const POST_MESSAGE: &str = "inbox.messaging.PostMessage";
+const COLLECT: &str = "inbox.messaging.Collect";
 const EXPIRE: &str = "inbox.messaging.Expire";
 
 /// The guard `unknown-option` of `PostMessage`, as `ess/domains/messaging.yaml` declares it: a
@@ -340,6 +342,82 @@ impl<B: MessageStorage, C> ExpireBehavior for Core<B, C> {
                 message_id: input.message_id,
                 to: held.data.from,
                 thread: held.data.thread,
+            },
+        })
+    }
+}
+
+/// `inbox.messaging.Collect`: `unknown-message` for an id no row carries, then the guards on the
+/// stored row in declaration order: `foreign-message` (the caller is neither the recipient in
+/// `to` nor the sender in `from`), `not-sender`, `collected` for a row in `Answered` or
+/// `Refused`, and `not-settled` otherwise. An absent caller attribute makes its comparison
+/// Unknown, and the guards are decided in three-valued logic as the generated behaviours decide
+/// them: `foreign-message` is `all(to != inbox, from != principal)`, so the sender without an
+/// `inbox` reaches `not-sender` and beyond, and a guard that stays Unknown is no declared outcome.
+///
+/// `collected` deletes the row and answers with what that row held, every member of its `Outbox`
+/// row (the bodies as plain text): the response is read from the same snapshot the guards read and the delete removes, inside the one request, so an answer or
+/// a refusal stored before the request is in it and none can land between the read and the
+/// delete ([`crate::handle`] runs the request inside the backend's [`crate::Exclusive`] section).
+impl<B: MessageStorage, C: TryContext> CollectBehavior for Core<B, C> {
+    fn collect(&mut self, input: Collect) -> Result<CollectOutcome, UnmetObligation> {
+        let Some(held) = MessageStorage::get(&self.backend, &input.message_id) else {
+            return Ok(CollectOutcome::UnknownMessage {
+                error: UnknownMessage,
+            });
+        };
+        let not_recipient = self.try_caller_inbox()?.map(|inbox| held.data.to != inbox);
+        let not_sender = self
+            .try_caller_principal()?
+            .map(|principal| held.data.from != principal);
+        if invariant::all([not_recipient, not_sender]).ok_or_else(|| undeclared(COLLECT))? {
+            return Ok(CollectOutcome::ForeignMessage {
+                error: UnknownMessage,
+            });
+        }
+        if not_sender.ok_or_else(|| undeclared(COLLECT))? {
+            return Ok(CollectOutcome::NotSender { error: NotSender });
+        }
+        if !matches!(held.state, MessageState::Answered | MessageState::Refused) {
+            return Ok(CollectOutcome::NotSettled { error: NotSettled });
+        }
+
+        MessageStorage::delete(&mut self.backend, &input.message_id);
+        let data = held.data;
+        Ok(CollectOutcome::Collected {
+            message_handled: MessageHandled {
+                message_id: input.message_id,
+            },
+            response: CollectResponse {
+                message_id: data.message_id,
+                from: data.from,
+                on_behalf_of: data.on_behalf_of,
+                authority: data.authority,
+                to: data.to,
+                kind: data.kind,
+                thread: data.thread,
+                reply_shape: data.reply_shape,
+                decision: data.decision,
+                default_on_silence: data.default_on_silence,
+                created: data.created,
+                expires: data.expires,
+                dedup_key: data.dedup_key,
+                body: data.body.0,
+                signature: data.signature,
+                state: held.state,
+                answered_by: data.answered_by,
+                decided_option: data.decided_option,
+                reply: data.reply.map(|reply| CollectedReply {
+                    reply_id: reply.reply_id,
+                    from: reply.from,
+                    on_behalf_of: reply.on_behalf_of,
+                    authority: reply.authority,
+                    created: reply.created,
+                    option: reply.option,
+                    body: reply.body.0,
+                    signature: reply.signature,
+                }),
+                refusal: data.refusal,
             },
         })
     }

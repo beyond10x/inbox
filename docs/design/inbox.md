@@ -73,6 +73,22 @@ When a message is removed:
 A note asks for nothing: `Answer` and `Refuse` of a note are refused `note` (`NotAnswerable`)
 and leave it as it was, so a note is never collected.
 
+`Collect` answers `collected` with the settled record it removes, its typed `response`: every
+member of the message's `Outbox` row, in its order (`message_id`, `from`, `on_behalf_of`,
+`authority`, `to`, `kind`, `thread`, `reply_shape`, `decision`, `default_on_silence`, `created`,
+`expires`, `dedup_key`, `body`, `signature`, `answered_by`, `decided_option`, `reply`, `refusal`,
+`state`), as the row held them in the request that deletes it. `expires` is there because an
+answer replaces it with the reply's, and the reply's signature covers it: with the record alone
+the sender can verify the reply it collected. The sender takes what that answer carries, not a
+row it read before: an answer or a refusal that lands before the `Collect` is in it, and a
+`Collect` before either is `not-settled` and removes nothing. Only the sender gets a record; a
+third principal gets `unknown-message` and the recipient `not-sender`, also on a message that is
+not settled. The bodies in the record are plain text: `body` is `String` and the reply is a
+`CollectedReply`, the fields of `Reply` with its body as `String` (see "What the specification
+cannot say"). An answer lost on the way loses the record: the row is gone, and a second
+`Collect` is `unknown-message`. Keeping a receipt until `expires` would change when a message is
+removed, and is not done.
+
 `Expire` that removes a message publishes `MessageExpired` with the message id, the sender (`to`)
 and the thread, as `MessageAnswered`, `MessageRefused` and `DecisionTakenOnSilence` name them.
 
@@ -233,9 +249,33 @@ not tried as a guard. Its option part has one: a `when_subject` outcome `option-
 interpreted (112 scenarios, all passed). On ESS 0.97.3 it validates, and synthesis writes the
 same 112 scenarios and refuses the new outcome (`ESS-SYNTH-004`). With it,
 `ess generate synthesize --target rust` keeps all of `Answer` an obligation on ESS 0.97.3 as on
-0.97.1 (85 of 88 capabilities generated, 3 obligations) and drops the method `external` of the
-generated `Context`, through which the service answers the external branches of `Answer`, so
-the option part stays in the external branch until synthesis generates that guard.
+0.97.1 (85 of 88 capabilities generated, 3 obligations, measured before `Collect` declared its
+response) and drops the method `external` of the generated `Context`, through which the service
+answers the external branches of `Answer`, so the option part stays in the external branch until
+synthesis generates that guard.
+
+- **A response field has no value source.** ESS 0.97.3 (as 0.97.1) declares the type of
+  `Collect`'s `response` and `returns: true` on `collected`, and the generated OpenAPI document
+  carries it (answered `200`, the record under `response`), but an outcome takes no `response:`
+  key ("unknown field `response`") and `{subject: <field>}` is a source of `sets:` and
+  `payload:` only. So the specification cannot say that the record is the deleted row's.
+  Synthesis keeps the behaviour of `Collect` an obligation ("kept an obligation by a typed
+  response"), and `inbox-core` answers it (`crates/inbox-core/src/obligations.rs`). The suite
+  checks the response's shape on each `collected` step (`expect_direct_response`, no expected
+  value); a value written in an authored scenario (`response: {answered_by: principal}`) failed
+  on the ESS 0.97.1 interpreted target, which does not read the row. The values are held by the
+  cases of `crates/inbox-core/tests/collect_record.rs` (one compares every member of the record
+  with the `Outbox` row read just before) and `crates/inbox-cli/tests/collect_record.rs`, not by
+  the suite.
+- **`Body` cannot be in the response.** The invariant `value.utf8_bytes <= 65536` of `Body` on
+  a type a response reaches refuses every authored scenario that runs `collected`
+  (`ESS-AUTHOR-001`, "invariant `{utf8_bytes: value} <= 65536` on response type
+  `inbox.messaging.Body` does not decide over its value alone"; `value.count` is admitted
+  there), on ESS 0.97.3 as on 0.97.1; the Rust synthesis of 0.97.3 accepts it. So the
+  response's `body` is `String`, and its `reply` is `CollectedReply`, the fields of `Reply` with
+  the body as `String`; the JSON of both is the same as the `Outbox` row's. The smallest
+  reproduction is a newtype with that invariant as the type of an input and of a response field
+  of one `returns: true` command, and one authored scenario that runs it.
 
 - **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
   answered to the owner of the inbox in `to` or to the sender in `from`.
@@ -314,11 +354,11 @@ refusals.
 The plan is in `.engineering/planning/`: one epic per stage 2 to 6 and draft stories for stage 2.
 
 Stage 2 starts from what ESS synthesizes. `ess generate synthesize --target rust --layout crate`
-on ESS 0.97.3 writes 87 of 89 capabilities: the model types, the behaviour of 7 commands, the
+on ESS 0.97.3 writes 87 of 90 capabilities: the model types, the behaviour of 6 commands, the
 query of 9 views, the storage and context ports, and an HTTP route table with JSON codecs. It
-leaves 2 obligations, the behaviours of `PostMessage` (the `distinct` over the options in the
-guard `unknown-option`, and the row-set guards `duplicate` and `duplicate-key`) and
-`Expire` (a narrowed read of `default_on_silence`). The generated storage ports (`get`, `put`,
+leaves 3 obligations, the behaviours of `PostMessage` (the `distinct` over the options in the
+guard `unknown-option`, and the row-set guards `duplicate` and `duplicate-key`), `Collect` (a
+typed response) and `Expire` (a narrowed read of `default_on_silence`). The generated storage ports (`get`, `put`,
 `delete`, `list` per entity) are the backend contract. The generated HTTP surface has no
 concurrency and no authentication by decision; the service adds both.
 

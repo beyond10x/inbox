@@ -308,6 +308,29 @@ pub enum Step {
         /// Whether the snapshot is a complete one.
         complete: bool,
     },
+    /// `expect_direct_response`: the last command answered this outcome, and the `response` it
+    /// returned satisfies the command's declared response (closed, each field of its type, each
+    /// newtype's constraints at every occurrence) and the literals the scenario states.
+    ExpectResponse(Box<ResponseCheck>),
+}
+
+/// What `expect_direct_response` holds the typed response of the last command to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResponseCheck {
+    /// The command.
+    pub command: String,
+    /// The outcome that returns the response.
+    pub outcome: String,
+    /// The declared response fields, in declaration order.
+    pub fields: Vec<(String, TypeRef)>,
+    /// Every declaration the fields reach; a newtype carries the alphabet and prefix of its
+    /// constraints.
+    pub types: BTreeMap<String, Body>,
+    /// The invariants of each constrained newtype, each `value.count <op> <n>`, with its
+    /// statement.
+    pub counts: BTreeMap<String, Vec<(String, Op, f64)>>,
+    /// The literals the scenario states, by dotted path into the response.
+    pub expected: Vec<(String, Value)>,
 }
 
 /// `Err` naming the first member an object of `value` states twice: ESS reads the suite with
@@ -811,6 +834,12 @@ fn step(value: &Value) -> Result<Step, String> {
                 complete: kind == "expect_complete_subject_unchanged",
             }
         }
+        "expect_direct_response" => {
+            keys(&["response"])?;
+            Step::ExpectResponse(Box::new(response_check(member(
+                fields, "response", &what,
+            )?)?))
+        }
         other => {
             return Err(format!(
                 "the step kind `{other}` is not interpreted by this runner"
@@ -1058,6 +1087,130 @@ fn value_invariants(fields: &[(String, Value)]) -> Result<ValueInvariants, Strin
         field: text_member(expected, "field", "expected")?.to_owned(),
         broken,
     })
+}
+
+/// The body of `expect_direct_response`: `command`, `outcome`, the declared `fields`, the
+/// `declarations` they reach (each a newtype, struct or enum, without invariants), the
+/// `constraints` of each constrained newtype (`alphabet`, `prefix`, `invariants`, each
+/// invariant `value.count <op> <n>`) and the `expected` literals by dotted path.
+fn response_check(value: &Value) -> Result<ResponseCheck, String> {
+    let what = "`expect_direct_response`";
+    let fields = object(value, what)?;
+    only(
+        fields,
+        &[
+            "command",
+            "outcome",
+            "fields",
+            "declarations",
+            "constraints",
+            "expected",
+        ],
+        what,
+    )?;
+    let command = text_member(fields, "command", what)?.to_owned();
+    let outcome = object(member(fields, "outcome", what)?, "outcome")?;
+    only(outcome, &["command", "outcome"], "outcome")?;
+    if text_member(outcome, "command", "outcome")? != command {
+        return Err(format!(
+            "{what} names `{command}` and an outcome of another command"
+        ));
+    }
+    let outcome = text_member(outcome, "outcome", "outcome")?.to_owned();
+    let declared = items(member(fields, "fields", what)?, "fields")?
+        .iter()
+        .map(|field| {
+            let field = object(field, "a response field")?;
+            only(field, &["name", "type"], "a response field")?;
+            Ok((
+                text_member(field, "name", "a response field")?.to_owned(),
+                crate::invariants::parse_type(text_member(field, "type", "a response field")?)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let constraints = object(member(fields, "constraints", what)?, "constraints")?;
+    let mut types = BTreeMap::new();
+    for (name, declaration) in object(member(fields, "declarations", what)?, "declarations")? {
+        let mut declaration = object(declaration, name)?.to_vec();
+        let kind = text_member(&declaration, "kind", name)?.to_owned();
+        if kind == "union" {
+            types.insert(name.clone(), union(name, &declaration)?);
+            continue;
+        }
+        if kind != "enum" {
+            declaration.push(("invariants".to_owned(), Value::Array(Vec::new())));
+        }
+        types.insert(name.clone(), body(name, &Value::Object(declaration))?);
+    }
+    let mut counts = BTreeMap::new();
+    for (name, constraint) in constraints {
+        let constraint = object(constraint, name)?;
+        only(constraint, &["alphabet", "invariants", "prefix"], name)?;
+        let Some(Body::Newtype {
+            of: TypeRef::Primitive(Primitive::Text),
+            alphabet,
+            prefix,
+        }) = types.get_mut(name)
+        else {
+            return Err(format!(
+                "the constraints of `{name}` are on no declared newtype over text"
+            ));
+        };
+        let optional_text = |key: &str| -> Result<Option<String>, String> {
+            match constraint.iter().find(|(member, _)| member == key) {
+                None | Some((_, Value::Null)) => Ok(None),
+                Some((_, value)) => as_text(value, key).map(|text| Some(text.to_owned())),
+            }
+        };
+        *alphabet = optional_text("alphabet")?;
+        *prefix = optional_text("prefix")?;
+        let invariants = items(member(constraint, "invariants", name)?, "invariants")?
+            .iter()
+            .map(|invariant| {
+                let text = as_text(invariant, "an invariant")?;
+                match counted(text) {
+                    Some(("value", op, bound)) => Ok((text.to_owned(), op, bound)),
+                    _ => Err(format!(
+                        "the invariant `{text}` of `{name}` is not one this runner interprets"
+                    )),
+                }
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        counts.insert(name.clone(), invariants);
+    }
+    crate::invariants::closure(
+        declared
+            .iter()
+            .map(|(_, type_ref)| type_ref.clone())
+            .collect(),
+        &types,
+    )?;
+    let expected = object(member(fields, "expected", what)?, "expected")?.to_vec();
+    Ok(ResponseCheck {
+        command,
+        outcome,
+        fields: declared,
+        types,
+        counts,
+        expected,
+    })
+}
+
+/// A union declaration of a response: `{"kind": "union", "tag": <member>, "variants": {<label>:
+/// <type>}}`.
+fn union(name: &str, declaration: &[(String, Value)]) -> Result<Body, String> {
+    only(declaration, &["kind", "tag", "variants"], name)?;
+    let tag = text_member(declaration, "tag", name)?.to_owned();
+    let variants = object(member(declaration, "variants", name)?, "variants")?
+        .iter()
+        .map(|(label, payload)| {
+            Ok((
+                label.clone(),
+                crate::invariants::parse_type(as_text(payload, "a variant")?)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(Body::Union { tag, variants })
 }
 
 /// One declaration of a `value_invariants` expectation. The invariants of a declaration other

@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -63,6 +63,29 @@ impl Body {
         }
         None
     }
+}
+
+/// CollectedReply — `inbox.messaging.CollectedReply`.
+///
+/// The reply envelope as `Collect` hands it to the sender: the fields of `Reply`, its body as plain text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectedReply {
+    /// `reply_id` — `inbox.messaging.MessageId`.
+    pub reply_id: MessageId,
+    /// `from` — `inbox.messaging.Principal`.
+    pub from: Principal,
+    /// `on_behalf_of` — `inbox.messaging.Principal`.
+    pub on_behalf_of: Principal,
+    /// `authority` — `Optional<inbox.messaging.DelegationId>`.
+    pub authority: Option<DelegationId>,
+    /// `created` — `Timestamp`.
+    pub created: crate::primitives::Timestamp,
+    /// `option` — `Optional<inbox.messaging.OptionLetter>`.
+    pub option: Option<OptionLetter>,
+    /// `body` — `String`.
+    pub body: String,
+    /// `signature` — `inbox.messaging.Signature`.
+    pub signature: Signature,
 }
 
 /// DecisionAsk — `inbox.messaging.DecisionAsk`.
@@ -997,13 +1020,58 @@ pub enum CloseInboxOutcome {
 
 /// Collect — the input of `inbox.messaging.Collect`.
 ///
-/// The sender takes the answer or the refusal of its message. The message is handled by that and is removed.
+/// The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its `Outbox` row, among them the envelope, its state, who answered, the decided option, the reply with the `expires` its signature covers, and the refusal.
 ///
 /// Everything it can result in is [`CollectOutcome`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Collect {
     /// `message_id` — `inbox.messaging.MessageId`.
     pub message_id: MessageId,
+}
+
+/// Actual typed response of `inbox.messaging.Collect`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectResponse {
+    /// `message_id` — `inbox.messaging.MessageId`.
+    pub message_id: MessageId,
+    /// `from` — `inbox.messaging.Principal`.
+    pub from: Principal,
+    /// `on_behalf_of` — `inbox.messaging.Principal`.
+    pub on_behalf_of: Principal,
+    /// `authority` — `Optional<inbox.messaging.DelegationId>`.
+    pub authority: Option<DelegationId>,
+    /// `to` — `inbox.messaging.Address`.
+    pub to: Address,
+    /// `kind` — `inbox.messaging.Kind`.
+    pub kind: Kind,
+    /// `thread` — `inbox.messaging.ThreadId`.
+    pub thread: ThreadId,
+    /// `reply_shape` — `Optional<inbox.messaging.ReplyShape>`.
+    pub reply_shape: Option<ReplyShape>,
+    /// `decision` — `Optional<inbox.messaging.DecisionAsk>`.
+    pub decision: Option<DecisionAsk>,
+    /// `default_on_silence` — `Optional<inbox.messaging.OptionLetter>`.
+    pub default_on_silence: Option<OptionLetter>,
+    /// `created` — `Timestamp`.
+    pub created: crate::primitives::Timestamp,
+    /// `expires` — `Timestamp`.
+    pub expires: crate::primitives::Timestamp,
+    /// `dedup_key` — `inbox.messaging.DedupKey`.
+    pub dedup_key: DedupKey,
+    /// `body` — `String`.
+    pub body: String,
+    /// `signature` — `inbox.messaging.Signature`.
+    pub signature: Signature,
+    /// `answered_by` — `Optional<inbox.messaging.AnsweredBy>`.
+    pub answered_by: Option<AnsweredBy>,
+    /// `decided_option` — `Optional<inbox.messaging.OptionLetter>`.
+    pub decided_option: Option<OptionLetter>,
+    /// `reply` — `Optional<inbox.messaging.CollectedReply>`.
+    pub reply: Option<CollectedReply>,
+    /// `refusal` — `Optional<String>`.
+    pub refusal: Option<String>,
+    /// `state` — `inbox.messaging.Message.State`.
+    pub state: MessageState,
 }
 
 /// Everything `inbox.messaging.Collect` can result in — one variant per declared outcome.
@@ -1032,6 +1100,8 @@ pub enum CollectOutcome {
     },
     /// `collected` — when the existing subject is in Answered or Refused.
     Collected {
+        /// Actual response returned by this branch.
+        response: CollectResponse,
         /// The `inbox.messaging.MessageHandled` this outcome publishes.
         message_handled: MessageHandled,
     },
@@ -2024,14 +2094,16 @@ pub mod obligations {
         fn close_inbox(&mut self, input: super::CloseInbox) -> Result<super::CloseInboxOutcome, crate::obligation::UnmetObligation>;
     }
 
-    /// The behaviour `inbox.messaging.Collect` — generated.
+    /// The behaviour `inbox.messaging.Collect` — an implementation obligation.
     ///
-    /// The specification fully determines it: [`crate::behaviour::Generated`] implements it
-    /// over the storage and context ports. Implement it yourself to replace that behaviour.
+    /// Why it is not generated: kept an obligation by a typed response (`response:`).
+    ///
+    /// Contract: given `inbox.messaging.Collect` input, decide and enact exactly one outcome. Declared outcomes (declaration order, not selection precedence): `unknown-message` for an identity no record carries, error `inbox.messaging.UnknownMessage`; `foreign-message` when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`, error `inbox.messaging.UnknownMessage`; `not-sender` when the existing subject's stored fields satisfy `from != caller.principal`, error `inbox.messaging.NotSender`; `collected` when the existing subject is in Answered or Refused, deletes `inbox.messaging.Message`, emits `inbox.messaging.MessageHandled`; `not-settled` otherwise, error `inbox.messaging.NotSettled`.
     pub trait CollectBehavior {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.Collect`.
         ///
-        /// `Err` is the typed refusal of a request the model declares no outcome for.
+        /// `Err` is the typed refusal of an obligation nothing has satisfied; a satisfying
+        /// implementation never returns it.
         fn collect(&mut self, input: super::Collect) -> Result<super::CollectOutcome, crate::obligation::UnmetObligation>;
     }
 
@@ -2209,6 +2281,12 @@ pub mod obligations {
     /// Each method returns the typed refusal naming what is owed — never a panic, never a guessed
     /// value — so a workspace built on this stub compiles and reports its own gaps.
     pub struct Unimplemented;
+
+    impl CollectBehavior for Unimplemented {
+        fn collect(&mut self, _input: super::Collect) -> Result<super::CollectOutcome, crate::obligation::UnmetObligation> {
+            Err(crate::obligation::UnmetObligation { capability: "command behaviour", source: "inbox.messaging.Collect" })
+        }
+    }
 
     impl ExpireBehavior for Unimplemented {
         fn expire(&mut self, _input: super::Expire) -> Result<super::ExpireOutcome, crate::obligation::UnmetObligation> {

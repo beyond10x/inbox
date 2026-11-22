@@ -24,6 +24,42 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   service's clock with the same outcome and error, and the message stays as it was. An answer
   to a message already answered or refused stays `already-settled`, whatever its `expires`. Stored, such an answer would be
   removed by the next sweep before its sender could collect it.
+- `collect` answers with the settled record it removes. The answer of `collected` is `200`
+  (was `202`) and carries `response`: every member of the message's `Outbox` row in its order,
+  `expires` (which the reply's signature covers) and the reply among them, read from the row in
+  the request that deletes it. Its `body` is plain text, and its `reply` has the new type
+  `CollectedReply`: the fields of `Reply`, its body as plain text; the JSON is the row's.
+  `inbox collect` sends only the `Collect`, prints that record and then drops the outbox line.
+  The text is the form `outbox` prints a row in, and `--json` puts the record under `message`
+  with the member names and order 0.2.0 printed there; the values are those the service held
+  when it removed the message. In 0.2.0 it read `Outbox` first and printed that row: a reply or
+  a refusal that arrived between the two requests was deleted without the sender seeing it, and
+  the outbox line was dropped. The behaviour of `Collect` is now an obligation of the
+  generated crate, implemented in `inbox-core` (87 of 90 capabilities generated, 3
+  obligations). A success answer that is not `collected` with the settled record of the message
+  collected (no `response`, as a 0.2.0 service answers; another outcome or none; a record that
+  does not decode as the declared response of `Collect`, is of another message or is not
+  `Answered` or `Refused`; a member stated twice) makes `inbox collect` exit 3 with one line on
+  standard error, and the outbox line stays. The conformance runner interprets the suite step
+  `expect_direct_response`: it checks the response's members, their types (a tagged union
+  among them), the alphabet and length of each newtype in it, and that no member is stated
+  twice.
+- The client writes no control character that another principal or the service chose to the
+  terminal. In text, each control character of the output but the line end (C0 with the tab
+  and a carriage return before a line end, DEL, C1) is shown as its escape `\u{1b}`: a reply
+  body, a refusal reason, a message body, an option or an address printed by `collect`,
+  `pending`, `wait`, `outbox`, `thread` or `replies`, and a line on standard error that repeats
+  text of the service. In 0.2.0 they were printed as written, so a recipient could clear the
+  sender's screen, set its window title or write over a line with its reply, and a sender
+  could do the same to whoever lists an inbox. With `--json`, DEL and C1 are written as `\u`
+  escapes as well (C0 was escaped already); a JSON reader gets the same values. Text without
+  control characters is printed byte for byte as before. The stored message, its signature and
+  the service are unchanged.
+
+### Known limits
+
+- A `collect` whose answer is lost after the service removed the message loses the record: a
+  second `collect` answers `unknown-message`, and the envelope stays in the outbox file.
 
 ## [0.3.0] - 2026-11-22
 

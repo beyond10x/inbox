@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -85,6 +85,87 @@ pub fn decode_inbox_messaging_body(value: &json::Value, at: &str) -> Result<crat
         Some(expected) => Err(json::DecodeError::of(at, expected, value)),
         None => Ok(decoded),
     }
+}
+
+/// Writes `inbox.messaging.CollectedReply` as JSON.
+pub fn encode_inbox_messaging_collected_reply(value: &crate::messaging::CollectedReply, out: &mut String) {
+    out.push('{');
+    json::member(out, "reply_id");
+    encode_inbox_messaging_message_id(&value.reply_id, out);
+    json::member(out, "from");
+    encode_inbox_messaging_principal(&value.from, out);
+    json::member(out, "on_behalf_of");
+    encode_inbox_messaging_principal(&value.on_behalf_of, out);
+    if let Some(held0) = &value.authority {
+        json::member(out, "authority");
+        encode_inbox_messaging_delegation_id(&*held0, out);
+    }
+    json::member(out, "created");
+    json::push_text(out, &value.created.0);
+    if let Some(held0) = &value.option {
+        json::member(out, "option");
+        encode_inbox_messaging_option_letter(&*held0, out);
+    }
+    json::member(out, "body");
+    json::push_text(out, &value.body);
+    json::member(out, "signature");
+    encode_inbox_messaging_signature(&value.signature, out);
+    out.push('}');
+}
+
+/// Reads `inbox.messaging.CollectedReply` from JSON.
+///
+/// # Errors
+///
+/// [`json::DecodeError`] naming the path and what the declaration says belongs there.
+pub fn decode_inbox_messaging_collected_reply(value: &json::Value, at: &str) -> Result<crate::messaging::CollectedReply, json::DecodeError> {
+    json::closed_at(value, at, &["reply_id", "from", "on_behalf_of", "authority", "created", "option", "body", "signature"])?;
+    Ok(crate::messaging::CollectedReply {
+        reply_id: {
+            let at0 = json::nested(at, "reply_id");
+            let member0 = json::member_at(value, at, "reply_id")?;
+            decode_inbox_messaging_message_id(member0, &at0)?
+        },
+        from: {
+            let at1 = json::nested(at, "from");
+            let member1 = json::member_at(value, at, "from")?;
+            decode_inbox_messaging_principal(member1, &at1)?
+        },
+        on_behalf_of: {
+            let at2 = json::nested(at, "on_behalf_of");
+            let member2 = json::member_at(value, at, "on_behalf_of")?;
+            decode_inbox_messaging_principal(member2, &at2)?
+        },
+        authority: match value.member("authority") {
+            None | Some(json::Value::Null) => None,
+            Some(member3) => {
+                let at3 = json::nested(at, "authority");
+                Some(decode_inbox_messaging_delegation_id(member3, &at3)?)
+            }
+        },
+        created: {
+            let at4 = json::nested(at, "created");
+            let member4 = json::member_at(value, at, "created")?;
+            crate::primitives::Timestamp(json::timestamp_at(member4, &at4, "an RFC 3339 instant")?.to_owned())
+        },
+        option: match value.member("option") {
+            None | Some(json::Value::Null) => None,
+            Some(member5) => {
+                let at5 = json::nested(at, "option");
+                Some(decode_inbox_messaging_option_letter(member5, &at5)?)
+            }
+        },
+        body: {
+            let at6 = json::nested(at, "body");
+            let member6 = json::member_at(value, at, "body")?;
+            json::text_at(member6, &at6, "a string")?.to_owned()
+        },
+        signature: {
+            let at7 = json::nested(at, "signature");
+            let member7 = json::member_at(value, at, "signature")?;
+            decode_inbox_messaging_signature(member7, &at7)?
+        },
+    })
 }
 
 /// Writes `inbox.messaging.DecisionAsk` as JSON.
@@ -2093,6 +2174,68 @@ pub fn decode_command_inbox_messaging_collect(value: &json::Value, at: &str) -> 
     })
 }
 
+/// Writes the response of `inbox.messaging.Collect` as JSON.
+pub fn encode_response_inbox_messaging_collect(value: &crate::messaging::CollectResponse, out: &mut String) {
+    out.push('{');
+    json::member(out, "message_id");
+    encode_inbox_messaging_message_id(&value.message_id, out);
+    json::member(out, "from");
+    encode_inbox_messaging_principal(&value.from, out);
+    json::member(out, "on_behalf_of");
+    encode_inbox_messaging_principal(&value.on_behalf_of, out);
+    if let Some(held0) = &value.authority {
+        json::member(out, "authority");
+        encode_inbox_messaging_delegation_id(&*held0, out);
+    }
+    json::member(out, "to");
+    encode_inbox_messaging_address(&value.to, out);
+    json::member(out, "kind");
+    encode_inbox_messaging_kind(&value.kind, out);
+    json::member(out, "thread");
+    encode_inbox_messaging_thread_id(&value.thread, out);
+    if let Some(held0) = &value.reply_shape {
+        json::member(out, "reply_shape");
+        encode_inbox_messaging_reply_shape(&*held0, out);
+    }
+    if let Some(held0) = &value.decision {
+        json::member(out, "decision");
+        encode_inbox_messaging_decision_ask(&*held0, out);
+    }
+    if let Some(held0) = &value.default_on_silence {
+        json::member(out, "default_on_silence");
+        encode_inbox_messaging_option_letter(&*held0, out);
+    }
+    json::member(out, "created");
+    json::push_text(out, &value.created.0);
+    json::member(out, "expires");
+    json::push_text(out, &value.expires.0);
+    json::member(out, "dedup_key");
+    encode_inbox_messaging_dedup_key(&value.dedup_key, out);
+    json::member(out, "body");
+    json::push_text(out, &value.body);
+    json::member(out, "signature");
+    encode_inbox_messaging_signature(&value.signature, out);
+    if let Some(held0) = &value.answered_by {
+        json::member(out, "answered_by");
+        encode_inbox_messaging_answered_by(&*held0, out);
+    }
+    if let Some(held0) = &value.decided_option {
+        json::member(out, "decided_option");
+        encode_inbox_messaging_option_letter(&*held0, out);
+    }
+    if let Some(held0) = &value.reply {
+        json::member(out, "reply");
+        encode_inbox_messaging_collected_reply(&*held0, out);
+    }
+    if let Some(held0) = &value.refusal {
+        json::member(out, "refusal");
+        json::push_text(out, &*held0);
+    }
+    json::member(out, "state");
+    encode_inbox_messaging_message_state(&value.state, out);
+    out.push('}');
+}
+
 /// Writes the outcome of `inbox.messaging.Collect` as JSON: the branch taken, what it published, and the declared
 /// refusal it carries where it carries one.
 pub fn encode_outcome_inbox_messaging_collect(value: &crate::messaging::CollectOutcome, out: &mut String) {
@@ -2140,7 +2283,7 @@ pub fn encode_outcome_inbox_messaging_collect(value: &crate::messaging::CollectO
             encode_error_inbox_messaging_not_sender(error, out);
             out.push('}');
         }
-        crate::messaging::CollectOutcome::Collected { message_handled } => {
+        crate::messaging::CollectOutcome::Collected { message_handled, .. } => {
             json::member(out, "outcome");
             json::push_text(out, "collected");
             json::member(out, "published");

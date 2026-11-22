@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/inbox.messaging.CollectedReply",
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:4df2b0a6d3e9ff9ba1bb302bbc9c0eaa708daf1cd70bd8428b41888ad71423a7",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.CollectedReply": {
+      "title": "CollectedReply",
+      "description": "The reply envelope as `Collect` hands it to the sender: the fields of `Reply`, its body as plain text.",
+      "x-ess-name": "inbox.messaging.CollectedReply",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "reply_id": {
+          "$ref": "#/$defs/inbox.messaging.MessageId"
+        },
+        "from": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "on_behalf_of": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "authority": {
+          "$ref": "#/$defs/inbox.messaging.DelegationId"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "option": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "body": {
+          "type": "string"
+        },
+        "signature": {
+          "$ref": "#/$defs/inbox.messaging.Signature"
+        }
+      },
+      "required": [
+        "reply_id",
+        "from",
+        "on_behalf_of",
+        "created",
+        "body",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DelegationId": {
+      "title": "DelegationId",
+      "description": "The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.",
+      "x-ess-name": "inbox.messaging.DelegationId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    },
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.Signature": {
+      "title": "Signature",
+      "description": "The key id and the Ed25519 signature over the canonical JSON of every other envelope field.",
+      "x-ess-name": "inbox.messaging.Signature",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

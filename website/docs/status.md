@@ -46,6 +46,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | An HTTP API: one `POST` per command, one `GET` per view | [HTTP API](reference/http-api.mdx) |
 | Every answer lists the events its command emitted | [events](reference/events.mdx) |
 | Every command prints text, or one JSON document | `--json` |
+| Text another principal wrote reaches your terminal with each control character shown as an escape | [first use](first-use.md#what-the-commands-print) |
 | Exit statuses 0 to 4 tell a refusal from wrong usage, an unreachable service and a file error | [first use](first-use.md#exit-statuses) |
 
 ## The service's defaults

@@ -75,6 +75,7 @@ impl Target for Echo {
             answer: Answer::Outcome {
                 outcome: command.expected.unwrap_or("posted").to_owned(),
                 error: None,
+                response: None,
             },
             events: Vec::new(),
         }
@@ -90,6 +91,7 @@ fn outcome(outcome: &str, error: Option<&str>, events: &[(&str, &str)]) -> Execu
         answer: Answer::Outcome {
             outcome: outcome.to_owned(),
             error: error.map(str::to_owned),
+            response: None,
         },
         events: events
             .iter()
@@ -1577,9 +1579,236 @@ fn the_core_target_answers_unknown_option_from_the_envelope_with_no_branch_force
             Answer::Outcome {
                 outcome: "unknown-option".to_owned(),
                 error: Some("inbox.messaging.ShapeMismatch".to_owned()),
+                response: None,
             },
             "{case}"
         );
         assert!(posted.events.is_empty(), "{case}: {:?}", posted.events);
+    }
+}
+
+const COLLECT: &str = r#"{"step": "execute_command", "command": "inbox.messaging.Collect",
+    "actor": "inbox.messaging.Client", "caller": {"inbox": "agent:ws/planner", "principal": "agent:ws/planner"},
+    "input": {"message_id": {"kind": "literal", "value": "01JGT0DK000000000000000001"}}}"#;
+
+/// The `expect_direct_response` step of `Collect` as ESS 0.97.3 writes it, cut down to the
+/// fields, the declarations and the constraints a check needs, with these `expected` members.
+fn collect_response(constraints: &str, expected: &str) -> String {
+    format!(
+        r#"{{"step": "expect_direct_response", "response": {{
+            "command": "inbox.messaging.Collect",
+            "outcome": {{"command": "inbox.messaging.Collect", "outcome": "collected"}},
+            "fields": [{{"name": "message_id", "type": "inbox.messaging.MessageId"}},
+              {{"name": "state", "type": "inbox.messaging.Message.State"}},
+              {{"name": "reply", "type": "Optional<inbox.messaging.CollectedReply>"}},
+              {{"name": "refusal", "type": "Optional<String>"}}],
+            "declarations": {{
+              "inbox.messaging.MessageId": {{"kind": "newtype", "of": "String"}},
+              "inbox.messaging.Message.State": {{"kind": "enum", "variants": ["Answered", "Refused", "Sent"]}},
+              "inbox.messaging.CollectedReply": {{"kind": "struct", "fields": [
+                {{"name": "reply_id", "type": "inbox.messaging.MessageId"}},
+                {{"name": "body", "type": "String"}}]}}}},
+            "constraints": {constraints},
+            "expected": {expected}}}}}"#
+    )
+}
+
+const ULID: &str = r#"{"inbox.messaging.MessageId": {"alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ",
+    "invariants": ["value.count == 26"], "prefix": null}}"#;
+
+fn collected(response: &str) -> Executed {
+    Executed {
+        answer: Answer::Outcome {
+            outcome: "collected".to_owned(),
+            error: None,
+            response: Some(parse(response)),
+        },
+        events: Vec::new(),
+    }
+}
+
+fn run_collect(check: &str, answer: Executed) -> (Status, Option<String>) {
+    let read = scenario(&format!("[{COLLECT}, {check}]"), "");
+    assert_eq!(read.unsupported(), None);
+    let mut target = Scripted {
+        answers: vec![answer],
+        ..Scripted::default()
+    };
+    let result = run_scenario(&read, &mut target);
+    (result.status, result.message)
+}
+
+const ANSWERED: &str = r#"{"message_id": "01JGT0DK000000000000000001", "state": "Answered",
+    "reply": {"reply_id": "01JGT0DK000000000000000002", "body": "Blue"}}"#;
+
+#[test]
+fn a_response_of_the_declared_shape_and_literals_passes() {
+    let check = collect_response(
+        ULID,
+        r#"{"state": "Answered", "reply.body": "Blue", "message_id": "01JGT0DK000000000000000001"}"#,
+    );
+    let (status, message) = run_collect(&check, collected(ANSWERED));
+    assert_eq!(status, Status::Passed, "{message:?}");
+    let refused =
+        r#"{"message_id": "01JGT0DK000000000000000001", "state": "Refused", "refusal": "no"}"#;
+    let (status, message) = run_collect(&collect_response(ULID, "{}"), collected(refused));
+    assert_eq!(status, Status::Passed, "{message:?}");
+}
+
+#[test]
+fn a_missing_response_fails() {
+    let (status, message) = run_collect(
+        &collect_response(ULID, "{}"),
+        outcome("collected", None, &[]),
+    );
+    assert_eq!(status, Status::Failed);
+    assert_eq!(
+        message.as_deref(),
+        Some(
+            "step 1: the response of `inbox.messaging.Collect` is missing: the answer carries no `response`"
+        )
+    );
+    let (status, message) = run_collect(
+        &collect_response(ULID, "{}"),
+        outcome("not-settled", Some("inbox.messaging.NotSettled"), &[]),
+    );
+    assert_eq!(status, Status::Failed);
+    assert!(
+        message
+            .as_deref()
+            .is_some_and(|text| text.contains("should answer `collected` with its response")),
+        "{message:?}"
+    );
+}
+
+#[test]
+fn a_response_off_its_declared_shape_fails() {
+    for (response, needle) in [
+        (
+            r#"{"message_id": "01JGT0DK000000000000000001", "state": "Answered", "row": 1}"#,
+            "carries `row`, which the response does not declare",
+        ),
+        (
+            r#"{"message_id": "01JGT0DK000000000000000001", "state": "Gone"}"#,
+            "`state`",
+        ),
+        (
+            r#"{"message_id": "01JGT0DK000000000000000001", "state": "Answered", "reply": {"body": "Blue"}}"#,
+            "`reply`",
+        ),
+        (r#"{"state": "Answered"}"#, "`message_id`"),
+        (
+            r#"{"message_id": "01JGT0DK00000000000000001", "state": "Answered"}"#,
+            "`value.count == 26` of `inbox.messaging.MessageId` does not hold",
+        ),
+        (
+            r#"{"message_id": "01JGT0DK000000000000000001", "state": "Answered",
+                "reply": {"reply_id": "01JGT0DK00000000000000000I", "body": "Blue"}}"#,
+            "`reply`",
+        ),
+    ] {
+        let (status, message) = run_collect(&collect_response(ULID, "{}"), collected(response));
+        assert_eq!(status, Status::Failed, "{response}: {message:?}");
+        let message = message.expect("a failure says why");
+        assert!(
+            message.starts_with("step 1: the response of `inbox.messaging.Collect` ")
+                && message.contains(needle),
+            "{response}: {message}"
+        );
+    }
+}
+
+#[test]
+fn a_response_that_differs_from_an_expected_literal_fails() {
+    let check = collect_response(ULID, r#"{"reply.body": "Red"}"#);
+    let (status, message) = run_collect(&check, collected(ANSWERED));
+    assert_eq!(status, Status::Failed);
+    assert_eq!(
+        message.as_deref(),
+        Some(
+            r#"step 1: the response of `inbox.messaging.Collect` should hold "Red" at `reply.body`; it holds "Blue""#
+        )
+    );
+    let check = collect_response(ULID, r#"{"refusal": "no"}"#);
+    let (status, message) = run_collect(&check, collected(ANSWERED));
+    assert_eq!(status, Status::Failed);
+    assert!(
+        message
+            .as_deref()
+            .is_some_and(|text| text.ends_with("at `refusal`; it holds nothing")),
+        "{message:?}"
+    );
+}
+
+#[test]
+fn a_response_constraint_the_runner_cannot_decide_leaves_the_scenario_unsupported() {
+    for constraints in [
+        r#"{"inbox.messaging.MessageId": {"alphabet": null, "invariants": ["value.utf8_bytes <= 26"], "prefix": null}}"#,
+        r#"{"inbox.messaging.Message.State": {"alphabet": null, "invariants": [], "prefix": null}}"#,
+        r#"{"inbox.messaging.MessageId": {"alphabet": null, "invariants": [], "prefix": null, "pattern": "x"}}"#,
+    ] {
+        let read = scenario(
+            &format!("[{COLLECT}, {}]", collect_response(constraints, "{}")),
+            "",
+        );
+        let reason = read.unsupported().map(str::to_owned);
+        assert!(reason.is_some(), "{constraints}");
+        let mut target = Scripted::default();
+        let result = run_scenario(&read, &mut target);
+        assert_eq!(result.status, Status::Unsupported, "{constraints}");
+        assert_eq!(result.message, reason);
+        assert!(target.sent.is_empty());
+    }
+}
+
+/// A union in a response, as ESS 0.97.3 declares `ReplyShape`: the tag names a variant and
+/// `value` holds a payload of that variant's type, and nothing else is in it.
+#[test]
+fn a_union_in_a_response_is_held_to_its_variants() {
+    let check = r#"{"step": "expect_direct_response", "response": {
+        "command": "inbox.messaging.Collect",
+        "outcome": {"command": "inbox.messaging.Collect", "outcome": "collected"},
+        "fields": [{"name": "reply_shape", "type": "Optional<inbox.messaging.ReplyShape>"}],
+        "declarations": {
+          "inbox.messaging.ReplyShape": {"kind": "union", "tag": "shape",
+            "variants": {"free": "inbox.messaging.FreeShape", "lines": "Integer", "schema": "String"}},
+          "inbox.messaging.FreeShape": {"kind": "struct", "fields": []}},
+        "constraints": {}, "expected": {}}}"#;
+    for (response, passes) in [
+        (r#"{"reply_shape": {"shape": "lines", "value": 2}}"#, true),
+        (r#"{"reply_shape": {"shape": "free", "value": {}}}"#, true),
+        (
+            r#"{"reply_shape": {"shape": "schema", "value": "{}"}}"#,
+            true,
+        ),
+        (r#"{}"#, true),
+        (
+            r#"{"reply_shape": {"shape": "lines", "value": "2"}}"#,
+            false,
+        ),
+        (r#"{"reply_shape": {"shape": "words", "value": 2}}"#, false),
+        (r#"{"reply_shape": {"value": 2}}"#, false),
+        (r#"{"reply_shape": {"shape": "lines"}}"#, false),
+        (
+            r#"{"reply_shape": {"shape": "lines", "value": 2, "max": 3}}"#,
+            false,
+        ),
+        (r#"{"reply_shape": "lines"}"#, false),
+    ] {
+        let (status, message) = run_collect(check, collected(response));
+        let expected = if passes {
+            Status::Passed
+        } else {
+            Status::Failed
+        };
+        assert_eq!(status, expected, "{response}: {message:?}");
+        if !passes {
+            assert!(
+                message
+                    .as_deref()
+                    .is_some_and(|text| text.contains("`reply_shape`")),
+                "{response}: {message:?}"
+            );
+        }
     }
 }

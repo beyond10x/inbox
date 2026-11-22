@@ -67,6 +67,21 @@ leaves alone an envelope the current start of the service already took
 
 A message the service still holds is answered `duplicate` and changes nothing.
 
+## A collect whose answer is lost loses the answer
+
+`inbox collect` takes the answer or the refusal of a message off the service: the service
+removes the message and, in the same request, answers with what it held: the message as
+`inbox outbox` shows it, with its state, who answered, the decided option, the reply and the
+refusal reason. `collect` prints that and only then drops the envelope from the outbox file. When the answer does not reach the client, for
+example because the connection breaks after the service removed the message, the reply or the
+refusal is gone:
+
+- a second `inbox collect` of that message answers `unknown-message`;
+- the envelope stays in the outbox file until it expires. `inbox repost` leaves it alone until
+  the service is restarted and then posts it again, so its recipient gets it once more.
+
+The service keeps no receipt of a collected message.
+
 ## The generated API documents
 
 The input `from` of `PostMessage` carries the example value `principal-262144` in the OpenAPI

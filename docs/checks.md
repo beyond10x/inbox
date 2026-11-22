@@ -12,18 +12,18 @@ Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cas
 | Part | What it does | Number | Proof |
 |---|---|---|---|
 | The specification | The domain `inbox.messaging`: inboxes, messages, their lifecycle, every refusal | 2 entities, 9 commands, 9 views, 10 events, 15 errors, 2 actors; 42 authored scenarios | [`ess/`](../ess), `task spec` |
-| The generated crate | Model types, command behaviours, view queries, storage and context ports, route table and JSON codecs, written by ESS from `ess/` | 87 of 89 capabilities generated; 2 obligations left to hand-written code (`PostMessage`, `Expire`) | [`generated/rust/inbox/`](../generated/rust/inbox), `task drift` |
-| The core | The 2 obligations over a backend; one command at a time per store | 151 cases | [`crates/inbox-core/`](../crates/inbox-core) |
-| The in-memory backend | Both storage ports in memory; part of the core crate (`MemoryBackend`) | in the 151 cases above, and in the test kit's | [`crates/inbox-core/`](../crates/inbox-core) |
+| The generated crate | Model types, command behaviours, view queries, storage and context ports, route table and JSON codecs, written by ESS from `ess/` | 87 of 90 capabilities generated; 3 obligations left to hand-written code (`PostMessage`, `Collect`, `Expire`) | [`generated/rust/inbox/`](../generated/rust/inbox), `task drift` |
+| The core | The 3 obligations over a backend; one command at a time per store | 164 cases | [`crates/inbox-core/`](../crates/inbox-core) |
+| The in-memory backend | Both storage ports in memory; part of the core crate (`MemoryBackend`) | in the 164 cases above, and in the test kit's | [`crates/inbox-core/`](../crates/inbox-core) |
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
 | The HTTP listener | A library: request signatures, the read rule, the wait on `Pending`, the expiry task, the limits; loopback only | 74 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 87 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 112 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
 | The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 117 scenarios: 32 passed, 0 failed, 0 error, 85 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](../crates/inbox-conformance/unsupported.tsv), `task conform` |
 | Acceptance | 3 checks against the built binary: a signed request and its reply between 2 keys; a read note and an expired request in no view; a repost after a restart, and a second repost that posts nothing | 3 passed | [`tests/acceptance/`](../tests/acceptance), `task acceptance` |
-| The conformance runner | Reads the suite, runs it against both targets, holds each report | 79 cases, 1 ignored | [`crates/inbox-conformance/`](../crates/inbox-conformance) |
+| The conformance runner | Reads the suite, runs it against both targets, holds each report | 86 cases, 1 ignored | [`crates/inbox-conformance/`](../crates/inbox-conformance) |
 | Declared coverage | Every refusal of the specification is claimed by an authored scenario; `task check` fails on one that is not | 96 refused generated scenarios, 96 covered; the suite reports `conformance_status: passed` on the interpreted target | `task coverage` |
 | Repository tasks | The drift check of the generated crate, the scenario checks, the animation writer, the words of the end-user pages, the path decision of the CI job and the test step. The cases of the drift check read one synthesis of `ess/` per run of `task test`; the 2 that change `ess/` run their own | 79 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
 
@@ -73,10 +73,22 @@ The limits are stated on the limits page of the site. Their stories are in
   filed. Source: `docs/design/service.md`, "The request signature".
 - `inbox repost` delivers a note once more that was read before a restart:
   `story:repost-does-not-redeliver-a-handled-note`.
+- A `collect` whose answer is lost after the service removed the message loses the record; a
+  second `collect` answers `unknown-message`, and the envelope stays in the outbox file until it
+  expires (`inbox repost` posts it again after a restart). No story is filed: keeping a receipt
+  of a collected message until its `expires` changes when a message is removed, a decision of
+  its own (the "Not in this story" of `story:collect-returns-the-settled-record`).
+- The values of `Collect`'s response are not in the suite: ESS 0.97.3 (as 0.97.1) has no source
+  for a response field, and a value written in an authored scenario failed on the ESS 0.97.1
+  interpreted target (`docs/design/inbox.md`, "What the specification cannot say"). The suite
+  checks the shape on each `collected` step, so a record with a wrong value passes it; the cases
+  named below hold the values.
 - Loopback only, no TLS, no second host, no wake-up: `epic:two-hosts-and-wake`.
 - One backend, in memory: `epic:jetstream-backend`.
 
 ## Security findings, closed after release 0.2.0
+
+Not released yet.
 
 - **A message whose `expires` had passed still took an answer or a refusal until the next
   sweep** (`story:a-due-message-takes-no-answer`). `answer` and `refuse` of a message in
@@ -97,6 +109,54 @@ The limits are stated on the limits page of the site. Their stories are in
   find the same stored message; they run in `task check`. The authored scenario
   `a-second-expired-reply-to-an-answered-request-is-already-settled` holds the order of
   `already-settled` before the reply's own deadline over HTTP.
+- **A collect deleted a reply the sender never saw** (finding 3 of the source review of
+  release 0.2.0, `story:collect-returns-the-settled-record`). `Collect` answers `collected` with
+  the settled record it removes (a typed `response`, read by `inbox-core` from the row in the
+  request that deletes it), and `inbox collect` prints that record and drops its outbox line
+  only after it holds the answer; it reads no row before. Before, `inbox collect` read `Outbox`,
+  then sent `Collect`, printed the row it had read and dropped the line: a reply or a refusal
+  that arrived between the two requests was deleted unseen. The cases of
+  `crates/inbox-core/tests/collect_record.rs` (the record of an answered, a refused and a
+  silence-decided message; every member of the record against the `Outbox` row read just
+  before; `not-settled`, a third principal and the recipient get none, the latter two also on a
+  message that is not settled) and `crates/inbox-cli/tests/collect_record.rs` (a stand-in
+  service that answers the read with the pending row and the `Collect` with the answered record;
+  a `collect` before the answer keeps the outbox line; a third principal gets `unknown-message`)
+  run in `task check`, with the adversary's cases (`adversary_collect_record.rs` and
+  `adversary_collect_record_2.rs` of the core, the binary and the runner: the reply verifies
+  from the record alone, `--json` keeps the members 0.2.0 printed under `message`, an answer
+  without the record of the message or outside the declared record of `Collect` exits 3 and
+  keeps the line, every mix of caller attributes gets the outcome the guards order, the record
+  is the `Outbox` row for every settlement). The text line of a decision taken on silence has
+  its case. The conformance runner checks the response's shape on each `collected` step of the
+  suite (`expect_direct_response`, which a member stated twice fails; 6 cases in
+  `crates/inbox-conformance/tests/runner.rs`). The part that stays: an answer lost after the
+  delete loses the record (above, "Open limits and their stories").
+- **The client printed the control sequences of another principal** (found by the second
+  adversary pass on `story:collect-returns-the-settled-record`, finding 1; in release 0.2.0,
+  not among the findings of its source review;
+  `story:the-client-prints-no-control-sequence-of-another-principal`). Every write of the
+  client to standard output and standard error goes through `crates/inbox-cli/src/output.rs`:
+  text shows each control character but the line end (C0 with the tab and a carriage return
+  before a line end, DEL, C1) as its escape `\u{1b}`, and a JSON document has DEL and C1 as
+  `\u` escapes (the generated writer escapes C0 only). Before, `collect`, `pending`, `wait`,
+  `outbox`, `thread` and `replies` printed a body, a reply, a refusal reason or an option as
+  another principal wrote it, so an erase of the screen, an OSC window title, a carriage
+  return or a C1 control sequence introducer reached the terminal of whoever ran them, and a
+  line on standard error did the same with the service's `refused` text. The 6 cases of
+  `crates/inbox-cli/tests/control_sequences.rs` (the adversary's case for `collect` of an
+  answered and a refused message; `pending` with a body and an option; `outbox` and `thread`
+  of both principals; a `refused` text and a 302 body on standard error; `--json` of `outbox`
+  and `collect` with no raw control character and the values as sent; a body without control
+  characters printed byte for byte as before) and 3 unit cases of `output.rs` (the escape, a
+  document read back to the same value, and no other file of `src/` that writes to standard
+  output or standard error) run in `task check`, and so do the 7 cases of the adversary pass
+  (`crates/inbox-cli/tests/adversary_control_sequences.rs`). With the escape taken out of the text
+  printer the cases of `collect`, `pending`, `outbox` and `thread` fail; out of the line on
+  standard error, its case; out of the JSON printer, the `--json` case; with a carriage return
+  before a line end dropped again, the `outbox` case. The stored message, the signature check
+  and the service are unchanged. The part that stays: a line end in such a value is printed
+  as a line end, so a value can still start a line that looks like one of the client's own.
 
 ## Security findings, closed in release 0.2.0
 
@@ -196,3 +256,8 @@ without them.
     `task coverage` fails. Until it is fixed the inputs `decision` and `default_on_silence` of
     `PostMessage` carry an example each. On ESS 0.97.1 they made synthesis take about 4 times
     as long as before the guard; on ESS 0.97.3 synthesis takes as long with them as without.
+  - Not filed: on a type a command's response reaches, the invariant `value.utf8_bytes <= 65536`
+    of `Body` refuses every authored scenario that runs the returning outcome (`ESS-AUTHOR-001`,
+    "does not decide over its value alone", on ESS 0.97.1 and 0.97.3), where `value.count` is
+    admitted. `Collect`'s response carries the bodies as `String` (`CollectedReply` for the
+    reply) until it is fixed.

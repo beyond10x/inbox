@@ -26,7 +26,7 @@
 //! targets, each with its own list of the scenarios it leaves unsupported:
 //!
 //! - [`CoreTarget`], the implementation `inbox-core`, list `unsupported-core.tsv` (empty): the
-//!   generated `handle` over the 2 obligations of `inbox-core` and its `MemoryBackend`, with a
+//!   generated `handle` over the 3 obligations of `inbox-core` and its `MemoryBackend`, with a
 //!   [`StepContext`] that carries the step's caller and answers each of the 5 `external:`
 //!   branches as the step's expected outcome says;
 //! - [`WireTarget`], the implementation `inbox-serve`, list `unsupported.tsv`: a running `inbox

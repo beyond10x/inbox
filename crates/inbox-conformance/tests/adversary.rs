@@ -73,6 +73,7 @@ fn outcome(name: &str, error: Option<&str>, events: &[(&str, &str)]) -> Executed
         Answer::Outcome {
             outcome: name.to_owned(),
             error: error.map(str::to_owned),
+            response: None,
         },
         events,
     )

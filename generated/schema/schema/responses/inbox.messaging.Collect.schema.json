@@ -1,0 +1,378 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Collect response",
+  "description": "The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its `Outbox` row, among them the envelope, its state, who answered, the decided option, the reply with the `expires` its signature covers, and the refusal.",
+  "x-ess-name": "inbox.messaging.Collect",
+  "x-ess-kind": "command-response",
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "$ref": "#/$defs/inbox.messaging.MessageId"
+    },
+    "from": {
+      "$ref": "#/$defs/inbox.messaging.Principal"
+    },
+    "on_behalf_of": {
+      "$ref": "#/$defs/inbox.messaging.Principal"
+    },
+    "authority": {
+      "$ref": "#/$defs/inbox.messaging.DelegationId"
+    },
+    "to": {
+      "$ref": "#/$defs/inbox.messaging.Address"
+    },
+    "kind": {
+      "$ref": "#/$defs/inbox.messaging.Kind"
+    },
+    "thread": {
+      "$ref": "#/$defs/inbox.messaging.ThreadId"
+    },
+    "reply_shape": {
+      "$ref": "#/$defs/inbox.messaging.ReplyShape"
+    },
+    "decision": {
+      "$ref": "#/$defs/inbox.messaging.DecisionAsk"
+    },
+    "default_on_silence": {
+      "$ref": "#/$defs/inbox.messaging.OptionLetter"
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dedup_key": {
+      "$ref": "#/$defs/inbox.messaging.DedupKey"
+    },
+    "body": {
+      "type": "string"
+    },
+    "signature": {
+      "$ref": "#/$defs/inbox.messaging.Signature"
+    },
+    "answered_by": {
+      "$ref": "#/$defs/inbox.messaging.AnsweredBy"
+    },
+    "decided_option": {
+      "$ref": "#/$defs/inbox.messaging.OptionLetter"
+    },
+    "reply": {
+      "$ref": "#/$defs/inbox.messaging.CollectedReply"
+    },
+    "refusal": {
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/inbox.messaging.Message.State"
+    }
+  },
+  "required": [
+    "message_id",
+    "from",
+    "on_behalf_of",
+    "to",
+    "kind",
+    "thread",
+    "created",
+    "expires",
+    "dedup_key",
+    "body",
+    "signature",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:369d51b22590f4b3f57a7e0800b49c14998eafc0609c53fd8c575ef24c0fe962",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "inbox.messaging.Address": {
+      "title": "Address",
+      "description": "The address of an inbox: `agent:<host>/<session-name>` or `human:<name>`. `group:<name>` is reserved; version 1 opens no group inbox, and a sender that addresses several inboxes posts one envelope to each under one `thread`.",
+      "x-ess-name": "inbox.messaging.Address",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.AnsweredBy": {
+      "title": "AnsweredBy",
+      "description": "principal: the reply's `on_behalf_of` answered. silence: nobody answered before `expires`, and the service took the decision's `default_on_silence` (the convention of `sdc.decision.PrincipalKind`).",
+      "x-ess-name": "inbox.messaging.AnsweredBy",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "principal",
+        "silence"
+      ]
+    },
+    "inbox.messaging.CollectedReply": {
+      "title": "CollectedReply",
+      "description": "The reply envelope as `Collect` hands it to the sender: the fields of `Reply`, its body as plain text.",
+      "x-ess-name": "inbox.messaging.CollectedReply",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "reply_id": {
+          "$ref": "#/$defs/inbox.messaging.MessageId"
+        },
+        "from": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "on_behalf_of": {
+          "$ref": "#/$defs/inbox.messaging.Principal"
+        },
+        "authority": {
+          "$ref": "#/$defs/inbox.messaging.DelegationId"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "option": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "body": {
+          "type": "string"
+        },
+        "signature": {
+          "$ref": "#/$defs/inbox.messaging.Signature"
+        }
+      },
+      "required": [
+        "reply_id",
+        "from",
+        "on_behalf_of",
+        "created",
+        "body",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DecisionAsk": {
+      "title": "DecisionAsk",
+      "description": "What a decision asks. The deadline is the envelope's `expires`; the option silence takes is the envelope's `default_on_silence`.",
+      "x-ess-name": "inbox.messaging.DecisionAsk",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/inbox.messaging.DecisionOption"
+          }
+        },
+        "recommended_option": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "request_ref": {
+          "description": "The id of the decision request this envelope carries, where another system records it (for example an `sdc.decision.DecisionRequest`). The inbox never records the decision.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "options"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DecisionOption": {
+      "title": "DecisionOption",
+      "x-ess-name": "inbox.messaging.DecisionOption",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "letter": {
+          "$ref": "#/$defs/inbox.messaging.OptionLetter"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "letter",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.DedupKey": {
+      "title": "DedupKey",
+      "description": "The sender's key for one logical message. A sender with no key of its own writes the message id.",
+      "x-ess-name": "inbox.messaging.DedupKey",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.DelegationId": {
+      "title": "DelegationId",
+      "description": "The id of a delegation that lets `from` speak for `on_behalf_of`. The SignatureVerifier port resolves it; the inbox stores no delegation.",
+      "x-ess-name": "inbox.messaging.DelegationId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.FreeShape": {
+      "title": "FreeShape",
+      "x-ess-name": "inbox.messaging.FreeShape",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "inbox.messaging.Kind": {
+      "title": "Kind",
+      "description": "note: handled when read. request: handled when answered or refused. decision: a request with lettered options, which silence may answer.",
+      "x-ess-name": "inbox.messaging.Kind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "note",
+        "request",
+        "decision"
+      ]
+    },
+    "inbox.messaging.Message.State": {
+      "title": "State",
+      "x-ess-name": "inbox.messaging.Message.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Answered",
+        "Delivered",
+        "Read",
+        "Refused",
+        "Sent"
+      ]
+    },
+    "inbox.messaging.MessageId": {
+      "title": "MessageId",
+      "description": "A ULID the sender sets. A sender that posts a message again sends the same id.",
+      "x-ess-name": "inbox.messaging.MessageId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    },
+    "inbox.messaging.OptionLetter": {
+      "title": "OptionLetter",
+      "x-ess-name": "inbox.messaging.OptionLetter",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[A-Z]*$",
+      "minLength": 1,
+      "maxLength": 1,
+      "x-ess-invariants": [
+        "value.count == 1"
+      ],
+      "x-ess-alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    },
+    "inbox.messaging.Principal": {
+      "title": "Principal",
+      "description": "Who sends, or whose word a message is: `agent:<host>/<session-name>` or `human:<name>`. The SignatureVerifier port decides which key speaks for which principal.",
+      "x-ess-name": "inbox.messaging.Principal",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "inbox.messaging.ReplyShape": {
+      "title": "ReplyShape",
+      "description": "What a reply to a request must look like. free: any text. lines: at most this many lines. schema: a reference to a JSON Schema the reply body must satisfy.",
+      "x-ess-name": "inbox.messaging.ReplyShape",
+      "x-ess-kind": "union",
+      "oneOf": [
+        {
+          "title": "free",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "free"
+            },
+            "value": {
+              "$ref": "#/$defs/inbox.messaging.FreeShape"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "lines",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "lines"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "schema",
+          "type": "object",
+          "properties": {
+            "shape": {
+              "type": "string",
+              "const": "schema"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "shape",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "x-ess-union-tag": "shape"
+    },
+    "inbox.messaging.Signature": {
+      "title": "Signature",
+      "description": "The key id and the Ed25519 signature over the canonical JSON of every other envelope field.",
+      "x-ess-name": "inbox.messaging.Signature",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "inbox.messaging.ThreadId": {
+      "title": "ThreadId",
+      "description": "The ULID that ties the envelopes of one fan-out together: a request sent to 11 inboxes is 11 messages with one thread. A message sent to one inbox carries its own id.",
+      "x-ess-name": "inbox.messaging.ThreadId",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]*$",
+      "minLength": 26,
+      "maxLength": 26,
+      "x-ess-invariants": [
+        "value.count == 26"
+      ],
+      "x-ess-alphabet": "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    }
+  }
+}

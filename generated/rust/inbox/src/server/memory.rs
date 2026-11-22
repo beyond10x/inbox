@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral stores for the generated network entry points; no durability.
@@ -24,9 +24,9 @@ fn list(&self) -> Vec<crate::messaging::InboxSnapshot> { crate::behaviour::Inbox
 #[derive(Clone, Default)]
 pub struct MemoryMessageStorage(std::rc::Rc<std::cell::RefCell<Vec<crate::messaging::MessageSnapshot>>>);
 impl crate::behaviour::MessageStorage for MemoryMessageStorage {
-fn get(&self, identity: &crate::messaging::MessageId) -> Option<crate::messaging::MessageSnapshot> { let key = memory_key_15(identity); self.0.borrow().iter().find(|row| memory_key_15(&row.data.message_id) == key).cloned() }
-fn put(&mut self, snapshot: crate::messaging::MessageSnapshot) { self.delete(&snapshot.data.message_id); let mut rows = self.0.borrow_mut(); rows.push(snapshot); rows.sort_by(|row, other| memory_key_15(&row.data.message_id).cmp(&memory_key_15(&other.data.message_id))); }
-fn delete(&mut self, identity: &crate::messaging::MessageId) { let key = memory_key_15(identity); self.0.borrow_mut().retain(|row| memory_key_15(&row.data.message_id) != key); }
+fn get(&self, identity: &crate::messaging::MessageId) -> Option<crate::messaging::MessageSnapshot> { let key = memory_key_16(identity); self.0.borrow().iter().find(|row| memory_key_16(&row.data.message_id) == key).cloned() }
+fn put(&mut self, snapshot: crate::messaging::MessageSnapshot) { self.delete(&snapshot.data.message_id); let mut rows = self.0.borrow_mut(); rows.push(snapshot); rows.sort_by(|row, other| memory_key_16(&row.data.message_id).cmp(&memory_key_16(&other.data.message_id))); }
+fn delete(&mut self, identity: &crate::messaging::MessageId) { let key = memory_key_16(identity); self.0.borrow_mut().retain(|row| memory_key_16(&row.data.message_id) != key); }
 fn list(&self) -> Vec<crate::messaging::MessageSnapshot> { self.0.borrow().clone() }
 }
 impl crate::behaviour::MessageStorage for MemoryPorts {
@@ -53,7 +53,7 @@ fn try_external(&mut self, _command: crate::behaviour::ExternalCommand<'_>, _out
 
 fn memory_key_1(value: &crate::messaging::Address) -> MemoryKey { let _ = value; MemoryKey::Text((&value.0).clone()) }
 
-fn memory_key_15(value: &crate::messaging::MessageId) -> MemoryKey { let _ = value; MemoryKey::Text((&value.0).clone()) }
+fn memory_key_16(value: &crate::messaging::MessageId) -> MemoryKey { let _ = value; MemoryKey::Text((&value.0).clone()) }
 
 // A common structural order; individual specifications use only a subset of the variants.
 #[allow(dead_code)]
@@ -70,6 +70,9 @@ enum MemoryKey {
     Optional(Option<Box<MemoryKey>>),
 }
 
+impl crate::messaging::obligations::CollectBehavior for MemoryPorts {
+fn collect(&mut self, input: crate::messaging::Collect) -> Result<crate::messaging::CollectOutcome, crate::obligation::UnmetObligation> { crate::messaging::obligations::CollectBehavior::collect(&mut crate::messaging::obligations::Unimplemented, input) }
+}
 impl crate::messaging::obligations::ExpireBehavior for MemoryPorts {
 fn expire(&mut self, input: crate::messaging::Expire) -> Result<crate::messaging::ExpireOutcome, crate::obligation::UnmetObligation> { crate::messaging::obligations::ExpireBehavior::expire(&mut crate::messaging::obligations::Unimplemented, input) }
 }

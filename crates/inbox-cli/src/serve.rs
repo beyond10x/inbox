@@ -1,7 +1,7 @@
 //! `inbox serve`: the service of `crates/inbox-server` over `inbox_core::MemoryBackend`, until
 //! SIGINT or SIGTERM.
 
-use std::io::{ErrorKind, Write};
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use crate::failure::Failure;
-use crate::output::warn;
+use crate::output::{print_document, print_text, warn};
 
 /// The backends `INBOX_BACKEND` may name in this stage.
 const BACKENDS: &[&str] = &["memory"];
@@ -112,21 +112,17 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
         .map_err(|error| Failure::Local(format!("the signal handlers: {error}")))?;
     let address = server.local_addr();
     let url = format!("http://{address}");
-    let line = if json {
+    if json {
         let mut out = String::from("{");
         json::member(&mut out, "address");
         json::push_text(&mut out, &address.to_string());
         json::member(&mut out, "url");
         json::push_text(&mut out, &url);
         out.push('}');
-        out
+        print_document(&out);
     } else {
-        url
-    };
-    let mut stdout = std::io::stdout().lock();
-    let _ = writeln!(stdout, "{line}");
-    let _ = stdout.flush();
-    drop(stdout);
+        print_text(&url);
+    }
     let stopper = server.stopper();
     let handle = signals.handle();
     // The signal thread stops the service first, then writes its line. It is never joined: the

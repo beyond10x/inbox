@@ -648,6 +648,7 @@ fn executed(route: &Route, status: u16, body: &Value) -> Executed {
             answer: Answer::Outcome {
                 outcome: outcome.clone(),
                 error,
+                response: body.member("response").cloned(),
             },
             events,
         };

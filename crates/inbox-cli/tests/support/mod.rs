@@ -497,6 +497,48 @@ pub fn stand_in_answers(
     stand_in_answers_within(answers, STAND_IN_WAIT)
 }
 
+/// A stand-in for the service on 127.0.0.1:0 that answers each `GET` with the status 200 and
+/// `get`, and the first request of another method with the status 200 and `post`, one request
+/// per connection; the thread ends after that answer and hands back the request line of each
+/// request it read. When no connection comes within 10 s the thread fails, so joining it fails.
+pub fn stand_in_by_method(
+    get: String,
+    post: String,
+) -> (String, std::thread::JoinHandle<Vec<String>>) {
+    use std::io::Write;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
+    let url = format!("http://{}", listener.local_addr().expect("an address"));
+    let handle = std::thread::spawn(move || {
+        let mut requests = Vec::new();
+        loop {
+            let Some(mut stream) = accept_within(&listener, STAND_IN_WAIT) else {
+                panic!(
+                    "the stand-in received no connection within {} s after {requests:?}",
+                    STAND_IN_WAIT.as_secs()
+                );
+            };
+            let received = read_request(&mut stream);
+            let line = String::from_utf8_lossy(&received)
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .to_owned();
+            let is_get = line.starts_with("GET ");
+            requests.push(line);
+            let body = if is_get { &get } else { &post };
+            let answer = format!(
+                "HTTP/1.1 200 Stand-in\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(answer.as_bytes());
+            if !is_get {
+                return requests;
+            }
+        }
+    });
+    (url, handle)
+}
+
 /// [`stand_in_answers`] with the wait for each connection given: the case that holds the bound
 /// passes 1 s, so it does not cost the gate the 10 s every other case allows.
 pub fn stand_in_answers_within(

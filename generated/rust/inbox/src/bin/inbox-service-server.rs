@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral generated server. Durable storage and production authentication remain ports.
@@ -18,6 +18,6 @@ static_root: Option<std::path::PathBuf>,
 fn main() -> std::process::ExitCode {
 let options = Options::parse();
 let _ = options;
-eprintln!("unmet startup obligations:\ncaller attribute: inbox\ncaller attribute: principal\ncommand behaviour: inbox.messaging.Expire\ncommand behaviour: inbox.messaging.PostMessage\nexternal branch answer: inbox.messaging.Answer/authority-invalid\nexternal branch answer: inbox.messaging.Answer/deadline-passed\nexternal branch answer: inbox.messaging.Answer/expired-on-arrival\nexternal branch answer: inbox.messaging.Answer/shape-mismatch\nexternal branch answer: inbox.messaging.Answer/signature-invalid\nexternal branch answer: inbox.messaging.Refuse/deadline-passed");
+eprintln!("unmet startup obligations:\ncaller attribute: inbox\ncaller attribute: principal\ncommand behaviour: inbox.messaging.Collect\ncommand behaviour: inbox.messaging.Expire\ncommand behaviour: inbox.messaging.PostMessage\nexternal branch answer: inbox.messaging.Answer/authority-invalid\nexternal branch answer: inbox.messaging.Answer/deadline-passed\nexternal branch answer: inbox.messaging.Answer/expired-on-arrival\nexternal branch answer: inbox.messaging.Answer/shape-mismatch\nexternal branch answer: inbox.messaging.Answer/signature-invalid\nexternal branch answer: inbox.messaging.Refuse/deadline-passed");
 std::process::ExitCode::FAILURE
 }

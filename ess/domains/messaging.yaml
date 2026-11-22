@@ -166,6 +166,24 @@ types:
       - {name: body, type: inbox.messaging.Body}
       - {name: signature, type: inbox.messaging.Signature}
 
+  # SYNTHESIS: `Reply` itself cannot be a field of a response on ESS 0.97.3 (as on 0.97.1): the
+  # invariant `value.utf8_bytes <= 65536` of its `body` (`Body`) on a type a response reaches
+  # refuses every authored scenario that runs `collected` (`ESS-AUTHOR-001` "does not decide over
+  # its value alone"); `value.count` is admitted there. This copy carries the body as plain text.
+  - name: inbox.messaging.CollectedReply
+    kind: struct
+    naming:
+      summary: "The reply envelope as `Collect` hands it to the sender: the fields of `Reply`, its body as plain text."
+    fields:
+      - {name: reply_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: created, type: Timestamp}
+      - {name: option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: body, type: String}
+      - {name: signature, type: inbox.messaging.Signature}
+
 entities:
   - name: inbox.messaging.Inbox
     naming:
@@ -767,9 +785,38 @@ commands:
   - name: inbox.messaging.Collect
     naming:
       wire: collect
-      summary: The sender takes the answer or the refusal of its message. The message is handled by that and is removed.
+      summary: "The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its `Outbox` row, among them the envelope, its state, who answered, the decided option, the reply with the `expires` its signature covers, and the refusal."
     input:
       - {name: message_id, type: inbox.messaging.MessageId}
+    # SYNTHESIS: ESS 0.97.3 (as 0.97.1) has no source for a response field (an outcome takes no
+    # `response:` key, and `{subject: <field>}` is a source of `sets:` and `payload:` only), so
+    # the values below cannot be tied to the deleted row here, and a typed response keeps the
+    # behaviour of this command an obligation. `inbox-core` answers each field from the row
+    # `collected` deletes, read in the same request; its cases and those of `inbox-cli` hold the
+    # values. The fields are those of the `Outbox` row, in its order; `body` is `String` and
+    # `reply` is `CollectedReply`, because `Body` on a type a response reaches is refused (see
+    # `CollectedReply`).
+    response:
+      - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: from, type: inbox.messaging.Principal}
+      - {name: on_behalf_of, type: inbox.messaging.Principal}
+      - {name: authority, type: Optional<inbox.messaging.DelegationId>}
+      - {name: to, type: inbox.messaging.Address}
+      - {name: kind, type: inbox.messaging.Kind}
+      - {name: thread, type: inbox.messaging.ThreadId}
+      - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: created, type: Timestamp}
+      - {name: expires, type: Timestamp}
+      - {name: dedup_key, type: inbox.messaging.DedupKey}
+      - {name: body, type: String}
+      - {name: signature, type: inbox.messaging.Signature}
+      - {name: answered_by, type: Optional<inbox.messaging.AnsweredBy>}
+      - {name: decided_option, type: Optional<inbox.messaging.OptionLetter>}
+      - {name: reply, type: Optional<inbox.messaging.CollectedReply>}
+      - {name: refusal, type: Optional<String>}
+      - {name: state, type: inbox.messaging.Message.State}
     outcomes:
       - {name: unknown-message, unknown_instance: true, error: inbox.messaging.UnknownMessage}
       - name: foreign-message
@@ -788,6 +835,7 @@ commands:
         when_subject_state: [Answered, Refused]
         deletes: inbox.messaging.Message
         instance: message_id
+        returns: true
         emits: [inbox.messaging.MessageHandled]
         payload:
           inbox.messaging.MessageHandled: {message_id: input.message_id}

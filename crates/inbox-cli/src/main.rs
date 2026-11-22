@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod client;
+mod collected;
 mod commands;
 mod failure;
 mod ids;
@@ -18,7 +19,6 @@ mod output;
 mod reference;
 mod serve;
 
-use std::io::Write;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -482,14 +482,6 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
     Ok(Some(done))
 }
 
-/// Writes one line to standard output. A failed write (a reader that is gone) is not a panic: the
-/// exit status still says what happened.
-fn print(line: &str) {
-    let mut stdout = std::io::stdout().lock();
-    let _ = writeln!(stdout, "{line}");
-    let _ = stdout.flush();
-}
-
 fn main() {
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
@@ -504,7 +496,7 @@ fn main() {
                 error.exit();
             }
             if std::env::args().any(|arg| arg == "--json") {
-                print(&Failure::Usage(error.kind().to_string()).document());
+                output::print_document(&Failure::Usage(error.kind().to_string()).document());
             }
             let _ = error.print();
             std::process::exit(USAGE);
@@ -512,13 +504,14 @@ fn main() {
     };
     let json = cli.json;
     match run(cli.command, json) {
-        Ok(Some(done)) => print(if json { &done.document } else { &done.text }),
+        Ok(Some(done)) if json => output::print_document(&done.document),
+        Ok(Some(done)) => output::print_text(&done.text),
         Ok(None) => {}
         Err(failure) => {
             if json {
-                print(&failure.document());
+                output::print_document(&failure.document());
             } else if let Some(text) = failure.text() {
-                print(text);
+                output::print_text(text);
             }
             output::warn(&format!("inbox: {}", failure.message()));
             std::process::exit(failure.status());

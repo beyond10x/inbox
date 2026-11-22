@@ -62,6 +62,13 @@ pub enum Body {
         /// The labels.
         variants: Vec<String>,
     },
+    /// A tagged union, written `{<tag>: <variant>, "value": <payload>}`: read in a response only.
+    Union {
+        /// The member that names the variant.
+        tag: String,
+        /// Each variant's label and the type of its payload.
+        variants: Vec<(String, TypeRef)>,
+    },
 }
 
 /// One step of the site inside the root value.
@@ -168,6 +175,9 @@ pub fn closure(starts: Vec<TypeRef>, types: &BTreeMap<String, Body>) -> Result<(
                         pending.extend(fields.iter().map(|(_, type_ref)| type_ref.clone()));
                     }
                     Some(Body::Enum { .. }) => {}
+                    Some(Body::Union { variants, .. }) => {
+                        pending.extend(variants.iter().map(|(_, type_ref)| type_ref.clone()));
+                    }
                 }
             }
         }
@@ -193,7 +203,7 @@ impl ValueInvariants {
         for (index, row) in rows.iter().enumerate() {
             let value = row.member(&self.root);
             let location = format!("row {index} `{}`", self.root);
-            if let Err(reason) = self.shape(&self.root_type, value, &location) {
+            if let Err(reason) = shape(&self.types, &self.root_type, value, &location) {
                 failures.push(reason);
                 continue;
             }
@@ -241,122 +251,223 @@ impl ValueInvariants {
         }
         Ok(())
     }
+}
 
-    /// The whole value against its declared representation.
-    fn shape(
-        &self,
-        type_ref: &TypeRef,
-        value: Option<&Value>,
-        location: &str,
-    ) -> Result<(), String> {
-        if let TypeRef::Optional(of) = type_ref {
-            return match value {
-                None | Some(Value::Null) => Ok(()),
-                Some(present) => self.shape(of, Some(present), location),
-            };
-        }
-        let Some(value) = value else {
-            return if self.represents_absence(type_ref) {
+/// The whole value against its declared representation.
+pub fn shape(
+    types: &BTreeMap<String, Body>,
+    type_ref: &TypeRef,
+    value: Option<&Value>,
+    location: &str,
+) -> Result<(), String> {
+    if let TypeRef::Optional(of) = type_ref {
+        return match value {
+            None | Some(Value::Null) => Ok(()),
+            Some(present) => shape(types, of, Some(present), location),
+        };
+    }
+    let Some(value) = value else {
+        return if represents_absence(types, type_ref) {
+            Ok(())
+        } else {
+            Err(format!("{location} is missing, and its type is required"))
+        };
+    };
+    match type_ref {
+        TypeRef::Optional(_) => unreachable!("handled above"),
+        TypeRef::Primitive(primitive) => {
+            if admits(*primitive, value) {
                 Ok(())
             } else {
-                Err(format!("{location} is missing, and its type is required"))
-            };
-        };
-        match type_ref {
-            TypeRef::Optional(_) => unreachable!("handled above"),
-            TypeRef::Primitive(primitive) => {
-                if admits(*primitive, value) {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "{location} holds {}, which is no {primitive:?}",
-                        render(value)
-                    ))
-                }
+                Err(format!(
+                    "{location} holds {}, which is no {primitive:?}",
+                    render(value)
+                ))
             }
-            TypeRef::List(of) => {
-                let Value::Array(items) = value else {
+        }
+        TypeRef::List(of) => {
+            let Value::Array(items) = value else {
+                return Err(format!(
+                    "{location} holds {}, which is no list",
+                    render(value)
+                ));
+            };
+            for (index, item) in items.iter().enumerate() {
+                shape(types, of, Some(item), &format!("{location}[{index}]"))?;
+            }
+            Ok(())
+        }
+        TypeRef::Named(name) => match &types[name] {
+            Body::Newtype {
+                of,
+                alphabet,
+                prefix,
+            } => {
+                shape(types, of, Some(value), location)?;
+                if let Value::Text(text) = value {
+                    if let Some(alphabet) = alphabet
+                        && let Some(outside) = text.chars().find(|c| !alphabet.contains(*c))
+                    {
+                        return Err(format!(
+                            "{location} holds {text:?}, whose {outside:?} is outside the alphabet of `{name}`"
+                        ));
+                    }
+                    if let Some(prefix) = prefix
+                        && !text.starts_with(prefix.as_str())
+                    {
+                        return Err(format!(
+                            "{location} holds {text:?}, which does not start with the prefix {prefix:?} of `{name}`"
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            Body::Struct { fields } => {
+                let Value::Object(members) = value else {
                     return Err(format!(
-                        "{location} holds {}, which is no list",
+                        "{location} holds {}, which is no `{name}`",
                         render(value)
                     ));
                 };
-                for (index, item) in items.iter().enumerate() {
-                    self.shape(of, Some(item), &format!("{location}[{index}]"))?;
+                if let Some((undeclared, _)) = members
+                    .iter()
+                    .find(|(key, _)| !fields.iter().any(|(field, _)| field == key))
+                {
+                    return Err(format!(
+                        "{location} carries `{undeclared}`, which `{name}` does not declare"
+                    ));
+                }
+                for (field, type_ref) in fields {
+                    shape(
+                        types,
+                        type_ref,
+                        value.member(field),
+                        &format!("{location}.{field}"),
+                    )?;
                 }
                 Ok(())
             }
-            TypeRef::Named(name) => match &self.types[name] {
-                Body::Newtype {
-                    of,
-                    alphabet,
-                    prefix,
-                } => {
-                    self.shape(of, Some(value), location)?;
-                    if let Value::Text(text) = value {
-                        if let Some(alphabet) = alphabet
-                            && let Some(outside) = text.chars().find(|c| !alphabet.contains(*c))
-                        {
-                            return Err(format!(
-                                "{location} holds {text:?}, whose {outside:?} is outside the alphabet of `{name}`"
-                            ));
-                        }
-                        if let Some(prefix) = prefix
-                            && !text.starts_with(prefix.as_str())
-                        {
-                            return Err(format!(
-                                "{location} holds {text:?}, which does not start with the prefix {prefix:?} of `{name}`"
-                            ));
-                        }
-                    }
-                    Ok(())
-                }
-                Body::Struct { fields } => {
-                    let Value::Object(members) = value else {
-                        return Err(format!(
-                            "{location} holds {}, which is no `{name}`",
-                            render(value)
-                        ));
-                    };
-                    if let Some((undeclared, _)) = members
-                        .iter()
-                        .find(|(key, _)| !fields.iter().any(|(field, _)| field == key))
-                    {
-                        return Err(format!(
-                            "{location} carries `{undeclared}`, which `{name}` does not declare"
-                        ));
-                    }
-                    for (field, type_ref) in fields {
-                        self.shape(
-                            type_ref,
-                            value.member(field),
-                            &format!("{location}.{field}"),
-                        )?;
-                    }
-                    Ok(())
-                }
-                Body::Enum { variants } => match value {
-                    Value::Text(label) if variants.contains(label) => Ok(()),
-                    other => Err(format!(
-                        "{location} holds {}, which is no label of `{name}`",
-                        render(other)
-                    )),
-                },
+            Body::Enum { variants } => match value {
+                Value::Text(label) if variants.contains(label) => Ok(()),
+                other => Err(format!(
+                    "{location} holds {}, which is no label of `{name}`",
+                    render(other)
+                )),
             },
-        }
+            Body::Union { tag, variants } => {
+                let (Value::Object(members), Some(payload)) =
+                    (value, union_payload(tag, variants, value))
+                else {
+                    return Err(format!(
+                        "{location} holds {}, which is no `{name}`",
+                        render(value)
+                    ));
+                };
+                if let Some((undeclared, _)) =
+                    members.iter().find(|(key, _)| key != tag && key != "value")
+                {
+                    return Err(format!(
+                        "{location} carries `{undeclared}`, which `{name}` does not declare"
+                    ));
+                }
+                shape(
+                    types,
+                    payload,
+                    value.member("value"),
+                    &format!("{location}.value"),
+                )
+            }
+        },
     }
+}
 
-    fn represents_absence(&self, type_ref: &TypeRef) -> bool {
-        match type_ref {
-            TypeRef::Optional(_) => true,
-            TypeRef::Named(name) => match &self.types[name] {
-                Body::Newtype { of, .. } => self.represents_absence(of),
-                _ => false,
-            },
+/// The payload type of the variant a union value names in its `tag` member.
+fn union_payload<'t>(
+    tag: &str,
+    variants: &'t [(String, TypeRef)],
+    value: &Value,
+) -> Option<&'t TypeRef> {
+    let Some(Value::Text(label)) = value.member(tag) else {
+        return None;
+    };
+    variants
+        .iter()
+        .find(|(variant, _)| variant == label)
+        .map(|(_, payload)| payload)
+}
+
+fn represents_absence(types: &BTreeMap<String, Body>, type_ref: &TypeRef) -> bool {
+    match type_ref {
+        TypeRef::Optional(_) => true,
+        TypeRef::Named(name) => match &types[name] {
+            Body::Newtype { of, .. } => represents_absence(types, of),
             _ => false,
-        }
+        },
+        _ => false,
     }
+}
 
+/// Every present value of a declared newtype inside `value`, with the newtype's name and where
+/// the value was met. `value` already satisfies `type_ref` ([`shape`]).
+pub fn occurrences<'v>(
+    types: &BTreeMap<String, Body>,
+    type_ref: &TypeRef,
+    value: Option<&'v Value>,
+    location: &str,
+    found: &mut Vec<(String, String, &'v Value)>,
+) {
+    let Some(value) = value.filter(|value| **value != Value::Null) else {
+        return;
+    };
+    match type_ref {
+        TypeRef::Primitive(_) => {}
+        TypeRef::Optional(of) => occurrences(types, of, Some(value), location, found),
+        TypeRef::List(of) => {
+            if let Value::Array(items) = value {
+                for (index, item) in items.iter().enumerate() {
+                    occurrences(
+                        types,
+                        of,
+                        Some(item),
+                        &format!("{location}[{index}]"),
+                        found,
+                    );
+                }
+            }
+        }
+        TypeRef::Named(name) => match &types[name] {
+            Body::Newtype { of, .. } => {
+                found.push((name.clone(), location.to_owned(), value));
+                occurrences(types, of, Some(value), location, found);
+            }
+            Body::Enum { .. } => {}
+            Body::Union { tag, variants } => {
+                if let Some(payload) = union_payload(tag, variants, value) {
+                    occurrences(
+                        types,
+                        payload,
+                        value.member("value"),
+                        &format!("{location}.value"),
+                        found,
+                    );
+                }
+            }
+            Body::Struct { fields } => {
+                for (field, type_ref) in fields {
+                    occurrences(
+                        types,
+                        type_ref,
+                        value.member(field),
+                        &format!("{location}.{field}"),
+                        found,
+                    );
+                }
+            }
+        },
+    }
+}
+
+impl ValueInvariants {
     /// Every value of the checked type at the site, with where it was met.
     fn visit<'v>(
         &self,
@@ -400,7 +511,7 @@ impl ValueInvariants {
                 }
             }
             TypeRef::Named(name) => match &self.types[name] {
-                Body::Newtype { .. } | Body::Enum { .. } => {}
+                Body::Newtype { .. } | Body::Enum { .. } | Body::Union { .. } => {}
                 Body::Struct { fields } => {
                     if let Value::Object(_) = value {
                         for (field, type_ref) in fields {

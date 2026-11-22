@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T16:44:54Z",
+  "actor": "agent:inbox",
+  "artifact": "story:collect-returns-the-settled-record",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

@@ -266,7 +266,7 @@
     {
       "actor": "sender",
       "command": "Collect",
-      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed. The message is removed. Found in Outbox, Replies, Settled, Thread. Collect can be refused with NotSettled: The message has no answer and no refusal to collect yet.",
+      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its Outbox row, among them the envelope, its state, who answered, the decided option, the reply with the expires its signature covers, and the refusal. The message is removed. Found in Outbox, Replies, Settled, Thread. Collect can be refused with NotSettled: The message has no answer and no refusal to collect yet.",
       "end": 0,
       "entity": "Message",
       "journey": 1,
@@ -395,7 +395,7 @@
     {
       "actor": "sender",
       "command": "Collect",
-      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed. The message is removed. Found in Outbox, Settled, Thread. Collect can be refused with NotSender: The caller did not send the message.",
+      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed, and the answer carries the settled record as the message held it when it was removed: the members of its Outbox row, among them the envelope, its state, who answered, the decided option, the reply with the expires its signature covers, and the refusal. The message is removed. Found in Outbox, Settled, Thread. Collect can be refused with NotSender: The caller did not send the message.",
       "end": 1,
       "entity": "Message",
       "journey": 2,

@@ -1,11 +1,12 @@
 //! The core of the inbox service: what the synthesized crate `inbox` leaves open, supplied once.
 //!
-//! `generated/rust/inbox` implements 7 of the 9 command behaviours and all 9 view queries over
-//! storage and context ports it does not implement, and owes 2 obligations (`PLAN.md`). This crate
+//! `generated/rust/inbox` implements 6 of the 9 command behaviours and all 9 view queries over
+//! storage and context ports it does not implement, and owes 3 obligations (`PLAN.md`). This crate
 //! supplies the rest and restates none of the specification's rules:
 //!
-//! - [`Core`]: the behaviours of `PostMessage` and `Expire` (the obligations), over a backend `B`
-//!   and a context `C`. Handed to [`inbox::behaviour::Generated`], it completes the system.
+//! - [`Core`]: the behaviours of `PostMessage`, `Collect` and `Expire` (the obligations), over a
+//!   backend `B` and a context `C`. Handed to [`inbox::behaviour::Generated`], it completes the
+//!   system.
 //! - [`ServiceContext`]: the generated context port ([`inbox::behaviour::TryContext`]) and
 //!   [`PostExternals`], built from a caller, a [`SignatureVerifier`], the backend and the service's
 //!   [`CommandClock`]. It answers the 9 `external:` branches: 3 of `PostMessage`, 5 of `Answer`, 1
@@ -43,7 +44,7 @@ use inbox::system::{System, SystemEvent};
 /// `dispatch` run.
 pub type Service<B, C> = System<Generated<Core<B, C>>>;
 
-/// Assembles the generated system: the 7 generated behaviours and 9 view queries, and the 2
+/// Assembles the generated system: the 6 generated behaviours and 9 view queries, and the 3
 /// obligations of [`Core`], over `backend` and `context`.
 ///
 /// The generated `InboxService` gives no access to its behaviours after construction, so the

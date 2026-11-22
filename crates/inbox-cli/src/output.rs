@@ -1,5 +1,6 @@
 //! What a command prints: one JSON document with `--json`, text for a person without.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
 use std::io::Write as _;
 
@@ -14,11 +15,79 @@ pub struct Done {
     pub text: String,
 }
 
-/// Writes one line to standard error. A failed write (a reader that is gone) is ignored, never a
-/// panic, as `eprintln!` would.
+/// Writes one line to standard error, each control character but the line end in its visible
+/// form ([`visible`]): the line may repeat text of the service or of another principal. A failed
+/// write (a reader that is gone) is ignored, never a panic, as `eprintln!` would.
 pub fn warn(line: &str) {
     let mut stderr = std::io::stderr().lock();
-    let _ = writeln!(stderr, "{line}");
+    let _ = writeln!(stderr, "{}", visible(line));
+}
+
+/// Writes text for a person to standard output, each control character but the line end in its
+/// visible form ([`visible`]). A failed write (a reader that is gone) is not a panic: the exit
+/// status still says what happened.
+pub fn print_text(text: &str) {
+    print(&visible(text));
+}
+
+/// Writes a JSON document to standard output with no raw control character in it
+/// ([`plain_document`]).
+pub fn print_document(document: &str) {
+    print(&plain_document(document));
+}
+
+fn print(line: &str) {
+    let mut stdout = std::io::stdout().lock();
+    let _ = writeln!(stdout, "{line}");
+    let _ = stdout.flush();
+}
+
+/// `text` with each control character but the line end (C0 with the tab and the carriage
+/// return, DEL, C1) written as its escape `\u{1b}`: a value another principal or the service set
+/// reaches the terminal as visible text, never as a control sequence. Text without control
+/// characters is unchanged.
+pub fn visible(text: &str) -> Cow<'_, str> {
+    escaped(text, |character| {
+        character.is_control() && character != '\n'
+    })
+}
+
+/// `document` with each control character a JSON writer may leave raw inside a string (DEL and
+/// C1; a C0 character in a string is escaped already) written as its `\u` escape: a JSON reader
+/// gets the same value, and no control sequence reaches a terminal. JSON's white space outside a
+/// string (line end, carriage return, tab) is kept.
+pub fn plain_document(document: &str) -> Cow<'_, str> {
+    if !document.chars().any(raw_in_document) {
+        return Cow::Borrowed(document);
+    }
+    let mut out = String::with_capacity(document.len() + 8);
+    for character in document.chars() {
+        if raw_in_document(character) {
+            let _ = write!(out, "\\u{:04x}", u32::from(character));
+        } else {
+            out.push(character);
+        }
+    }
+    Cow::Owned(out)
+}
+
+fn raw_in_document(character: char) -> bool {
+    character.is_control() && !matches!(character, '\n' | '\r' | '\t')
+}
+
+fn escaped(text: &str, escape: impl Fn(char) -> bool) -> Cow<'_, str> {
+    if !text.chars().any(&escape) {
+        return Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len() + 8);
+    for character in text.chars() {
+        if escape(character) {
+            out.extend(character.escape_unicode());
+        } else {
+            out.push(character);
+        }
+    }
+    Cow::Owned(out)
 }
 
 /// Appends `value` as JSON. Numbers keep the spelling they arrived in.
@@ -111,36 +180,44 @@ pub fn rows_text(answer: &Value) -> String {
                 }
             }
         }
-        if let Some(reply) = row.member("reply") {
-            let option = text(reply, "option");
-            let _ = writeln!(
-                out,
-                "  reply {} from {}{}:",
-                text(reply, "reply_id"),
-                text(reply, "from"),
-                if option.is_empty() {
-                    String::new()
-                } else {
-                    format!(", option {option}")
-                }
-            );
-            indent(&mut out, text(reply, "body"));
-        } else if !text(row, "decided_option").is_empty() {
-            let _ = writeln!(
-                out,
-                "  decided on silence: option {}",
-                text(row, "decided_option")
-            );
-        }
-        if !text(row, "refusal").is_empty() {
-            let _ = writeln!(out, "  refused: {}", text(row, "refusal"));
-        }
+        settlement(&mut out, row);
     }
     out.trim_end().to_owned()
 }
 
+/// What a message carries once it is settled: its reply, the option silence took, its refusal.
+fn settlement(out: &mut String, row: &Value) {
+    if let Some(reply) = row.member("reply") {
+        let option = text(reply, "option");
+        let _ = writeln!(
+            out,
+            "  reply {} from {}{}:",
+            text(reply, "reply_id"),
+            text(reply, "from"),
+            if option.is_empty() {
+                String::new()
+            } else {
+                format!(", option {option}")
+            }
+        );
+        indent(out, text(reply, "body"));
+    } else if !text(row, "decided_option").is_empty() {
+        let _ = writeln!(
+            out,
+            "  decided on silence: option {}",
+            text(row, "decided_option")
+        );
+    }
+    if !text(row, "refusal").is_empty() {
+        let _ = writeln!(out, "  refused: {}", text(row, "refusal"));
+    }
+}
+
+/// Each line of `body`, indented. A line ends at `\n` only: a carriage return before it stays in
+/// the line, and [`print_text`] shows it.
 fn indent(out: &mut String, body: &str) {
-    for line in body.lines() {
+    for line in body.split_inclusive('\n') {
+        let line = line.strip_suffix('\n').unwrap_or(line);
         let _ = writeln!(out, "    {line}");
     }
 }
@@ -149,11 +226,62 @@ fn indent(out: &mut String, body: &str) {
 mod tests {
     use inbox::server::json;
 
-    use super::document;
+    use super::{document, plain_document, visible};
 
     #[test]
     fn a_document_is_written_as_it_was_read() {
         let text = r#"{"rows":[{"a":"x\"y\n","n":1.50,"b":true,"c":null,"d":[]}],"e":{}}"#;
         assert_eq!(document(&json::parse(text).unwrap()), text);
+    }
+
+    #[test]
+    fn every_control_character_but_the_line_end_is_shown_escaped() {
+        assert_eq!(
+            visible("a\u{1b}[2J\u{7}\r\n\t\u{7f}\u{9b}b"),
+            "a\\u{1b}[2J\\u{7}\\u{d}\n\\u{9}\\u{7f}\\u{9b}b"
+        );
+        let plain = "Grüße, 世界\n\\u{1b} stays\n";
+        assert!(matches!(visible(plain), std::borrow::Cow::Borrowed(text) if text == plain));
+    }
+
+    #[test]
+    fn a_document_holds_no_raw_control_character_and_reads_as_the_same_value() {
+        let value = json::Value::Object(vec![(
+            "body".to_owned(),
+            json::Value::Text("a\u{1b}\u{7f}\u{80}\u{9b}\u{9f}\u{a0}\r\n".to_owned()),
+        )]);
+        let written = plain_document(&document(&value)).into_owned();
+        assert!(!written.chars().any(char::is_control), "{written:?}");
+        assert_eq!(json::parse(&written).unwrap(), value);
+    }
+
+    /// Every write to standard output or standard error of the client goes through `print_text`,
+    /// `print_document` or `warn` of this file, which hold it to the rule of [`visible`]. A file
+    /// of `src/` that writes there itself fails here, naming the file and what it wrote with.
+    #[test]
+    fn only_this_file_writes_to_standard_output_or_standard_error() {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut wrong = Vec::new();
+        for entry in std::fs::read_dir(&source).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|name| name == "output.rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for writer in [
+                "stdout(",
+                "stderr(",
+                "print!(",
+                "println!(",
+                "eprint!(",
+                "eprintln!(",
+                "dbg!(",
+            ] {
+                if text.contains(writer) {
+                    wrong.push(format!("{}: {writer}", path.display()));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "{wrong:?}");
     }
 }

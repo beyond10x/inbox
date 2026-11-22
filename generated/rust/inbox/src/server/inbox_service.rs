@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! The `inbox-service` component of `inbox` v1, on the wire.
@@ -57,7 +57,7 @@ pub const ROUTES: &[(&str, &str)] = &[
 /// Everything outside `runtime` is the same in every language this plan is emitted into, and
 /// `cargo xtask synth --check` starts both and compares them.
 pub const STARTUP: &[&str] = &[
-    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"inbox\",\"version\":\"v1\",\"model_digest\":\"3e4c77060da514bbacdc690839b281f20df25901b546d6e7659718737aa1116f\",\"contract_digest\":\"9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19\",\"components\":[\"inbox-service\"],\"capabilities\":{\"generated\":87,\"obligations\":2,\"refused\":0}",
+    "{\"log\":\"ess/1\",\"event\":\"system.starting\",\"system\":\"inbox\",\"version\":\"v1\",\"model_digest\":\"472e4c0d4d4587bc32c3f9fbc69901f05e4cacb441bf313283bb12be5886d618\",\"contract_digest\":\"487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd\",\"components\":[\"inbox-service\"],\"capabilities\":{\"generated\":87,\"obligations\":3,\"refused\":0}",
     "{\"log\":\"ess/1\",\"event\":\"surface.serving\",\"component\":\"inbox-service\",\"reached_by\":\"network\",\"transport\":\"http/1.1\",\"routes\":20,\"paths\":[{\"method\":\"GET\",\"path\":\"/docs\",\"serves\":\"documentation\",\"name\":\"docs\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/answer\",\"serves\":\"command\",\"name\":\"inbox.messaging.Answer\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/close-inbox\",\"serves\":\"command\",\"name\":\"inbox.messaging.CloseInbox\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/collect\",\"serves\":\"command\",\"name\":\"inbox.messaging.Collect\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/expire\",\"serves\":\"command\",\"name\":\"inbox.messaging.Expire\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/mark-delivered\",\"serves\":\"command\",\"name\":\"inbox.messaging.MarkDelivered\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/open-inbox\",\"serves\":\"command\",\"name\":\"inbox.messaging.OpenInbox\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/post\",\"serves\":\"command\",\"name\":\"inbox.messaging.PostMessage\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/read\",\"serves\":\"command\",\"name\":\"inbox.messaging.MarkRead\"},{\"method\":\"POST\",\"path\":\"/messaging/commands/refuse\",\"serves\":\"command\",\"name\":\"inbox.messaging.Refuse\"},{\"method\":\"GET\",\"path\":\"/messaging/views/due\",\"serves\":\"view\",\"name\":\"inbox.messaging.Due\"},{\"method\":\"GET\",\"path\":\"/messaging/views/inboxes\",\"serves\":\"view\",\"name\":\"inbox.messaging.Inboxes\"},{\"method\":\"GET\",\"path\":\"/messaging/views/messages\",\"serves\":\"view\",\"name\":\"inbox.messaging.Messages\"},{\"method\":\"GET\",\"path\":\"/messaging/views/outbox\",\"serves\":\"view\",\"name\":\"inbox.messaging.Outbox\"},{\"method\":\"GET\",\"path\":\"/messaging/views/pending\",\"serves\":\"view\",\"name\":\"inbox.messaging.Pending\"},{\"method\":\"GET\",\"path\":\"/messaging/views/replies\",\"serves\":\"view\",\"name\":\"inbox.messaging.Replies\"},{\"method\":\"GET\",\"path\":\"/messaging/views/settled\",\"serves\":\"view\",\"name\":\"inbox.messaging.Settled\"},{\"method\":\"GET\",\"path\":\"/messaging/views/thread\",\"serves\":\"view\",\"name\":\"inbox.messaging.Thread\"},{\"method\":\"GET\",\"path\":\"/messaging/views/unanswered\",\"serves\":\"view\",\"name\":\"inbox.messaging.Unanswered\"},{\"method\":\"GET\",\"path\":\"/openapi.json\",\"serves\":\"contract\",\"name\":\"openapi\"}]",
     "{\"log\":\"ess/1\",\"event\":\"system.ready\",\"system\":\"inbox\",\"surfaces\":1",
 ];
@@ -969,7 +969,7 @@ fn answer_inbox_messaging_collect(outcome: &crate::messaging::CollectOutcome) ->
             json::push_text(&mut body, "inbox.messaging.NotSender");
             403
         }
-        crate::messaging::CollectOutcome::Collected { message_handled, .. } => {
+        crate::messaging::CollectOutcome::Collected { response, message_handled, .. } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "collected");
             json::member(&mut body, "published");
@@ -981,7 +981,9 @@ fn answer_inbox_messaging_collect(outcome: &crate::messaging::CollectOutcome) ->
             wire::encode_event_inbox_messaging_message_handled(message_handled, &mut body);
             body.push('}');
             body.push(']');
-            202
+            json::member(&mut body, "response");
+            wire::encode_response_inbox_messaging_collect(response, &mut body);
+            200
         }
         crate::messaging::CollectOutcome::NotSettled { .. } => {
             json::member(&mut body, "outcome");

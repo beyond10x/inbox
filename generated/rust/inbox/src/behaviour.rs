@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
+// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -261,42 +261,9 @@ where
     }
 }
 
-/// `inbox.messaging.Collect`, generated: every outcome is one the specification fully determines.
-impl<P> crate::messaging::obligations::CollectBehavior for Generated<P>
-where
-    P: TryContext + MessageStorage,
-{
+impl<P: crate::messaging::obligations::CollectBehavior> crate::messaging::obligations::CollectBehavior for Generated<P> {
     fn collect(&mut self, input: crate::messaging::Collect) -> Result<crate::messaging::CollectOutcome, UnmetObligation> {
-        let _ = &input;
-        // The addressed row's existence, at step 2 of the one precedence rule.
-        if MessageStorage::get(&self.ports, &input.message_id).is_none() {
-            return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
-        }
-        // The addressed row, read before the branches that select by it.
-        let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
-        };
-        let _ = &held;
-        // `foreign-message`: selected by the addressed row.
-        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Collect")? {
-            return Ok(crate::messaging::CollectOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
-        }
-        // `not-sender`: selected by the addressed row.
-        if decided(equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Collect")? {
-            return Ok(crate::messaging::CollectOutcome::NotSender { error: crate::messaging::NotSender });
-        }
-        // `collected`: selected by the addressed row.
-        if decided(Some(matches!(held.state, crate::messaging::MessageState::Answered | crate::messaging::MessageState::Refused)), "inbox.messaging.Collect")? {
-            let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-                return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
-            };
-            let _ = &held;
-            let answer = crate::messaging::CollectOutcome::Collected { message_handled: crate::messaging::MessageHandled { message_id: input.message_id.clone() } };
-            MessageStorage::delete(&mut self.ports, &input.message_id);
-            return Ok(answer);
-        }
-        // `not-settled`: the default.
-        return Ok(crate::messaging::CollectOutcome::NotSettled { error: crate::messaging::NotSettled });
+        crate::messaging::obligations::CollectBehavior::collect(&mut self.ports, input)
     }
 }
 

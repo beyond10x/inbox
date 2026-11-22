@@ -139,6 +139,18 @@ scenario expects `foreign-message`; the scenario that expects it,
 `a-third-principal-finds-no-message`, is unsupported there (it has a step as the Sweeper), and
 `crates/inbox-server/tests/foreign_message.rs` witnesses the answer.
 
+`collect` answers `collected` with `200` and the settled record under `response` (the
+generated contract; `Collect` declares a typed response): every member of the message's
+`Outbox` row, `expires` and the reply among them, read by `inbox-core` from the row it deletes,
+inside the one `Exclusive` section of that request. No answer or refusal can land between that
+read and the delete, and the client prints what this answer carries. A client that gets a
+success answer that is not `collected` with the settled record of the message it collected,
+decoded as the declared response of `Collect` with each member once (a 0.2.0 service answers
+`202` without `response`), exits 3 and keeps its outbox line. Every refusal
+of `collect` (`unknown-message`, the renamed `foreign-message`, `not-sender`, `not-settled`)
+carries no `response` and changes no row. An answer lost after the delete loses the record: the
+service keeps no receipt, and a second `collect` is `unknown-message`.
+
 No request over HTTP is the
 `inbox.messaging.Sweeper`: `Expire`, `Due` and `Messages` are answered `403` with the generated
 refusal `{"refused": "not granted", "actor": "inbox.messaging.Client"}`. Only the expiry task sends

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T16:44:54Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-prints-no-control-sequence-of-another-principal",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

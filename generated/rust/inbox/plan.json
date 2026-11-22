@@ -2,8 +2,8 @@
   "provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "source_digest": "3e4c77060da514bbacdc690839b281f20df25901b546d6e7659718737aa1116f",
-    "contract_digest": "9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19"
+    "source_digest": "472e4c0d4d4587bc32c3f9fbc69901f05e4cacb441bf313283bb12be5886d618",
+    "contract_digest": "487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd"
   },
   "scope": {
     "profile": "component-skeletons",
@@ -34,6 +34,13 @@
     {
       "kind": "domain_type",
       "source": "inbox.messaging.Body",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "inbox.messaging.CollectedReply",
       "disposition": {
         "disposition": "generated"
       }
@@ -217,7 +224,12 @@
       "kind": "command_behavior",
       "source": "inbox.messaging.Collect",
       "disposition": {
-        "disposition": "generated"
+        "disposition": "obligation",
+        "reason": {
+          "class": "undetermined",
+          "construct": "a typed response (`response:`)"
+        },
+        "contract": "given `inbox.messaging.Collect` input, decide and enact exactly one outcome. Declared outcomes (declaration order, not selection precedence): `unknown-message` for an identity no record carries, error `inbox.messaging.UnknownMessage`; `foreign-message` when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`, error `inbox.messaging.UnknownMessage`; `not-sender` when the existing subject's stored fields satisfy `from != caller.principal`, error `inbox.messaging.NotSender`; `collected` when the existing subject is in Answered or Refused, deletes `inbox.messaging.Message`, emits `inbox.messaging.MessageHandled`; `not-settled` otherwise, error `inbox.messaging.NotSettled`"
       }
     },
     {

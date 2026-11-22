@@ -64,6 +64,16 @@ inbox read --secret-key-file bob.key "$MESSAGE_ID"
 `inbox --help` lists the other commands: `close`, `wait`, `answer`, `refuse`, `outbox`,
 `collect`, `thread`, `replies`, `repost` and `keyfile add-delegation`.
 
+## What the commands print
+
+`pending`, `outbox`, `collect` and `thread` print text another principal wrote: a body, a reply,
+a refusal reason, an option, an address. Each control character in it but the line end is shown
+as its escape, such as `\u{1b}` for an escape character, `\u{d}` for a carriage return and
+`\u{9}` for a tab, so that text cannot clear your screen, move the cursor, set the window title
+or write over a line. A line on standard error that repeats text of the service is shown the
+same way. Text without control characters is printed as it was written. With `--json` the values
+are the ones sent, and no control character is written raw.
+
 ## Exit statuses
 
 Every command takes `--json` and then prints one JSON document on standard output.
@@ -83,6 +93,9 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 An envelope leaves the file when its answer is collected, when the service refuses it with an
 error of the specification other than `UnknownInbox`, or when it expires (24 hours after it was
 made, by default). `id-taken` is such an error, so `post` and `repost` exit 1 and drop the line.
+`inbox collect` prints the message as the service held it when it removed it, in the form
+`inbox outbox` prints a row (`--json`: under `message`). An answer that carries no such record,
+as a service of release 0.2.0 answers, makes `collect` exit 3, and the envelope stays.
 
 Every answer of the service carries the header `Inbox-Epoch`: 32 hex digits that change with each
 start of the service. When a post arrives, `inbox post` records that value in the epochs file

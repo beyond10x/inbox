@@ -1,5 +1,6 @@
-//! The 2 obligations beyond their external branches: dedup of `PostMessage` through `list`, its
-//! other refusals in the order of the contract, and the 3 outcomes of `Expire` on a stored row.
+//! 2 of the 3 obligations beyond their external branches: dedup of `PostMessage` through `list`,
+//! its other refusals in the order of the contract, and the 3 outcomes of `Expire` on a stored
+//! row. The cases of `Collect` are in `tests/collect_record.rs`.
 
 use crate::support::{
     KeyIdVerifier, Post, World, open_worker, outcome, post, published, quoted, text,

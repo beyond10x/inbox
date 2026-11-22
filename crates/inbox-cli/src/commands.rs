@@ -16,11 +16,12 @@ use inbox_server::{Clock, SystemClock, format_instant};
 use inbox_verify::{Instant, sign_envelope};
 
 use crate::client::{Epoch, Service, declared_error, query_value, route};
+use crate::collected;
 use crate::failure::Failure;
 use crate::ids::ulid;
 use crate::keys::Caller;
 use crate::outbox::{Outbox, Unreadable};
-use crate::output::{self, Done, document, rows, rows_text, warn};
+use crate::output::{self, Done, document, rows_text, warn};
 
 /// The model's error a repeated `message_id` or `dedup_key` is answered with (the outcomes
 /// `duplicate` and `duplicate-key` of `PostMessage`): the message is there, so it arrived.
@@ -181,19 +182,19 @@ pub fn refuse(client: &Client, message_id: &str, reason: &str) -> Result<Done, F
     Ok(outcome(&answer, message_id))
 }
 
-/// `inbox collect`: reads the message's row in the caller's `Outbox` first, so the answer or the
-/// refusal it takes is shown, then collects it and drops it from the outbox file. The service
-/// removed the message once it answered `collected`: what it handed over is printed also when
-/// the outbox file cannot be changed after that, and the local failure is reported beside it.
+/// `inbox collect`: sends `Collect` and prints the settled record its answer carries (the
+/// `response` of the outcome `collected`: the members of the message's `Outbox` row as the
+/// service held them when it removed the message, in the form `outbox` prints a row; `--json`:
+/// under `message`), then drops the envelope from the outbox file. Nothing is read before the
+/// `Collect`, so an answer that arrived just before it is the one printed. A refusal
+/// (`not-settled`, `unknown-message`) removes nothing. A success answer that is not `collected`
+/// with the settled record of this message ([`collected::record`]: no `response`, as a 0.2.0
+/// service answers, one outside the declared response of `Collect`, of another `message_id`, not
+/// settled, or with a member stated twice) is a transport failure: nothing is printed as
+/// collected and the outbox line stays. The service removed the message
+/// once it answered `collected`: what it handed over is printed also when the outbox file cannot
+/// be changed after that, and the local failure is reported beside it.
 pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
-    let outbox = client.view(
-        "outbox",
-        &format!("sender={}", query_value(&client.caller.principal)),
-    )?;
-    let row = rows(&outbox)
-        .iter()
-        .find(|row| output::text(row, "message_id") == message_id)
-        .cloned();
     let mut body = String::new();
     wire::encode_command_inbox_messaging_collect(
         &Collect {
@@ -202,13 +203,22 @@ pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
         &mut body,
     );
     let answer = client.command("collect", &body)?;
+    let record = match collected::record(&answer, message_id) {
+        Ok(record) => record.clone(),
+        Err(why) => {
+            return Err(Failure::Transport(format!(
+                "the service answered `collected` without the record of {message_id} ({why}): \
+                 its reply is not shown, and its outbox line is kept"
+            )));
+        }
+    };
     let shown = Value::Object(vec![(
         "rows".to_owned(),
-        Value::Array(row.iter().cloned().collect()),
+        Value::Array(vec![record.clone()]),
     )]);
     let done = Done {
         document: document(&Value::Object(vec![
-            ("message".to_owned(), row.unwrap_or(Value::Null)),
+            ("message".to_owned(), record),
             ("answer".to_owned(), answer.clone()),
         ])),
         text: format!(
