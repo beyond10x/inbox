@@ -9,8 +9,6 @@ tags:
 - from-finding
 relations:
 - informed_by: review-result:adversary-foreign-message-id-pass-1
-- blocks: epic:two-hosts-and-wake
-- blocks: epic:jetstream-backend
 scope:
 - confidence: cited
   path: AGENTS.md

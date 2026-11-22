@@ -9,8 +9,6 @@ tags:
 - from-finding
 relations:
 - informed_by: review-result:adversary-http-service-pass-1
-- blocks: epic:two-hosts-and-wake
-- blocks: epic:jetstream-backend
 - depends_on: story:post-from-is-the-caller
 scope:
 - confidence: cited

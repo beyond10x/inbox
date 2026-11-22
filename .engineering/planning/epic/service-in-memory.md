@@ -2,13 +2,14 @@
 format: aep.planning-md/3
 id: epic:service-in-memory
 kind: epic
-status: active
+status: implemented
 title: 'Stage 2: `inbox serve` with the in-memory backend, and the CLI client'
 summary: The service of the specification, its own non-persistent backend, the signature verifier and the `inbox` CLI.
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T07:46:03Z", actor: "agent:inbox", revision: 4}
 - {from: "proposed", to: "active", at: "2026-11-21T07:46:03Z", actor: "agent:inbox", revision: 5}
+- {from: "active", to: "implemented", at: "2026-11-22T18:27:57Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
