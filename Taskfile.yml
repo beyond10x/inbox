@@ -10,10 +10,11 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold ess/scenarios/ and ess/ess-inputs.yaml to tools/scenarios.py and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 3 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, hold ess/scenarios/ and ess/ess-inputs.yaml to tools/scenarios.py, the landing page's animation data to ess/ and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 3 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: scenarios-drift
+      - task: animation-drift
       - task: projections-drift
       - task: drift
       - task: coverage
@@ -108,6 +109,16 @@ tasks:
     desc: Fail when ess/scenarios/ or ess/ess-inputs.yaml differs from what tools/scenarios.py writes, one line per path (edited, missing, not written by the script); writes nothing.
     cmds:
       - python3 tools/scenarios.py ess --check
+
+  animation:
+    desc: Rewrite website/src/generated/animation.json, the data of the landing page's hero figure and slides, from the compiled ess/ with tools/animation.py, after its checks pass.
+    cmds:
+      - python3 tools/animation.py ess
+
+  animation-drift:
+    desc: Fail when website/src/generated/animation.json differs from what tools/animation.py writes from the compiled ess/ (edited, missing); writes nothing.
+    cmds:
+      - python3 tools/animation.py ess --check
 
   plan:
     desc: Validate the AEP planning store.

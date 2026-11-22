@@ -1,0 +1,576 @@
+{
+  "actors": {
+    "recipient": "Client",
+    "sender": "Client",
+    "service": "Sweeper"
+  },
+  "commands": [
+    "OpenInbox",
+    "PostMessage",
+    "MarkDelivered",
+    "MarkRead",
+    "Answer",
+    "Collect",
+    "Refuse",
+    "Expire",
+    "CloseInbox"
+  ],
+  "counts": {
+    "commands": 9,
+    "errors": 14,
+    "views": 9
+  },
+  "errors": [
+    "NotRecipient",
+    "NoAuthority",
+    "Duplicate",
+    "UnknownMessage",
+    "NotAnswerable",
+    "ShapeMismatch",
+    "NotSettled",
+    "SignatureInvalid",
+    "MessageIdTaken",
+    "AlreadySettled",
+    "NotSender",
+    "AlreadyExpired",
+    "NotDue",
+    "UnknownInbox"
+  ],
+  "frame_ms": 2600,
+  "frames": [
+    {
+      "actor": "recipient",
+      "command": "OpenInbox",
+      "description": "Client, the recipient, sends OpenInbox. Open the inbox at an address, or open it again. The caller becomes its owner. A client sends this after every reconnect, because a restarted service holds no inbox. State: Open. Visible in Inboxes. OpenInbox can be refused with NotRecipient: The caller does not own the inbox the message was sent to.",
+      "end": null,
+      "entity": "Inbox",
+      "journey": 0,
+      "refusal": "NotRecipient",
+      "removed": false,
+      "state": "Open",
+      "step": 0,
+      "token": null,
+      "views": [
+        "Inboxes"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "OpenInbox",
+        "Open",
+        "Inboxes",
+        "NotRecipient"
+      ],
+      "words": 9
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with NoAuthority: on_behalf_of differs from from and no valid delegation covers it.",
+      "end": null,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "NoAuthority",
+      "removed": false,
+      "state": "Sent",
+      "step": 1,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "NoAuthority"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with Duplicate: A live message of this sender already carries this id or this dedup key; nothing was stored.",
+      "end": null,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "Duplicate",
+      "removed": false,
+      "state": "Sent",
+      "step": 1,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "Duplicate"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "recipient",
+      "command": "MarkDelivered",
+      "description": "Client, the recipient, sends MarkDelivered. An adapter reports that a live wake surface took the message. It is sent only after the surface took it. State: Delivered. An adapter handed it to a live wake surface. Visible in Outbox, Pending, Thread. MarkDelivered can be refused with UnknownMessage: No live message has this id: it was never posted, it was handled, or it expired.",
+      "end": null,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "UnknownMessage",
+      "removed": false,
+      "state": "Delivered",
+      "step": 2,
+      "token": "recipient",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "MarkDelivered",
+        "Delivered",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "UnknownMessage"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "recipient",
+      "command": "MarkRead",
+      "description": "Client, the recipient, sends MarkRead. The owner of the inbox read the message. A note is handled by that and is removed; a request or a decision waits for its answer. State: Read. The owner of the inbox read it and has not answered yet. Visible in Outbox, Thread, Unanswered. MarkRead can be refused with UnknownMessage: No live message has this id: it was never posted, it was handled, or it expired.",
+      "end": null,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "UnknownMessage",
+      "removed": false,
+      "state": "Read",
+      "step": 3,
+      "token": "recipient",
+      "views": [
+        "Outbox",
+        "Thread",
+        "Unanswered"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "MarkRead",
+        "Read",
+        "Outbox",
+        "Thread",
+        "Unanswered",
+        "UnknownMessage"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "recipient",
+      "command": "Answer",
+      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with NotAnswerable: A note takes no answer.",
+      "end": 0,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "NotAnswerable",
+      "removed": false,
+      "state": "Answered",
+      "step": 4,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Answer",
+        "Answered",
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread",
+        "NotAnswerable"
+      ],
+      "words": 12
+    },
+    {
+      "actor": "recipient",
+      "command": "Answer",
+      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with ShapeMismatch: The envelope does not fit its kind, or the reply does not fit what the message asked for.",
+      "end": 0,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "ShapeMismatch",
+      "removed": false,
+      "state": "Answered",
+      "step": 4,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Answer",
+        "Answered",
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread",
+        "ShapeMismatch"
+      ],
+      "words": 12
+    },
+    {
+      "actor": "sender",
+      "command": "Collect",
+      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed. The message is removed. Found in Outbox, Replies, Settled, Thread. Collect can be refused with NotSettled: The message has no answer and no refusal to collect yet.",
+      "end": 0,
+      "entity": "Message",
+      "journey": 1,
+      "refusal": "NotSettled",
+      "removed": true,
+      "state": null,
+      "step": 5,
+      "token": "sender",
+      "views": [
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Collect",
+        "Outbox",
+        "Replies",
+        "Settled",
+        "Thread",
+        "NotSettled"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with SignatureInvalid: The SignatureVerifier port refused the signature: the key is unknown or lapsed, or the signature does not verify.",
+      "end": null,
+      "entity": "Message",
+      "journey": 2,
+      "refusal": "SignatureInvalid",
+      "removed": false,
+      "state": "Sent",
+      "step": 6,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "SignatureInvalid"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with MessageIdTaken: A live message of another sender carries this id; nothing was stored.",
+      "end": null,
+      "entity": "Message",
+      "journey": 2,
+      "refusal": "MessageIdTaken",
+      "removed": false,
+      "state": "Sent",
+      "step": 6,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "MessageIdTaken"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "recipient",
+      "command": "Refuse",
+      "description": "Client, the recipient, sends Refuse. The owner of the inbox refuses the message and says why. The sender collects the reason. State: Refused. The owner of the inbox refused it; it waits for the sender to collect the reason. Visible in Outbox, Settled, Thread. Refuse can be refused with AlreadySettled: The message is already answered or refused.",
+      "end": 1,
+      "entity": "Message",
+      "journey": 2,
+      "refusal": "AlreadySettled",
+      "removed": false,
+      "state": "Refused",
+      "step": 7,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Settled",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Refuse",
+        "Refused",
+        "Outbox",
+        "Settled",
+        "Thread",
+        "AlreadySettled"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "sender",
+      "command": "Collect",
+      "description": "Client, the sender, sends Collect. The sender takes the answer or the refusal of its message. The message is handled by that and is removed. The message is removed. Found in Outbox, Settled, Thread. Collect can be refused with NotSender: The caller did not send the message.",
+      "end": 1,
+      "entity": "Message",
+      "journey": 2,
+      "refusal": "NotSender",
+      "removed": true,
+      "state": null,
+      "step": 8,
+      "token": "sender",
+      "views": [
+        "Outbox",
+        "Settled",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Collect",
+        "Outbox",
+        "Settled",
+        "Thread",
+        "NotSender"
+      ],
+      "words": 10
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with AlreadyExpired: expires is not after created.",
+      "end": null,
+      "entity": "Message",
+      "journey": 3,
+      "refusal": "AlreadyExpired",
+      "removed": false,
+      "state": "Sent",
+      "step": 9,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "AlreadyExpired"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "service",
+      "command": "Expire",
+      "description": "Sweeper, the service, sends Expire. The service's expiry task removes one message whose expires has passed. now is the Clock port's reading. A decision that names a default_on_silence is answered by silence instead and kept until keep_until. The message is removed. Found in Due, Messages. Expire can be refused with NotDue: expires is after the clock reading sent.",
+      "end": null,
+      "entity": "Message",
+      "journey": 3,
+      "refusal": "NotDue",
+      "removed": true,
+      "state": null,
+      "step": 10,
+      "token": "inbox",
+      "views": [
+        "Due",
+        "Messages"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "Expire",
+        "Due",
+        "Messages",
+        "NotDue"
+      ],
+      "words": 9
+    },
+    {
+      "actor": "recipient",
+      "command": "CloseInbox",
+      "description": "Client, the recipient, sends CloseInbox. Close an inbox. Posts to it are refused; the messages it holds stay until they expire. State: Closed. Visible in Inboxes. CloseInbox can be refused with UnknownInbox: No open inbox has this address.",
+      "end": null,
+      "entity": "Inbox",
+      "journey": 0,
+      "refusal": "UnknownInbox",
+      "removed": false,
+      "state": "Closed",
+      "step": 11,
+      "token": null,
+      "views": [
+        "Inboxes"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "CloseInbox",
+        "Closed",
+        "Inboxes",
+        "UnknownInbox"
+      ],
+      "words": 9
+    }
+  ],
+  "generated": "Written by tools/animation.py from the compiled ess/ (task animation). Do not edit.",
+  "inbox": "Inbox",
+  "layout": {
+    "host": "host",
+    "planned": "planned",
+    "process": "process",
+    "service": "inbox"
+  },
+  "lifecycle": {
+    "initial": "Sent",
+    "path": [
+      "Sent",
+      "Delivered",
+      "Read"
+    ],
+    "terminal": [
+      "Answered",
+      "Refused"
+    ]
+  },
+  "message": "Message",
+  "planned_note": "The second host and the link to it are planned: today the service listens on loopback only, so every agent that uses it runs on the service's own host.",
+  "still": [
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "toward": "inbox"
+    },
+    {
+      "actor": "recipient",
+      "command": "MarkDelivered",
+      "toward": "actor"
+    },
+    {
+      "actor": "recipient",
+      "command": "MarkRead",
+      "toward": "actor"
+    },
+    {
+      "actor": "recipient",
+      "command": "Answer",
+      "toward": "inbox"
+    },
+    {
+      "actor": "sender",
+      "command": "Collect",
+      "toward": "actor"
+    }
+  ],
+  "views": [
+    "Inboxes",
+    "Outbox",
+    "Pending",
+    "Thread",
+    "Unanswered",
+    "Replies",
+    "Settled",
+    "Due",
+    "Messages"
+  ],
+  "word_limit": 12
+}

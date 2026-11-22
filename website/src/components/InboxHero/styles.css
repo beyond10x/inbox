@@ -1,0 +1,173 @@
+/* The hero figure. Every colour is a docs-system token or a mix of two: text is heading or muted
+   (at least 4.5:1 on what is under it), every outline that carries meaning is line, muted, accent
+   or danger (at least 3:1 on both sides). The planned host is dimmed with dashes and a thinner
+   stroke, never with a colour under those ratios. */
+
+@media (min-width: 997px) {
+  .inbox-landing .b10x-hero {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 3rem;
+  }
+}
+
+.inbox-hero {
+  --inbox-accent: var(--b10x-product-hue, var(--b10x-color-accent, var(--b10x-color-link)));
+  --inbox-heading: var(--b10x-color-heading);
+  --inbox-muted: var(--b10x-color-muted);
+  --inbox-line: var(--b10x-color-line);
+  --inbox-card: var(--b10x-color-panel, var(--b10x-color-surface));
+  --inbox-ground: var(--b10x-color-canvas);
+  --inbox-surface: var(--b10x-color-surface);
+  --inbox-process: color-mix(in srgb, var(--inbox-accent) 9%, var(--b10x-color-surface));
+  --inbox-service: color-mix(in srgb, var(--inbox-accent) 15%, var(--b10x-color-surface));
+  --inbox-danger: var(--b10x-color-danger);
+  --inbox-on-accent: var(--b10x-color-on-accent);
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--inbox-line);
+  border-radius: var(--b10x-radius-lg, 14px);
+  background: var(--inbox-card);
+  box-shadow: var(--b10x-card-shadow, none);
+}
+
+.inbox-hero__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.inbox-hero__svg text {
+  font-family: var(--b10x-font-mono);
+  font-size: 16px;
+  font-weight: 500;
+  fill: var(--inbox-heading);
+}
+
+.inbox-hero__host rect {
+  fill: var(--inbox-ground);
+  stroke: var(--inbox-line);
+  stroke-width: 1.5;
+}
+.inbox-hero__svg .inbox-hero__host-label { fill: var(--inbox-muted); font-weight: 600; }
+
+.inbox-hero__process rect {
+  fill: var(--inbox-process);
+  stroke: var(--inbox-muted);
+  stroke-width: 1.75;
+}
+.inbox-hero__process--inbox rect {
+  fill: var(--inbox-service);
+  stroke: var(--inbox-accent);
+  stroke-width: 2.5;
+}
+.inbox-hero__svg .inbox-hero__inbox-label { font-weight: 700; }
+
+.inbox-hero__host--planned rect {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-dasharray: 6 5;
+}
+.inbox-hero__process--planned rect {
+  fill: none;
+  stroke: var(--inbox-line);
+  stroke-width: 1.25;
+  stroke-dasharray: 6 5;
+}
+
+.inbox-hero__tray path {
+  fill: none;
+  stroke: var(--inbox-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.inbox-hero__head {
+  fill: var(--inbox-surface);
+  stroke: var(--inbox-accent);
+  stroke-width: 2;
+}
+.inbox-hero__face { fill: none; stroke: var(--inbox-accent); stroke-width: 1.75; }
+.inbox-hero__eye { fill: var(--inbox-accent); }
+.inbox-hero__antenna { stroke: var(--inbox-accent); stroke-width: 2; }
+.inbox-hero__agent--planned .inbox-hero__head { fill: none; stroke: var(--inbox-line); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.inbox-hero__agent--planned .inbox-hero__face { stroke: var(--inbox-line); stroke-width: 1.25; }
+.inbox-hero__agent--planned .inbox-hero__eye { fill: var(--inbox-line); }
+.inbox-hero__agent--planned .inbox-hero__antenna { stroke: var(--inbox-line); stroke-width: 1.25; }
+
+.inbox-hero__link {
+  stroke: var(--inbox-muted);
+  stroke-width: 2;
+}
+.inbox-hero__link--active {
+  stroke: var(--inbox-accent);
+  stroke-width: 3.5;
+}
+.inbox-hero__link--planned {
+  stroke: var(--inbox-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+}
+
+.inbox-hero__label rect {
+  fill: var(--inbox-surface);
+  stroke: var(--inbox-muted);
+  stroke-width: 1.5;
+}
+.inbox-hero__label--to-inbox rect,
+.inbox-hero__label--to-agent rect,
+.inbox-hero__label--service rect { stroke: var(--inbox-accent); stroke-width: 2.25; }
+.inbox-hero__svg .inbox-hero__label--to-inbox text,
+.inbox-hero__svg .inbox-hero__label--to-agent text,
+.inbox-hero__svg .inbox-hero__label--service text { font-weight: 650; }
+.inbox-hero__label--state rect { fill: var(--inbox-ground); stroke: var(--inbox-heading); stroke-width: 1.75; }
+.inbox-hero__label--refusal rect { stroke: var(--inbox-danger); stroke-width: 1.75; stroke-dasharray: 5 3; }
+.inbox-hero__svg .inbox-hero__label--refusal .inbox-hero__glyph { fill: var(--inbox-danger); }
+.inbox-hero__label--planned rect { stroke: var(--inbox-line); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.inbox-hero__svg .inbox-hero__label--planned text { fill: var(--inbox-muted); }
+.inbox-hero__svg .inbox-hero__glyph { fill: var(--inbox-accent); font-weight: 700; }
+
+.inbox-hero__legend-swatch {
+  fill: var(--inbox-process);
+  stroke: var(--inbox-muted);
+  stroke-width: 1.75;
+}
+.inbox-hero__svg .inbox-hero__legend text { fill: var(--inbox-muted); }
+
+.inbox-hero__token rect {
+  fill: var(--inbox-accent);
+  stroke: none;
+}
+.inbox-hero__token path {
+  fill: none;
+  stroke: var(--inbox-on-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.inbox-hero__token--moving { transform: translate(var(--to-x), var(--to-y)); }
+
+.inbox-hero__pulse {
+  fill: none;
+  stroke: var(--inbox-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .inbox-hero__token--moving {
+    animation: inbox-hero-travel 1300ms ease-in-out forwards;
+  }
+  .inbox-hero__token--removed {
+    animation: inbox-hero-travel 1300ms ease-in-out forwards, inbox-hero-fade 500ms ease-in 1500ms forwards;
+  }
+  .inbox-hero__appear { animation: inbox-hero-appear 300ms ease-out both; }
+  .inbox-hero__pulse { animation: inbox-hero-appear 300ms ease-out both; }
+}
+
+@keyframes inbox-hero-travel {
+  0% { transform: translate(var(--from-x), var(--from-y)); }
+  50% { transform: translate(var(--via-x), var(--via-y)); }
+  100% { transform: translate(var(--to-x), var(--to-y)); }
+}
+@keyframes inbox-hero-fade { to { opacity: 0; } }
+@keyframes inbox-hero-appear { from { opacity: 0; } to { opacity: 1; } }

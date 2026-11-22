@@ -8,6 +8,21 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- The landing page of the documentation site has an animated figure of one message going
+  through the inbox, and 3 slides below it. Every command, view, error, state and actor they
+  show is read from the compiled `ess/`: `tools/animation.py` writes
+  `website/src/generated/animation.json` (`task animation`), and `task animation-drift`, in
+  `task check`, fails when the file differs from what the script writes. 16 page tests
+  (`website/tests/landing.spec.ts`, Playwright) hold the page, among them the numbers of slide
+  3 to the status page and the count of open security findings to the limits page.
+
+### Changed
+
+- The text of the landing page states `main` after wave 8: 38 authored scenarios, 111 in the
+  suite, 31 over HTTP, 2 open security findings. It said that no program and no client exist.
+
 ## [0.2.0] - 2026-11-22
 
 ### Added

@@ -1,0 +1,191 @@
+/* The pitch slider under the hero. Colours are docs-system tokens only: text is heading, text or
+   muted (at least 4.5:1 on the card), every outline that carries meaning is line, muted, heading,
+   accent, success or danger (at least 3:1). Text is at least 13 px. */
+
+.inbox-pitch {
+  --pitch-accent: var(--b10x-product-hue, var(--b10x-color-accent, var(--b10x-color-link)));
+  --pitch-card: var(--b10x-color-panel, var(--b10x-color-surface));
+  --pitch-ground: var(--b10x-color-canvas);
+  --pitch-tint: color-mix(in srgb, var(--pitch-accent) 12%, var(--b10x-color-surface));
+  padding-block: 3rem 3.6rem;
+  border-top: 1px solid var(--b10x-color-hairline, var(--b10x-color-line));
+}
+
+.inbox-pitch__card {
+  border: 1px solid var(--b10x-color-line);
+  border-radius: var(--b10x-radius-lg, 14px);
+  background: var(--pitch-card);
+  box-shadow: var(--b10x-card-shadow, none);
+  overflow: hidden;
+}
+
+.inbox-pitch__viewport {
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
+}
+.inbox-pitch__viewport:focus-visible {
+  outline: 2px solid var(--b10x-color-focus);
+  outline-offset: -4px;
+  border-radius: var(--b10x-radius-lg, 14px);
+}
+
+.inbox-pitch__track {
+  display: flex;
+  transition: transform 450ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.inbox-pitch__slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 25rem);
+  gap: 3rem;
+  align-items: center;
+  padding: 2.8rem 3.2rem 1.6rem;
+}
+
+.inbox-pitch__copy { min-width: 0; }
+.inbox-pitch__label {
+  margin: 0 0 0.9rem;
+  color: var(--b10x-color-muted);
+  font: 650 0.85rem/1.4 var(--b10x-font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.inbox-pitch__claim {
+  margin: 0 0 1rem;
+  color: var(--b10x-color-heading);
+  font-size: clamp(1.6rem, 2.6vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.inbox-pitch__line {
+  margin: 0 0 1.3rem;
+  max-width: 34rem;
+  color: var(--b10x-color-text);
+  font-size: 1.06rem;
+  line-height: 1.6;
+}
+.inbox-pitch__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  color: var(--b10x-color-link);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.inbox-pitch__link:focus-visible { outline: 2px solid var(--b10x-color-focus); outline-offset: 2px; }
+
+.inbox-pitch__graphic { min-width: 0; }
+.inbox-pitch__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 25rem;
+  margin-inline: auto;
+  overflow: visible;
+}
+.inbox-pitch__svg text {
+  font-family: var(--b10x-font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--b10x-color-heading);
+}
+
+.inbox-pitch__pill rect { fill: var(--pitch-ground); stroke: var(--b10x-color-muted); stroke-width: 1.5; }
+.inbox-pitch__pill--state rect { stroke: var(--b10x-color-heading); stroke-width: 1.75; }
+.inbox-pitch__pill--end rect { fill: var(--pitch-tint); stroke: var(--pitch-accent); stroke-width: 2.25; }
+.inbox-pitch__pill--contract rect { stroke: var(--pitch-accent); stroke-width: 2; }
+
+.inbox-pitch__arrow line,
+.inbox-pitch__arrow polyline,
+.inbox-pitch__rule {
+  fill: none;
+  stroke: var(--b10x-color-muted);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.inbox-pitch__svg .inbox-pitch__command { fill: var(--b10x-color-muted); font-weight: 500; }
+.inbox-pitch__svg .inbox-pitch__caption {
+  fill: var(--b10x-color-muted);
+  font-family: var(--b10x-font-sans);
+  font-weight: 500;
+}
+
+.inbox-pitch__process { fill: var(--pitch-tint); stroke: var(--b10x-color-muted); stroke-width: 1.5; }
+.inbox-pitch__agent circle { fill: var(--b10x-color-surface); stroke: var(--pitch-accent); stroke-width: 2; }
+.inbox-pitch__agent .inbox-pitch__face { fill: none; stroke: var(--pitch-accent); stroke-width: 1.75; }
+
+.inbox-pitch__service rect { fill: var(--pitch-tint); stroke: var(--pitch-accent); stroke-width: 2.5; }
+.inbox-pitch__svg .inbox-pitch__box-title { font-weight: 700; }
+.inbox-pitch__svg .inbox-pitch__box-sub { fill: var(--b10x-color-text); font-weight: 500; }
+
+.inbox-pitch__bar-track { fill: var(--pitch-ground); stroke: var(--b10x-color-line); stroke-width: 1.25; }
+.inbox-pitch__bar-fill { fill: var(--pitch-accent); }
+.inbox-pitch__svg .inbox-pitch__bar-label { fill: var(--b10x-color-text); font-family: var(--b10x-font-sans); }
+.inbox-pitch__finding circle { fill: var(--pitch-ground); stroke: var(--b10x-color-danger); stroke-width: 2; }
+
+.inbox-pitch__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem 1.1rem;
+}
+.inbox-pitch__arrow-button,
+.inbox-pitch__dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--b10x-color-heading);
+  font: inherit;
+  cursor: pointer;
+}
+.inbox-pitch__arrow-button { border: 1px solid var(--b10x-color-line); font-size: 1.15rem; }
+.inbox-pitch__arrow-button:hover { background: var(--b10x-color-surface-muted); }
+.inbox-pitch__dots { display: flex; gap: 0.1rem; }
+.inbox-pitch__dot span {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px solid var(--b10x-color-muted);
+  border-radius: 999px;
+  background: transparent;
+  transition: width 200ms ease, background-color 200ms ease;
+}
+.inbox-pitch__dot[aria-current='true'] span {
+  width: 1.7rem;
+  border-color: var(--b10x-color-heading);
+  background: var(--b10x-color-heading);
+}
+.inbox-pitch__dot:hover span { border-color: var(--b10x-color-heading); }
+.inbox-pitch__arrow-button:focus-visible,
+.inbox-pitch__dot:focus-visible {
+  outline: 2px solid var(--b10x-color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .inbox-pitch__slide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    align-content: start;
+    padding: 1.6rem 1rem 0.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inbox-pitch__track,
+  .inbox-pitch__dot span { transition: none; }
+}

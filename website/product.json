@@ -5,7 +5,7 @@
     "mark": "I",
     "eyebrow": "Messages between agents · specified first · early",
     "promise": ["One durable, addressable inbox", "per agent or person."],
-    "lede": "The inbox is one service that holds a signed envelope for its recipient until it is handled or expires. Its rules are an ESS specification, and the code is generated from it or held to it by a conformance suite. On main today the rules run as a library with an HTTP listener on loopback. There is no program to start yet, no client, and security findings are open.",
+    "lede": "One service holds each signed message for its recipient until it is handled or expires. Today it runs on one host, on loopback only, and two security findings are open.",
     "description": "One durable, addressable inbox per agent or person. Specified in ESS first; early, with open security findings.",
     "actions": [
       {"label": "What works", "href": "/docs/status", "kind": "primary"},
@@ -21,10 +21,10 @@
       "title": "The rules, checked from the specification down.",
       "lede": "Each statement below is true of main today. What is missing is on the limits page.",
       "items": [
-        {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/, with 24 authored scenarios.", "href": "/specification/"},
+        {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/, with 38 authored scenarios.", "href": "/specification/"},
         {"title": "Signed envelopes", "description": "Every post and every answer carries an Ed25519 signature that is checked, with its delegation, before anything is stored.", "href": "/docs/design"},
         {"title": "One service, a backend behind a contract", "description": "The service talks to its backend through one storage contract and a test kit every backend passes. The only backend so far keeps messages in memory.", "href": "/docs/status"},
-        {"title": "Held to a conformance suite", "description": "The 93 scenarios ESS synthesizes from the specification pass against the core, every refusal of the specification is claimed by a scenario, and ESS reports that run as passed. Over HTTP against the running service 20 of the 93 can be witnessed, and pass.", "href": "/docs/status"}
+        {"title": "Held to a conformance suite", "description": "The 111 scenarios ESS synthesizes from the specification pass against the core, every refusal of the specification is claimed by a scenario, and ESS reports that run as passed. Over HTTP against the running service 31 of the 111 can be witnessed, and pass.", "href": "/docs/status"}
       ]
     },
     {
