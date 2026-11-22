@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:59202bc61282f439bdd70963dd4f112afea0fe5a4f0b5a4b74fdeae4ea5f94b1"
+      "contract_digest": "slice-sha256/2:06a55b631774a98dd1963698c1586a37b420a9837664daaf4f3299949b978ff7"
     },
     "x-ess-reached-by": "network"
   },
@@ -970,7 +970,7 @@
             }
           },
           "409": {
-            "description": "Outcomes `duplicate`, `duplicate-key`, `unknown-inbox`, `inbox-closed` and `id-taken`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
+            "description": "Outcomes `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed` and `id-taken`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
             "content": {
               "application/json": {
                 "schema": {
@@ -986,13 +986,13 @@
                   },
                   "oneOf": [
                     {
+                      "$ref": "#/components/schemas/inbox.messaging.PostMessage.unknown-inbox.Response"
+                    },
+                    {
                       "$ref": "#/components/schemas/inbox.messaging.PostMessage.duplicate.Response"
                     },
                     {
                       "$ref": "#/components/schemas/inbox.messaging.PostMessage.duplicate-key.Response"
-                    },
-                    {
-                      "$ref": "#/components/schemas/inbox.messaging.PostMessage.unknown-inbox.Response"
                     },
                     {
                       "$ref": "#/components/schemas/inbox.messaging.PostMessage.inbox-closed.Response"

@@ -6,7 +6,7 @@ none of this: they list features and limits ([features](https://beyond10x.github
 
 ## On `main`
 
-Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cases of
+Numbers from 2026-11-22, ESS 0.97.4, Rust 1.99.1. Case counts are the passed cases of
 `task test` (cargo-nextest) in one run of `task check`.
 
 | Part | What it does | Number | Proof |

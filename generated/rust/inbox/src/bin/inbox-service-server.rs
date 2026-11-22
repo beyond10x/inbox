@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest f807145c2ee167ef46048e8e80ca37f3559adea0def6d63fa0d8b3b81c9a7a9d
+// contract digest ab51269fa0786cb62de332826f17f3199db230ea4e52fe7335e4d8ea79e313bc
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Ephemeral generated server. Durable storage and production authentication remain ports.

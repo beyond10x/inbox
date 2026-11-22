@@ -13,7 +13,7 @@ disagree, `ess/` holds.
 [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md):
 the problem, the shape (one service, backends behind one storage contract, signed envelopes),
 the model of two entities, nine commands and nine views, when a message is removed, the eight
-decisions taken while modelling, and what ESS 0.97.3 cannot express.
+decisions taken while modelling, and what ESS 0.97.4 cannot express.
 
 ## Signing
 

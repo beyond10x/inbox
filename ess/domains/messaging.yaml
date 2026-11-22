@@ -479,9 +479,12 @@ commands:
         external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
         before_row: true
         error: inbox.messaging.NoAuthority
-      # SYNTHESIS: ESS 0.97.3 answers `unknown-inbox` (`exists: false`) before this outcome and
-      # before `duplicate-key`, whatever the declaration order; the outcomes with `where` and
+      # SYNTHESIS: ESS 0.97.4 answers `unknown-inbox` (`exists: false`) before `duplicate` and
+      # `duplicate-key`, and it is declared before them; the outcomes with `where` and
       # `inbox-closed` follow in declaration order. A sender's repost goes to an inbox that exists.
+      - name: unknown-inbox
+        when_related: {via: input.to, exists: false}
+        error: inbox.messaging.UnknownInbox
       - name: duplicate
         when_related:
           entity: inbox.messaging.Message
@@ -495,9 +498,6 @@ commands:
           where: {all: [dedup_key == input.dedup_key, from == input.from]}
           exists: true
         error: inbox.messaging.Duplicate
-      - name: unknown-inbox
-        when_related: {via: input.to, exists: false}
-        error: inbox.messaging.UnknownInbox
       - name: inbox-closed
         when_related: {via: input.to, predicate: state == Closed}
         error: inbox.messaging.UnknownInbox

@@ -16,6 +16,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   CPUs, and failed at the bound twice that day; with the setting it took 39 s at 105 to 139. No
   shipped code changes: `cargo build --release` and `cargo install` do not read the dev
   profile.
+- The repository uses ESS 0.97.4 (`ess/ess-inputs.yaml` and `ESS_VERSION` of the check workflow).
+  Before the reorder below, 0.97.4 writes `generated/` and the conformance suite byte for byte as
+  the committed tree did. `PostMessage` now declares its outcome `unknown-inbox` above `duplicate`
+  and `duplicate-key`: the `SYNTHESIS` note of `ess/domains/messaging.yaml` records that ESS
+  answers it before them. The next ESS release refuses a declaration order that disagrees with
+  that precedence; this is not measured for `PostMessage` on 0.97.4. The reorder changes 35 files
+  of `generated/` (the `UnknownInbox` arm of `generated/rust/inbox/src/server/wire.rs` moves above
+  `Duplicate`; the contract digest changes) and two digests of the suite
+  (`provenance.contract_digest` and `provenance.spec_digest`); no scenario of the suite changes.
 
 ### Fixed
 
