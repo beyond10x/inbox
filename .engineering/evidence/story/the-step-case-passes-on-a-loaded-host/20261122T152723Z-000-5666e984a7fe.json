@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T15:27:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-step-case-passes-on-a-loaded-host",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

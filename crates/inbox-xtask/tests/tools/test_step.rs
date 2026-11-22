@@ -183,7 +183,8 @@ fn child_ignores_term() {
 "#;
 
 /// The step as `task test` runs it (this repository's `.config/nextest.toml`, real
-/// cargo-nextest), over its bound while a test ignores SIGTERM and another test's child does:
+/// cargo-nextest, test binaries built before the step), over its bound while a test ignores
+/// SIGTERM and another test's child does:
 /// when the step has ended, no process of the run is still running, and the 10 slowest tests
 /// are printed. Adversary case, 2026-11-22: the step SIGKILLs cargo-nextest 10 s after SIGTERM,
 /// the same 10 s as nextest's grace period before it SIGKILLs a test, so nextest dies first and
@@ -224,13 +225,35 @@ fn a_run_over_the_bound_leaves_no_test_process_running() {
         }
         command
     };
-    let build = fixture_command("cargo", &["nextest", "run", "--offline", "--no-run"])
-        .output()
-        .unwrap();
-    assert!(
-        build.status.success(),
-        "{}",
-        String::from_utf8_lossy(&build.stderr)
+    // Built and listed before the step, so its bound of 2 s holds no start of `cargo` and no wait
+    // on the lock of the package cache: on a loaded host that start took up to 3.7 s and the bound
+    // ended the run before either test ran.
+    let cargo_json = |name: &str, args: &[&str]| {
+        let built = fixture_command("cargo", args).output().unwrap();
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+        let path = dir.join(name);
+        fs::write(&path, &built.stdout).unwrap();
+        path.to_str().unwrap().to_owned()
+    };
+    let binaries = cargo_json(
+        "binaries.json",
+        &[
+            "nextest",
+            "list",
+            "--offline",
+            "--list-type",
+            "binaries-only",
+            "--message-format",
+            "json",
+        ],
+    );
+    let metadata = cargo_json(
+        "metadata.json",
+        &["metadata", "--offline", "--format-version", "1"],
     );
 
     let output = fixture_command(
@@ -239,10 +262,13 @@ fn a_run_over_the_bound_leaves_no_test_process_running() {
             script().to_str().unwrap(),
             "2",
             report.to_str().unwrap(),
-            "cargo",
+            "cargo-nextest",
             "nextest",
             "run",
-            "--offline",
+            "--binaries-metadata",
+            &binaries,
+            "--cargo-metadata",
+            &metadata,
         ],
     )
     .output()
