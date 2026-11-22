@@ -739,6 +739,8 @@ timeline:
   - event: inbox.messaging.MessageExpired
     payload:
       message_id: 01JGT0TP000000000000000003
+      to: agent:ws/planner
+      thread: 01JGT0TP000000000000000003
 - at: '2026-01-05T09:45:00Z'
   command: inbox.messaging.MarkDelivered
   actor: inbox.messaging.Client

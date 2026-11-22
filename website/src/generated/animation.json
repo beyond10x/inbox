@@ -25,12 +25,12 @@
     "NoAuthority",
     "Duplicate",
     "UnknownMessage",
-    "NotAnswerable",
+    "AlreadySettled",
     "ShapeMismatch",
     "NotSettled",
     "SignatureInvalid",
     "MessageIdTaken",
-    "AlreadySettled",
+    "NotAnswerable",
     "NotSender",
     "AlreadyExpired",
     "NotDue",
@@ -197,11 +197,11 @@
     {
       "actor": "recipient",
       "command": "Answer",
-      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with NotAnswerable: A note takes no answer.",
+      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with AlreadySettled: The message is already answered or refused.",
       "end": 0,
       "entity": "Message",
       "journey": 1,
-      "refusal": "NotAnswerable",
+      "refusal": "AlreadySettled",
       "removed": false,
       "state": "Answered",
       "step": 4,
@@ -224,7 +224,7 @@
         "Replies",
         "Settled",
         "Thread",
-        "NotAnswerable"
+        "AlreadySettled"
       ],
       "words": 12
     },
@@ -362,11 +362,11 @@
     {
       "actor": "recipient",
       "command": "Refuse",
-      "description": "Client, the recipient, sends Refuse. The owner of the inbox refuses the message and says why. The sender collects the reason. State: Refused. The owner of the inbox refused it; it waits for the sender to collect the reason. Visible in Outbox, Settled, Thread. Refuse can be refused with AlreadySettled: The message is already answered or refused.",
+      "description": "Client, the recipient, sends Refuse. The owner of the inbox refuses the message and says why. The sender collects the reason. State: Refused. The owner of the inbox refused it; it waits for the sender to collect the reason. Visible in Outbox, Settled, Thread. Refuse can be refused with NotAnswerable: A note takes no answer.",
       "end": 1,
       "entity": "Message",
       "journey": 2,
-      "refusal": "AlreadySettled",
+      "refusal": "NotAnswerable",
       "removed": false,
       "state": "Refused",
       "step": 7,
@@ -387,7 +387,7 @@
         "Outbox",
         "Settled",
         "Thread",
-        "AlreadySettled"
+        "NotAnswerable"
       ],
       "words": 11
     },
@@ -457,15 +457,15 @@
     {
       "actor": "service",
       "command": "Expire",
-      "description": "Sweeper, the service, sends Expire. The service's expiry task removes one message whose expires has passed. now is the Clock port's reading. A decision that names a default_on_silence is answered by silence instead and kept until keep_until. The message is removed. Found in Due, Messages. Expire can be refused with NotDue: expires is after the clock reading sent.",
+      "description": "Sweeper, the service, sends Expire. The service's expiry task removes one message whose expires has passed. now is the Clock port's reading. A decision that names a default_on_silence is answered by silence instead and kept until keep_until. State: Sent. The service stored the message. Visible in Due, Messages. Expire can be refused with NotDue: expires is after the clock reading sent.",
       "end": null,
       "entity": "Message",
       "journey": 3,
       "refusal": "NotDue",
-      "removed": true,
-      "state": null,
+      "removed": false,
+      "state": "Sent",
       "step": 10,
-      "token": "inbox",
+      "token": "service",
       "views": [
         "Due",
         "Messages"
@@ -477,11 +477,12 @@
         "inbox",
         "planned",
         "Expire",
+        "Sent",
         "Due",
         "Messages",
         "NotDue"
       ],
-      "words": 9
+      "words": 10
     },
     {
       "actor": "recipient",

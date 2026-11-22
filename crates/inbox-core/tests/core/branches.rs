@@ -1,5 +1,6 @@
-//! Each of the 6 `external:` branches the service context answers, once taken and once not taken:
-//! 3 of `PostMessage` and 3 of `Answer`.
+//! Each of the 5 `external:` branches the service context answers, once taken and once not taken:
+//! 2 of `PostMessage` and 3 of `Answer`; and the declared guard `unknown-option` of `PostMessage`,
+//! which the core decides from the envelope.
 
 use crate::support::{
     KeyIdVerifier, Post, Reply, World, answer, open_worker, outcome, post, published,
@@ -196,4 +197,47 @@ fn answer_shape_mismatch_not_taken_for_a_decision_answered_with_an_offered_optio
     reply.option = Some("A".to_owned());
     let answered = answer(&world, &reply);
     assert_eq!(outcome(&answered), "answered");
+}
+
+#[test]
+fn answer_shape_mismatch_taken_for_a_request_answered_with_an_option() {
+    let world = world_with_request();
+    let mut reply = Reply::to(REQUEST, REPLY);
+    reply.option = Some("A".to_owned());
+    let answered = answer(&world, &reply);
+    refused(&world, &answered, "shape-mismatch", 1);
+}
+
+/// `decision-without-options` also takes a decision whose `options` list is empty: no letter
+/// could answer it.
+#[test]
+fn post_decision_without_options_taken_for_an_empty_options_list() {
+    let world = world();
+    let mut decision = Post::decision(DECISION, None);
+    decision.decision = Some(r#"{"options":[]}"#.to_owned());
+    let answer = post(&world, &decision);
+    refused(&world, &answer, "decision-without-options", 0);
+    assert_eq!(
+        crate::support::text(&answer, "error"),
+        "inbox.messaging.ShapeMismatch"
+    );
+}
+
+/// A note asks for nothing: `Refuse` of it answers `note` and leaves the stored note as it was.
+#[test]
+fn refuse_of_a_note_answers_note_and_leaves_it_as_it_was() {
+    let world = world();
+    assert_eq!(outcome(&post(&world, &Post::note(REQUEST))), "posted");
+    let before = world.sweeper_rows("inbox.messaging.Messages", "{}");
+    let refused_note = world.client(
+        "agent:box/worker",
+        "inbox.messaging.Refuse",
+        &format!("{{\"message_id\":\"{REQUEST}\",\"reason\":\"Not for this session.\"}}"),
+    );
+    refused(&world, &refused_note, "note", 1);
+    assert_eq!(
+        crate::support::text(&refused_note, "error"),
+        "inbox.messaging.NotAnswerable"
+    );
+    assert_eq!(world.sweeper_rows("inbox.messaging.Messages", "{}"), before);
 }

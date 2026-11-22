@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
+// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! inbox-service — the `inbox-service` component of `inbox` v1.
@@ -254,6 +254,7 @@ where
             crate::messaging::RefuseOutcome::UnknownMessage { .. } => {}
             crate::messaging::RefuseOutcome::ForeignMessage { .. } => {}
             crate::messaging::RefuseOutcome::NotRecipient { .. } => {}
+            crate::messaging::RefuseOutcome::Note { .. } => {}
             crate::messaging::RefuseOutcome::Refused { message_refused, .. } => {
                 self.outbox.push(PublishedEvent::MessageRefused(message_refused.clone()));
             }

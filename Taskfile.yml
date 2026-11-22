@@ -45,9 +45,10 @@ tasks:
       - cargo build --locked --manifest-path generated/rust/inbox/Cargo.toml --features server --target-dir '{{.ROOT_DIR}}/target'
 
   spec:
-    desc: Validate the ESS specification.
+    desc: Validate the ESS specification, and fail with the file and line of each UNMAPPED marker in ess/.
     cmds:
       - ess specify validate --path ess --strict-requires
+      - 'if grep -rn UNMAPPED ess; then echo "task spec: ess/ holds an UNMAPPED marker: express the rule, or make it an external: outcome listed in docs/design/inbox.md" >&2; exit 1; fi'
 
   projections:
     desc: Rewrite generated/openapi, generated/asyncapi, generated/schema and generated/docs from ess/.

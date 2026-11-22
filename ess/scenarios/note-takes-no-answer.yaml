@@ -1,9 +1,11 @@
 type: ess-scenario/7
 covers:
 - inbox.messaging.Answer/outcome/note
+- inbox.messaging.Refuse/outcome/note
 domain: inbox.messaging
 scenario: note-takes-no-answer
-summary: 'A note asks for nothing: an answer to it is refused and the note stays for its owner to read.'
+summary: 'A note asks for nothing: an answer to it and a refusal of it are refused, and the note stays
+  for its owner to read.'
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -70,6 +72,20 @@ timeline:
     name: inbox.messaging.NotAnswerable
   no_events:
   - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Refuse
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    message_id: 01JGT0AN000000000000000001
+    reason: Not for this session.
+  outcome: note
+  error:
+    name: inbox.messaging.NotAnswerable
+  no_events:
+  - inbox.messaging.MessageRefused
 assert:
 - view: inbox.messaging.Pending
   params:

@@ -1,6 +1,6 @@
 <!--
 generated from inbox v1
-contract digest slice-sha256/2:b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
+contract digest slice-sha256/2:a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
 do not edit: regenerate with `ess generate`
 -->
 
@@ -667,7 +667,7 @@ It has four outcomes.
 
 **`decided-on-silence`** — Taken when the existing subject's stored fields satisfy `(kind == decision and state in [Sent, Delivered, Read] and defined(default_on_silence))`. It moves a `inbox.messaging.Message` from `Delivered`, `Read` and `Sent` to `Answered`, along the declared move `decide_on_silence`. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.DecisionTakenOnSilence`. It sets `expires` from `input.keep_until`, `answered_by` from `"silence"` and `decided_option` from `subject.default_on_silence before the outcome`. A test establishes and independently observes the subject enum fact before selecting this branch.
 
-**`expired`** — The default branch, taken when no other outcome's condition matched. It removes the `inbox.messaging.Message` its input names; no view shows it afterwards. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.MessageExpired`. A test reaches it by constructing an input that satisfies no other outcome's condition.
+**`expired`** — The default branch, taken when no other outcome's condition matched. It removes every `inbox.messaging.Message` its filter `message_id == input.message_id` selects. No selected row at all is an accepted answer. It emits `inbox.messaging.MessageExpired`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
 ### `MarkDelivered`
 
@@ -762,9 +762,9 @@ It has 14 outcomes.
 
 **`request-without-shape`** — Taken when `(kind == request and not (defined(reply_shape)))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
-**`decision-without-options`** — Taken when `(kind == decision and not (defined(decision)))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
+**`decision-without-options`** — A decision names no `decision`, or a `decision` with no option. Taken when `(kind == decision and (not (defined(decision)) or decision.options.count == 0))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
-**`unknown-option`** — Decided outside the input: `recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
+**`unknown-option`** — `recommended_option` or `default_on_silence` names no option of the decision (an envelope without a decision offers none), or two options carry one letter. Taken when `((defined(default_on_silence) and not (defined(decision))) or (defined(decision) and (not (distinct o in decision.options by o.letter as string) or (defined(decision.recommended_option) and not (exists o in decision.options: (o.letter == decision.recommended_option))) or (defined(default_on_silence) and not (exists o in decision.options: (o.letter == {fact: default_on_silence}))))))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
 **`signature-invalid`** — Decided outside the input: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.SignatureInvalid`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
@@ -791,13 +791,15 @@ It takes:
 - `message_id` — `inbox.messaging.MessageId`
 - `reason` — `String`
 
-It has five outcomes.
+It has six outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
 **`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
+
+**`note`** — A note asks for nothing, so it is not refused either; it is removed by `MarkRead` or `Expire`. Taken when the existing subject's stored fields satisfy `kind == note`. No entity in this specification changes. It reports `inbox.messaging.NotAnswerable`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`refused`** — The default branch, taken when no other outcome's condition matched. It moves a `inbox.messaging.Message` from `Delivered`, `Read` and `Sent` to `Refused`, along the declared move `refuse`. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.MessageRefused`. It sets `refusal` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
@@ -877,6 +879,8 @@ Nothing in this system reacts to it.
 It carries:
 
 - `message_id` — `inbox.messaging.MessageId`
+- `to` — `inbox.messaging.Principal`
+- `thread` — `inbox.messaging.ThreadId`
 
 Emitted by `inbox.messaging.Expire` on its `expired` outcome.
 
@@ -995,6 +999,8 @@ A note takes no answer.
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
 Reported by `inbox.messaging.Answer` on its `note` outcome.
+
+Reported by `inbox.messaging.Refuse` on its `note` outcome.
 
 ### `NotDue`
 
@@ -1120,4 +1126,4 @@ It may read [`Due`](#due) and [`Messages`](#messages), which an actor whose gran
 
 ---
 
-Generated from inbox v1 · contract digest `slice-sha256/2:b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from inbox v1 · contract digest `slice-sha256/2:a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373`. Do not edit this file; change the specification and regenerate it with `ess generate`.

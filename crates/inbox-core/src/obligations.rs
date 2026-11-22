@@ -6,8 +6,8 @@ use inbox::messaging::{
     Address, AlreadyExpired, AnsweredBy, AnyMessage, DecisionTakenOnSilence, Duplicate, Expire,
     ExpireOutcome, InboxSnapshot, InboxState, Kind, Message, MessageData, MessageExpired,
     MessageId, MessageIdTaken, MessagePosted, MessageSnapshot, MessageState, NoAuthority, NotDue,
-    NotSender, PostMessage, PostMessageOutcome, Principal, ShapeMismatch, SignatureInvalid,
-    UnknownInbox, UnknownMessage,
+    NotSender, OptionLetter, PostMessage, PostMessageOutcome, Principal, ShapeMismatch,
+    SignatureInvalid, UnknownInbox, UnknownMessage,
 };
 use inbox::obligation::UnmetObligation;
 use inbox::primitives::Timestamp;
@@ -120,15 +120,40 @@ fn instants(
 const POST_MESSAGE: &str = "inbox.messaging.PostMessage";
 const EXPIRE: &str = "inbox.messaging.Expire";
 
+/// The guard `unknown-option` of `PostMessage`, as `ess/domains/messaging.yaml` declares it: a
+/// `default_on_silence` on an envelope without a decision, which offers no option; or a decision
+/// whose options carry one letter twice, or whose `recommended_option` or `default_on_silence`
+/// names none of its options.
+fn unknown_option(input: &PostMessage) -> bool {
+    let Some(decision) = input.decision.as_ref() else {
+        return input.default_on_silence.is_some();
+    };
+    let letters: Vec<&OptionLetter> = decision
+        .options
+        .iter()
+        .map(|option| &option.letter)
+        .collect();
+    let repeated = letters
+        .iter()
+        .enumerate()
+        .any(|(at, letter)| letters[..at].contains(letter));
+    let offered =
+        |letter: Option<&OptionLetter>| letter.is_none_or(|letter| letters.contains(&letter));
+    repeated
+        || !offered(decision.recommended_option.as_ref())
+        || !offered(input.default_on_silence.as_ref())
+}
+
 /// `inbox.messaging.PostMessage`, in the order the ESS 0.97.1 interpreter and synthesizer select
 /// its outcomes:
 ///
 /// 1. the input-guarded refusals in declaration order: `not-sender` (`from` is not the caller's
 ///    `principal`; a caller without one is no declared outcome), `no-authority`,
-///    `already-expired`, `request-without-shape`, `decision-without-options`;
+///    `already-expired`, `request-without-shape`, `decision-without-options` (no `decision`, or
+///    one with no option), `unknown-option` (`unknown_option` above);
 /// 2. the external branches in declaration order, each asked of [`PostExternals`] before any row
-///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `unknown-option`,
-///    `signature-invalid`, `authority-invalid`;
+///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `signature-invalid`,
+///    `authority-invalid`;
 /// 3. the row refusals: `unknown-inbox` (`exists: false`), `duplicate` (a stored message with the
 ///    post's `message_id` and the post's `from`, read by `get`), `duplicate-key` (over `list`: a
 ///    stored message with the post's `dedup_key` and the post's `from`; the key of one sender
@@ -172,17 +197,22 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
                 error: ShapeMismatch,
             });
         }
-        if input.kind == Kind::Decision && input.decision.is_none() {
+        if input.kind == Kind::Decision
+            && input
+                .decision
+                .as_ref()
+                .is_none_or(|decision| decision.options.is_empty())
+        {
             return Ok(PostMessageOutcome::DecisionWithoutOptions {
                 error: ShapeMismatch,
             });
         }
-
-        if self.context.unknown_option(&input) {
+        if unknown_option(&input) {
             return Ok(PostMessageOutcome::UnknownOption {
                 error: ShapeMismatch,
             });
         }
+
         if self.context.signature_invalid(&input) {
             return Ok(PostMessageOutcome::SignatureInvalid {
                 error: SignatureInvalid,
@@ -303,6 +333,8 @@ impl<B: MessageStorage, C> ExpireBehavior for Core<B, C> {
         Ok(ExpireOutcome::Expired {
             message_expired: MessageExpired {
                 message_id: input.message_id,
+                to: held.data.from,
+                thread: held.data.thread,
             },
         })
     }

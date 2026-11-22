@@ -121,8 +121,9 @@ COVERS = {
     "decision-taken-on-silence": [
         out("Expire", "decided-on-silence"), tr("decide_on_silence", "Expire", "decided-on-silence"),
     ],
-    "note-expires": [out("Expire", "expired"), out("Expire", "not-due")],
-    "relayed-decision-without-delegation-refused": [out("PostMessage", "no-authority")],
+    "note-expires": [
+        out("Expire", "expired"), out("Expire", "not-due"), out("Expire", "unknown-message"),
+    ],
     "only-the-owner-handles-its-inbox": [
         out("MarkDelivered", "not-recipient"), out("MarkRead", "not-recipient"),
         out("Answer", "not-recipient"), out("Refuse", "not-recipient"), out("Collect", "not-sender"),
@@ -139,12 +140,11 @@ COVERS = {
           for i in answer_fields(view)],
     ],
     "closed-inbox-refuses-posts": [out("OpenInbox", "opened"), out("CloseInbox", "already-closed")],
-    "envelope-must-fit-its-kind": [out("PostMessage", "request-without-shape")],
     "marks-repeat-without-effect": [
         out("MarkDelivered", "already-delivered"), out("MarkRead", "already-read"),
         st("Delivered", "Collect"), st("Read", "Collect"),
     ],
-    "note-takes-no-answer": [out("Answer", "note")],
+    "note-takes-no-answer": [out("Answer", "note"), out("Refuse", "note")],
     "reply-envelope-is-checked": [
         out("Answer", "already-expired"), out("Answer", "no-authority"),
         out("Answer", "signature-invalid"), out("Answer", "authority-invalid"),
@@ -329,7 +329,9 @@ class Scenario:
     def expire(self, message_id, now, outcome, error=None, keep=24 * 60, sender=PLANNER, thread=None):
         events = None
         if outcome == "expired":
-            events = [("MessageExpired", {"message_id": message_id})]
+            events = [("MessageExpired", {
+                "message_id": message_id, "to": sender, "thread": thread or message_id,
+            })]
         if outcome == "decided-on-silence":
             events = [("DecisionTakenOnSilence", {
                 "message_id": message_id, "to": sender, "thread": thread or message_id,
@@ -456,10 +458,12 @@ names.append(s.write())
 # 6
 m = mid("WS", 1)
 s = Scenario("reply-of-the-wrong-shape-refused",
-             "A request asks for a reply of one line. A reply of three lines is refused and changes nothing; a reply of one line is then accepted.")
+             "A request asks for a reply of one line. A reply of three lines, and one naming an option, are refused and change nothing; a reply of one line is then accepted.")
 s.open(WORKER).post(m, WORKER, "request", reply_shape=LINES_1).read(m)
 s.answer(m, mid("WS", 2), outcome="shape-mismatch", error="ShapeMismatch",
          body="First line.\nSecond line.\nThird line.")
+s.answer(m, mid("WS", 4), option="A", body="One line.", outcome="shape-mismatch",
+         error="ShapeMismatch")
 s.answer(m, mid("WS", 3), body="One line.")
 s.check("Settled", sender(), contains={"message_id": m, "state": "Answered", "answered_by": "principal"})
 s.empty("Unanswered", inbox(WORKER))
@@ -752,9 +756,13 @@ names.append(s.write())
 m = mid("DC", 1)
 t = mid("DC", 9)
 s = Scenario("decision-answered-by-the-operator",
-             "The operator answers a decision with option A before `expires`. Every view that holds the message shows the reply, its option, and that a principal answered, not silence.")
+             "A reply naming no option, or a letter no option has, is refused. The operator answers the decision with option A before `expires`; every view that holds it shows the reply, its option, who answered.")
 s.open(OPERATOR).post(m, OPERATOR, "decision", thread=t, decision=ASK, default_on_silence="B",
                       expires=60, body="Ship release 4.2 today?")
+s.answer(m, mid("DC", 4), caller=OPERATOR, option="C", body="C. Wait.", created=9, expires=119,
+         outcome="shape-mismatch", error="ShapeMismatch")
+s.answer(m, mid("DC", 5), caller=OPERATOR, body="No letter.", created=9, expires=119,
+         outcome="shape-mismatch", error="ShapeMismatch")
 s.answer(m, mid("DC", 2), caller=OPERATOR, option="A", body="A. Ship it.", created=10, expires=120,
          thread=t)
 s.answer(m, mid("DC", 3), caller=OPERATOR, option="B", body="B. Hold it.", created=11, expires=121,
@@ -790,12 +798,16 @@ names.append(s.write())
 
 # 20
 s = Scenario("envelope-must-fit-its-kind",
-             "A request without a reply shape, a decision without options or with a silence option it does not offer, and an envelope that expires no later than its creation are refused and store nothing.")
+             "A request without a reply shape or with a silence option, a decision without options or with a silence option it lacks, and an envelope expiring at its creation are refused; nothing is stored.")
 s.open(WORKER)
 s.post(mid("EK", 1), WORKER, "request", outcome="request-without-shape", error="ShapeMismatch")
 s.post(mid("EK", 2), WORKER, "decision", default_on_silence="B", outcome="decision-without-options",
        error="ShapeMismatch")
 s.post(mid("EK", 3), WORKER, "decision", decision=ASK, default_on_silence="C", outcome="unknown-option",
+       error="ShapeMismatch")
+s.post(mid("EK", 6), WORKER, "request", reply_shape=LINES_1, default_on_silence="A",
+       outcome="unknown-option", error="ShapeMismatch")
+s.post(mid("EK", 5), WORKER, "decision", decision={"options": []}, outcome="decision-without-options",
        error="ShapeMismatch")
 s.post(mid("EK", 4), WORKER, "note", created=10, expires=10, outcome="already-expired",
        error="AlreadyExpired")
@@ -818,9 +830,10 @@ names.append(s.write())
 # 22
 m = mid("AN", 1)
 s = Scenario("note-takes-no-answer",
-             "A note asks for nothing: an answer to it is refused and the note stays for its owner to read.")
+             "A note asks for nothing: an answer to it and a refusal of it are refused, and the note stays for its owner to read.")
 s.open(WORKER).post(m, WORKER, "note")
 s.answer(m, mid("AN", 2), outcome="note", error="NotAnswerable")
+s.refuse(m, "Not for this session.", outcome="note", error="NotAnswerable")
 s.check("Pending", inbox(WORKER), contains={"message_id": m, "state": "Sent", "kind": "note"})
 names.append(s.write())
 

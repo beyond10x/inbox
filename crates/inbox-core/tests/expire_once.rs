@@ -159,6 +159,8 @@ fn expire(
 fn expired(id: &str) -> Vec<SystemEvent> {
     vec![SystemEvent::MessageExpired(MessageExpired {
         message_id: MessageId(id.to_owned()),
+        to: Principal(PLANNER.to_owned()),
+        thread: ThreadId(id.to_owned()),
     })]
 }
 

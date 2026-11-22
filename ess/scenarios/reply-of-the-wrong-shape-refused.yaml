@@ -1,8 +1,8 @@
 type: ess-scenario/7
 domain: inbox.messaging
 scenario: reply-of-the-wrong-shape-refused
-summary: A request asks for a reply of one line. A reply of three lines is refused and changes nothing;
-  a reply of one line is then accepted.
+summary: A request asks for a reply of one line. A reply of three lines, and one naming an option, are
+  refused and change nothing; a reply of one line is then accepted.
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -90,6 +90,29 @@ timeline:
   no_events:
   - inbox.messaging.MessageAnswered
 - at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:box/worker
+    inbox: agent:box/worker
+  input:
+    in_reply_to: 01JGT0WS000000000000000001
+    reply_id: 01JGT0WS000000000000000004
+    from: agent:box/worker
+    on_behalf_of: agent:box/worker
+    created: '2026-01-05T09:05:00Z'
+    expires: '2026-01-06T09:05:00Z'
+    option: A
+    body: One line.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: shape-mismatch
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:05:00Z'
   command: inbox.messaging.Answer
   actor: inbox.messaging.Client
   caller:

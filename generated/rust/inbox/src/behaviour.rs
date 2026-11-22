@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
+// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -499,6 +499,10 @@ where
         // `not-recipient`: selected by the addressed row.
         if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Refuse")? {
             return Ok(crate::messaging::RefuseOutcome::NotRecipient { error: crate::messaging::NotRecipient });
+        }
+        // `note`: selected by the addressed row.
+        if decided(equal(Some(&held.data.kind).map(|value| match value { crate::messaging::Kind::Note => "note", crate::messaging::Kind::Request => "request", crate::messaging::Kind::Decision => "decision" }.to_owned()), Some("note".to_owned())), "inbox.messaging.Refuse")? {
+            return Ok(crate::messaging::RefuseOutcome::Note { error: crate::messaging::NotAnswerable });
         }
         // `refused`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {

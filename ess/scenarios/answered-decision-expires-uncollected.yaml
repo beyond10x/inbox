@@ -121,6 +121,8 @@ timeline:
   - event: inbox.messaging.MessageExpired
     payload:
       message_id: 01JGT0DA000000000000000001
+      to: agent:ws/planner
+      thread: 01JGT0DA000000000000000001
 assert:
 - view: inbox.messaging.Outbox
   params:

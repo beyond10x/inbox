@@ -21,6 +21,11 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   security findings and the story of each open limit, moved out of the documentation site.
 - `task docs-words`, in `task check`: fails when a page of `website/docs` or
   `website/product.json` names a wave, a stage, a story, an epic or a count of scenarios.
+- The event `MessageExpired` names the sender (`to`) and the thread of the removed message, as
+  `MessageAnswered`, `MessageRefused` and `DecisionTakenOnSilence` do. A reader of 0.2.0
+  ignores the 2 members it does not know.
+- `task spec`, in `task check`: fails with the file and line when `ess/` holds an `UNMAPPED`
+  marker.
 
 ### Changed
 
@@ -34,6 +39,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   what is available with its command, the defaults of `inbox serve` with their flags, what is
   missing, and what is planned. The limits page states each limit as the user meets it. No
   page names a wave, a stage, a story or a count of scenarios or test cases.
+- `unknown-option` of `post` (a `recommended_option` or `default_on_silence` that names no
+  option of the decision, a `default_on_silence` without a decision, or two options with one
+  letter) is a guard of the specification, no longer an `external:` outcome. A post is refused
+  as in 0.2.0 and in the same order.
+- `post` refuses a decision whose `options` list is empty: `decision-without-options`
+  (`ShapeMismatch`), and nothing is stored. 0.2.0 stored it, and no letter could answer it.
+- `refuse` of a note is refused: the new outcome `note` (`NotAnswerable`, as `answer` of a
+  note), and the note stays as it was. 0.2.0 refused the note, and its sender could then
+  collect it.
 
 ## [0.2.0] - 2026-11-22
 

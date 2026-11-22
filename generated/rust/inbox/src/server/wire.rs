@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
+// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -852,6 +852,10 @@ pub fn encode_event_inbox_messaging_message_expired(value: &crate::messaging::Me
     out.push('{');
     json::member(out, "message_id");
     encode_inbox_messaging_message_id(&value.message_id, out);
+    json::member(out, "to");
+    encode_inbox_messaging_principal(&value.to, out);
+    json::member(out, "thread");
+    encode_inbox_messaging_thread_id(&value.thread, out);
     out.push('}');
 }
 
@@ -866,6 +870,16 @@ pub fn decode_event_inbox_messaging_message_expired(value: &json::Value, at: &st
             let at0 = json::nested(at, "message_id");
             let member0 = json::member_at(value, at, "message_id")?;
             decode_inbox_messaging_message_id(member0, &at0)?
+        },
+        to: {
+            let at1 = json::nested(at, "to");
+            let member1 = json::member_at(value, at, "to")?;
+            decode_inbox_messaging_principal(member1, &at1)?
+        },
+        thread: {
+            let at2 = json::nested(at, "thread");
+            let member2 = json::member_at(value, at, "thread")?;
+            decode_inbox_messaging_thread_id(member2, &at2)?
         },
     })
 }
@@ -2932,6 +2946,20 @@ pub fn encode_outcome_inbox_messaging_refuse(value: &crate::messaging::RefuseOut
             json::push_text(out, "inbox.messaging.NotRecipient");
             json::member(out, "payload");
             encode_error_inbox_messaging_not_recipient(error, out);
+            out.push('}');
+        }
+        crate::messaging::RefuseOutcome::Note { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "note");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.NotAnswerable");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_not_answerable(error, out);
             out.push('}');
         }
         crate::messaging::RefuseOutcome::Refused { message_refused } => {

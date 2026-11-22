@@ -380,8 +380,12 @@ commands:
       - {name: kind, type: inbox.messaging.Kind}
       - {name: thread, type: inbox.messaging.ThreadId}
       - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
-      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>}
-      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>}
+      # SYNTHESIS: ESS 0.97.1 synthesis draws a candidate for an `Optional` of a newtype without
+      # the newtype's invariant, so without these 2 examples the guard `unknown-option` refuses
+      # every candidate, `posted` is refused `ESS-SYNTH-003` and 54 generated scenarios leave the
+      # suite. They go when synthesis keeps the invariant: beyond10x/ess issue 809.
+      - {name: decision, type: Optional<inbox.messaging.DecisionAsk>, example: {options: [{letter: A, text: Ship}, {letter: B, text: Hold}], recommended_option: A}}
+      - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>, example: A}
       - {name: created, type: Timestamp}
       - {name: expires, type: Timestamp, summary: "Mandatory. A client that is given none writes `created` plus 24 hours."}
       - {name: dedup_key, type: inbox.messaging.DedupKey}
@@ -411,15 +415,29 @@ commands:
         when:
           all:
             - kind == decision
-            - not defined(decision)
+            - any:
+                - not defined(decision)
+                - decision.options.count == 0
         error: inbox.messaging.ShapeMismatch
-      # UNMAPPED: "the letters name options of the decision" has no ESS 0.97.1 spelling: a guard
-      # cannot test that a value is the `letter` of an element of an input list. It is an external
-      # refusal, decided before any row is read.
+        summary: A decision names no `decision`, or a `decision` with no option.
       - name: unknown-option
-        external: "`recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter"
-        before_row: true
+        when:
+          any:
+            - all:
+                - defined(default_on_silence)
+                - not defined(decision)
+            - all:
+                - defined(decision)
+                - any:
+                    - not: {distinct: {in: decision.options, as: o, by: o.letter}}
+                    - all:
+                        - defined(decision.recommended_option)
+                        - not: {exists: {in: decision.options, as: o, that: o.letter == decision.recommended_option}}
+                    - all:
+                        - defined(default_on_silence)
+                        - not: {exists: {in: decision.options, as: o, that: o.letter == default_on_silence}}
         error: inbox.messaging.ShapeMismatch
+        summary: "`recommended_option` or `default_on_silence` names no option of the decision (an envelope without a decision offers none), or two options carry one letter."
       - name: signature-invalid
         external: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify
         before_row: true
@@ -620,6 +638,11 @@ commands:
         when_subject:
           predicate: kind == note
         error: inbox.messaging.NotAnswerable
+      # SYNTHESIS: the option part has a guard ESS 0.97.1 validates and interprets (`exists` over
+      # the stored `decision.options`, a `when_subject` outcome before this one), but with it
+      # `ess generate synthesize --target rust` keeps all of `Answer` an obligation (85 of 88
+      # capabilities generated) and drops the external branch port the service answers through.
+      # The option part stays in this external branch until synthesis generates that guard.
       - name: shape-mismatch
         external: the reply does not fit the message's `reply_shape`, or names no option of the decision
         error: inbox.messaging.ShapeMismatch
@@ -668,6 +691,11 @@ commands:
         when_subject:
           predicate: to != caller.inbox
         error: inbox.messaging.NotRecipient
+      - name: note
+        when_subject:
+          predicate: kind == note
+        error: inbox.messaging.NotAnswerable
+        summary: A note asks for nothing, so it is not refused either; it is removed by `MarkRead` or `Expire`.
       - name: refused
         moves: inbox.messaging.Message.refuse
         instance: message_id
@@ -749,13 +777,13 @@ commands:
             thread: {subject: thread}
       - name: expired
         deletes: inbox.messaging.Message
-        instance: message_id
-        emits: [inbox.messaging.MessageExpired]
+        instances: {where: message_id == input.message_id}
+        emits: [{event: inbox.messaging.MessageExpired, each: changed}]
         payload:
-          # UNMAPPED: the service knows the sender and the thread of the message it removes, and a
-          # sender waits for that news. ESS 0.97.1 admits `{subject: …}` beside `moves:` and
-          # `updates:` only, so the event of a `deletes:` outcome carries the id alone.
-          inbox.messaging.MessageExpired: {message_id: input.message_id}
+          inbox.messaging.MessageExpired:
+            message_id: {changed: message_id}
+            to: {changed: from}
+            thread: {changed: thread}
 
 events:
   - name: inbox.messaging.InboxOpened
@@ -799,6 +827,8 @@ events:
   - name: inbox.messaging.MessageExpired
     fields:
       - {name: message_id, type: inbox.messaging.MessageId}
+      - {name: to, type: inbox.messaging.Principal}
+      - {name: thread, type: inbox.messaging.ThreadId}
 
 views:
   - name: inbox.messaging.Inboxes
