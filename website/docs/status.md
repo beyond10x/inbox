@@ -9,11 +9,11 @@ Stage 2 builds the service with the in-memory backend and the command-line clien
 ([`docs/plan/stage-2.md`](https://github.com/beyond10x/inbox/blob/main/docs/plan/stage-2.md)).
 All 5 waves are on `main`, and 3 more: 2 waves that close security findings (waves 6 and 7)
 and wave 8, which closes gaps in the checks.
-Release 0.1.0 holds waves 1 to 3.
+Release 0.1.0 holds waves 1 to 3, release 0.2.0 all 8.
 
 In short: the rules of the inbox run in process and behind an HTTP listener, and the
 conformance suite passes against them. One binary starts the service on a loopback address
-and is its client ([first use](first-use.md)). No release holds it, and two security
+and is its client ([first use](first-use.md)). No release attaches it, and two security
 findings are open ([limits](limits.md)).
 
 ## On `main`
@@ -88,6 +88,6 @@ From `docs/design/service.md`; each is set by the embedding.
 
 ## Not on `main`
 
-- No release holds the binary: build it from source ([first use](first-use.md)).
+- No release attaches a binary: build it from source ([first use](first-use.md)).
 - No persistent backend, no second host, no wake-up, no TLS.
 - No deployment.

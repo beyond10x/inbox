@@ -9,7 +9,7 @@ Status: stage 1 of 6 is done; the 5 waves of stage 2 (`docs/plan/stage-2.md`) ar
 delivered, and waves 6 to 8, added after them: wave 6 delivered 2 of its 3 stories, wave 7
 delivered story:dedup-key-scope and story:post-does-not-tell-a-message-id-exists on ESS 0.97.1,
 and wave 8 delivered 6 stories filed from findings of the adversary passes.
-Release 0.1.0 is the state of `main` after wave 3; waves 4 to 8 are on `main` and in no release.
+Release 0.1.0 is the state of `main` after wave 3, release 0.2.0 the state after wave 8.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
@@ -72,15 +72,20 @@ The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are t
 - The repository is public at `https://github.com/beyond10x/inbox`. What must never enter it is
   in "Rules" below; the gates scan every push and refuse without printing the match.
 - `main` moves only by the organization bot's fast-forward push through `b10x-gates`, after
-  `task check` is green on the commit. Three checks run on every push and are read before a
-  release: `common / Security and privacy`, `inbox / task check` and `Build documentation`.
-- The repository has no ruleset (read on 2026-11-21: 0). Writing a ruleset or branch protection
-  is the owner's act: `b10x-gates api` refuses it, and that refusal is not worked around. Until
-  the owner adds a ruleset that requires the 3 checks, nothing on the forge refuses a push to
-  `main`; the gate before the push is `task check` and `b10x-gates`.
-- Once that ruleset exists, a commit on which the 3 checks have not run is refused on `main`:
-  push it to a branch as the bot, open a pull request, wait for the checks on its head, then
-  fast-forward `main` to that commit. This route has not been run in this repository. Never
+  `task check` is green on the commit and 3 checks are green on it:
+  `common / Security and privacy`, `inbox / task check` and `Build documentation`.
+- The repository has 5 rulesets (read on 2026-11-22). "Required shared and repository gates"
+  requires the 3 checks on `main`, and a branch that is behind `main` is not refused for that.
+  4 more let only the organization bot create, update or delete a branch or a tag, and require
+  the bot as author and committer. Writing a ruleset or branch protection is the owner's act:
+  `b10x-gates api` refuses it, and that refusal is not worked around.
+- A commit on which the 3 checks have not run is refused on `main` (`GH013`, "3 of 3 required
+  status checks are expected"). The checks run on a pull request and on a push to `main` only,
+  so every commit takes this route: push it to a branch as the bot
+  (`b10x-gates publish --remote-ref refs/heads/<branch>`), open a pull request as the bot
+  (`b10x-gates gh -- pr create`), wait for the 3 checks on its head, then fast-forward `main`
+  to that commit. GitHub then shows the pull request as merged; delete the branch with
+  `b10x-gates bot -- delete-branch <branch>`. First run: pull request 1, 2026-11-22. Never
   merge a pull request with GitHub's merge button: `main` holds only commits the bot wrote and
   committed.
 - The site is the repository's own, at `https://beyond10x.github.io/inbox/` (route `/inbox/`).

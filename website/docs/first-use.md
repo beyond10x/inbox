@@ -5,8 +5,8 @@ description: Build the binary, start the service on a loopback address, and send
 
 # First use
 
-One binary, `inbox`, starts the service and is its client. It is on `main` and in no release
-yet: build it from source.
+One binary, `inbox`, starts the service and is its client. Release 0.2.0 is the first whose
+source holds it; no release attaches a binary: build it from source.
 
 :::warning[Test keys and loopback only]
 

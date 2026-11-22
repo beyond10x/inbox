@@ -1,6 +1,6 @@
 # Releasing the inbox
 
-A release is a bare version tag (`0.1.0`), annotated and written by the organization bot, on a
+A release is a bare version tag (`0.2.0`), annotated and written by the organization bot, on a
 `main` commit whose `task check` and 3 pushed checks are green, and a GitHub Release made from
 that tag. The tag is the workspace version, `[workspace.package] version` in `Cargo.toml`; the
 release workflow fails on a tag that differs.
@@ -50,10 +50,13 @@ The commands use the gates as the bot, from a checkout of this repository:
        $gates gh -- run list --workflow release.yml --branch <version> --limit 1
        $gates gh -- run watch <run-id> --exit-status
 
-6. **Release.** Write the notes from the annotated tag to a file, scan it, then create the
-   release as the bot and view it:
+6. **Release.** Write the notes to a file in the short form: a lead of 1 sentence (at most 25
+   words), `**Breaking**` (`- None.` when none), `**Changed**` with at most 5 bullets of one
+   clause each, one of them naming what stays on the limits page, and a last line that links
+   to the version's `CHANGELOG.md` section; at most 900 characters without that line. The
+   annotated tag carries the whole section. Scan the file, then create the release as the bot
+   and view it:
 
-       git tag -l --format='%(contents)' <version> > <notes-file>
        $gates scan-text <notes-file>
        $gates gh -- release create <version> --verify-tag --title "inbox <version>" \
          --notes-file <notes-file>

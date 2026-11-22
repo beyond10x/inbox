@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-22
+
 ### Added
 
 - The binary `inbox` (`crates/inbox-cli`), built from source with
@@ -137,7 +139,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   as every key. The read rule, the request signature and its window, the lapse of a key
   or a delegation, and the binding of a key to `from` are held by the tests of
   `crates/inbox-server` and `crates/inbox-verify`, not by those runs.
-- No release holds the binary.
+- No release attaches a binary: `inbox` is built from source.
 
 ## [0.1.0] - 2026-11-21
 

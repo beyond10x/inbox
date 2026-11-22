@@ -13,7 +13,7 @@ options.
 
 It is early. The rules are written and implemented, held to a conformance suite, and one
 binary starts the service on a loopback address and is its client
-([first use](first-use.md)). No release holds the binary, and security findings are open.
+([first use](first-use.md)). No release attaches a binary, and security findings are open.
 Read [what works](status.md) and [the limits](limits.md) before anything else.
 
 ## The problem

@@ -8,7 +8,8 @@ Documentation: https://beyond10x.github.io/inbox/
 ## State
 
 Early. The 5 waves of stage 2 of 6 are on `main`, and 3 more waves: 2 that close security
-findings and 1 that closes gaps in the checks. Release 0.1.0 holds waves 1 to 3.
+findings and 1 that closes gaps in the checks. Release 0.1.0 holds waves 1 to 3, release
+0.2.0 all 8.
 
 What works on `main`:
 
@@ -19,7 +20,8 @@ What works on `main`:
   library, loopback only).
 - The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
   address over the in-memory backend, and the other commands are the client. It is built
-  from source; no release holds it.
+  from source: release 0.2.0 is the first whose source holds it, and no release attaches a
+  binary.
 - The conformance suite: 111 scenarios pass on ESS's interpreted target and against the core,
   and every refusal of the specification is claimed by an authored scenario
   (`task coverage`: 93 of 93). ESS reports the run against the core as `passed`.
@@ -32,7 +34,7 @@ What works on `main`:
 
 What does not exist yet: a persistent
 backend, a second host, wake-up of an idle session, TLS, and any deployment. No release
-holds a binary.
+attaches a binary.
 
 Numbers and the path that proves each: [what works](https://beyond10x.github.io/inbox/docs/status).
 
@@ -81,7 +83,7 @@ The gate: principals of one operator (that operator's own sessions and hosts) ma
 service; a release, a listener outside loopback and a deployment each still need the operator's
 own order, and `inbox serve` still refuses an address outside loopback.
 
-Closed on `main` and in no release: the replay of a signed envelope under another caller
+Closed since release 0.2.0: the replay of a signed envelope under another caller
 (`story:post-from-is-the-caller`; a post or an answer whose `from` is not the caller is refused
 `not-sender`), the dedup key of another sender (`story:dedup-key-scope`; a key belongs to its
 sender), and a post that told whether a message id of another sender exists for an address no
@@ -89,7 +91,7 @@ inbox has or a closed inbox (`story:post-does-not-tell-a-message-id-exists`; `du
 the sender's own message only, and `id-taken` is new).
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
-loses every message; no release holds the binary; the first `inbox repost` after a restart
+loses every message; no release attaches a binary; the first `inbox repost` after a restart
 delivers once more a note its recipient read before it; the run of the suite over HTTP
 witnesses 31 of the 111 scenarios;
 gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.

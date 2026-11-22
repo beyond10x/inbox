@@ -46,9 +46,9 @@ idempotent by `message_id` and `dedup_key`; a repeated `Answer` is answered `alr
 Source: [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/service.md),
 "The request signature". No story is filed; version 1 leaves a replay record out.
 
-## Security findings, closed on `main`
+## Security findings, closed in release 0.2.0
 
-On `main` since waves 6 and 7 of stage 2 and in no release. Release 0.1.0 holds the listener
+Closed in waves 6 and 7 of stage 2 and in release 0.2.0. Release 0.1.0 holds the listener
 without them.
 
 - **A signed envelope can be posted again under another caller**
@@ -80,8 +80,9 @@ without them.
 
 ## What does not exist yet
 
-- **No release holds the binary.** `inbox serve` and the client are on `main` since wave 4
-  and are built from source ([first use](first-use.md)); release 0.1.0 has no binary.
+- **No release attaches a binary.** `inbox serve` and the client are in the source of
+  release 0.2.0 and are built from source ([first use](first-use.md)); release 0.1.0 does
+  not hold them.
 - **`inbox repost` delivers a note once more that was read before a restart**
   (`story:repost-does-not-redeliver-a-handled-note`). A note stays in its sender's outbox
   file until it expires, 24 hours by default. Every answer of the service carries the header
