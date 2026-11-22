@@ -289,8 +289,9 @@ for (const theme of THEMES) {
   });
 }
 
-const STATUS = readFileSync(join(__dirname, '..', 'docs', 'status.md'), 'utf8');
-const LIMITS = readFileSync(join(__dirname, '..', 'docs', 'limits.md'), 'utf8');
+const DOCS = join(__dirname, '..', 'docs');
+const LIMITS = readFileSync(join(DOCS, 'limits.md'), 'utf8');
+const openFindings = () => (LIMITS.split('## Security findings, open')[1].split(/\n## /)[0].match(/^### \d+\./gm) ?? []).length;
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
 test.describe('pitch slides', () => {
@@ -328,14 +329,12 @@ test.describe('pitch slides', () => {
     await expect(slides.nth(2).getByTestId('pitch-link')).toHaveAttribute('href', '/inbox/docs/limits');
   });
 
-  test('slide 3 states the numbers of the status page', async ({page}) => {
+  test('slide 3 counts the open security findings of the limits page and no scenario', async ({page}) => {
     await open(page);
     const text = (await page.getByTestId('pitch-slide').nth(2).textContent())!;
-    expect(STATUS).toContain('111 scenarios: 111 passed');
-    expect(STATUS).toContain('111 scenarios: 31 passed');
-    expect(STATUS).toContain('two security');
-    expect(text).toContain('111');
-    expect(text).toContain('31');
+    expect(text).toContain(`${NUMBER_WORDS[openFindings()]} security findings stay open`);
+    expect(text).toContain(`${openFindings()} open`);
+    expect(text).not.toMatch(/\d+ (of \d+|scenarios|witnessed)/);
   });
 
   test('moves with the arrows, the dots, the arrow keys and a swipe', async ({page}) => {
@@ -451,8 +450,7 @@ test.describe('at 390 px', () => {
 
 test.describe('claims', () => {
   test('the lede counts the open security findings of the limits page and claims one host', async () => {
-    const open = LIMITS.split('## Security findings, open')[1].split(/\n## /)[0];
-    const findings = (open.match(/^### \d+\./gm) ?? []).length;
+    const findings = openFindings();
     expect(findings).toBe(2);
     expect(product.product.lede).toContain(`${NUMBER_WORDS[findings]} security findings are open`);
     expect(product.product.lede).toContain('one host');

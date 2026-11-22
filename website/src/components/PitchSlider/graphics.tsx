@@ -129,8 +129,8 @@ export function ShapeGraphic(): ReactNode {
 }
 
 /** The conformance suite against the core and over HTTP, and the open findings. */
-export function SuiteGraphic({total, core, http, findings}: {total: number; core: number; http: number; findings: number}): ReactNode {
-  const bar = (y: number, passed: number, label: string, value: string) => (
+export function SuiteGraphic({findings}: {findings: number}): ReactNode {
+  const bar = (y: number, label: string, value: string) => (
     <g className="inbox-pitch__bar" transform={`translate(0 ${y})`}>
       <text className="inbox-pitch__bar-label" x={0} y={0}>
         {label}
@@ -139,15 +139,15 @@ export function SuiteGraphic({total, core, http, findings}: {total: number; core
         {value}
       </text>
       <rect className="inbox-pitch__bar-track" x={1} y={12} width={W - 2} height={22} rx={6} />
-      <rect className="inbox-pitch__bar-fill" x={1} y={12} width={Math.max(((W - 2) * passed) / total, 12)} height={22} rx={6} />
+      <rect className="inbox-pitch__bar-fill" x={1} y={12} width={W - 2} height={22} rx={6} />
     </g>
   );
   return (
     <Figure
       height={262}
-      label={`${core} of ${total} scenarios pass against the core; over HTTP ${http} of ${total} can be witnessed, and pass; ${findings} security findings are open.`}>
-      {bar(24, core, 'against the core', `${core} of ${total}`)}
-      {bar(104, http, 'over HTTP', `${http} witnessed`)}
+      label={`Every scenario of the conformance suite passes against the core; every refusal of the specification is covered by a scenario; ${findings} security findings are open.`}>
+      {bar(24, 'scenarios, against the core', 'all pass')}
+      {bar(104, 'refusals of the specification', 'all covered')}
       <g transform="translate(0 184)">
         <text className="inbox-pitch__bar-label" x={0} y={0}>
           security findings

@@ -38,6 +38,7 @@ The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are t
 | `docs/design/signing.md` | What each signature covers: context strings, canonical bytes, wire encodings, lapse and the 60 s request window, what a verifier refuses, the rules of the key file (an id is never reused), what version 1 leaves out | authored |
 | `docs/design/service.md` | The HTTP service of stage 2: the steps of one request in order with each refusal's status and body, the 3 request signature headers, the caller, the read rule, the wait, the expiry task, the limits, binding and stopping, what stage 2 leaves out | authored |
 | `docs/design/inbox.md` | The design, the decisions taken while modelling, and what ESS 0.97.1 cannot express | authored |
+| `docs/checks.md` | For the people and agents who build the inbox: the numbers the gate prints per part, why the run over HTTP witnesses part of the suite, what the checks do not cover, the closed security findings, and the story of each open limit. The end-user pages carry none of this | authored; updated by the coordinator that closes a wave |
 | `docs/plan/` | One wave plan page per stage: the waves in order, and per unit its branch, worktree id and stage | the wave's coordinator |
 | `.engineering/` | AEP planning store; the plan lives here, not in chat or plan files | `aep` |
 | `generated/docs/` | The specification pages `ess generate --kind docs` writes from `ess/`, with its `.ess-output/` record; the site reads them in place | `task projections` |
@@ -50,7 +51,7 @@ The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are t
 
 | Command | Does |
 |---|---|
-| `task check` | The gate: `task spec`, `task scenarios-drift`, `task animation-drift`, `task projections-drift`, `task drift`, `task coverage`, `task conform-interpreted`, `task conform`, `task acceptance`, `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, `task build-generated`. The suite is synthesized once per run (`task coverage` has `run: once`). Run it as `slot task check` on a shared host (`cargo test --workspace`: 476 passed, 0 failed, 5 ignored) |
+| `task check` | The gate: `task spec`, `task scenarios-drift`, `task animation-drift`, `task docs-words`, `task projections-drift`, `task drift`, `task coverage`, `task conform-interpreted`, `task conform`, `task acceptance`, `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, `task build-generated`. The suite is synthesized once per run (`task coverage` has `run: once`). Run it as `slot task check` on a shared host (`cargo test --workspace`: 476 passed, 0 failed, 5 ignored) |
 | `task spec` | `ess specify validate --path ess --strict-requires` |
 | `task projections` | Rewrite `generated/{openapi,asyncapi,schema,docs}` after a change to `ess/` |
 | `task generate` | Rewrite `generated/rust/inbox` after a change to `ess/` or to the `ess` version, then bring its `Cargo.lock` up to date with `cargo metadata`. The synthesis is staged in `target/inbox-xtask/generate`; the held crate moves to `target/inbox-xtask/previous` and is moved back if the staged one cannot take its place. If a run left the held crate only in `previous` (`generated/rust/inbox` absent), the next run moves it back first, `Cargo.lock` included; a `previous` beside a present crate is removed. Works where `generated/rust/` does not exist yet |
@@ -63,6 +64,7 @@ The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are t
 | `task scenarios` | Rewrite `ess/scenarios/` and `ess/ess-inputs.yaml` from `tools/scenarios.py`. The script runs its checks before it writes any file (one claimant per id; each claim of a type invariant at a view field rests on a row of that view with a value at the field's path); a failed check changes no file. Needs `python3` with PyYAML |
 | `task scenarios-drift` | Fail when `ess/scenarios/` or `ess/ess-inputs.yaml` differs from what `tools/scenarios.py` writes: one line per path (`edited:`, `missing:`, `not written by the script:`), exit 1; writes nothing (`python3 tools/scenarios.py ess --check`). In `task check` after `task spec` |
 | `task animation` | Rewrite `website/src/generated/animation.json` from the compiled `ess/` with `tools/animation.py`; a failed check of the script changes no file |
+| `task docs-words` | Fail, exit 1, with the matching lines when a page of `website/docs` or `website/product.json` names a wave, a stage, a story, an epic or a count of scenarios; writes nothing. In `task check` after `task animation-drift` |
 | `task animation-drift` | Fail with `edited: website/src/generated/animation.json` (or `missing:`), exit 1, when the file differs from what `tools/animation.py` writes from the compiled `ess/`; writes nothing. In `task check` after `task scenarios-drift`. After a change to `ess/`, run `task animation` and commit the file |
 | `task plan` | `aep plan artifact validate` |
 | `cargo build --release -p inbox-cli` | Build the binary `target/release/inbox` (`crates/inbox-cli`). Every command takes `--json` (one JSON document on standard output) and exits 0 done (a `2xx` answer), 1 refused by the service (the model's error name, or the service's `refused` text for `401`, `400`, `408`, `413`, `503`) or an outbox line `repost` cannot read, 2 wrong usage (an `INBOX_URL` that is not loopback, an envelope the generated decoder refuses), 3 transport failure or an answer that is neither success nor refusal, 4 a local file not readable or writable; a `repost` that meets a local failure and also a refusal or an unreadable outbox line posts every envelope, prints its report and exits 4 |
@@ -170,7 +172,16 @@ The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are t
   When an ESS release fixes it, remove the example and its comment, regenerate, and remove the
   lines that name it in `docs/design/inbox.md`, `website/docs/limits.md` and `CHANGELOG.md`.
 - The guard on `from` is in `ess/` (`not-sender`); no copy of it is written in the listener.
-- A draft that an adversary pass files against an open limit of `website/docs/limits.md` is
+- `website/docs`, `website/product.json` and the landing page are end-user documentation (the
+  operator, 2026-11-22: "a wave is not something the user is concerned with. They just want
+  to use the tool"; "Just list the features, the current ones, the missing ones, the upcoming
+  ones"). They name no wave, stage, story, epic, adversary pass or count of scenarios or test
+  cases. `website/docs/status.md` lists features: available, missing, planned.
+  `website/docs/limits.md` states each limit as what the user meets. The numbers of the gate,
+  gaps of the checks, closed findings and the story of each limit go in `docs/checks.md`.
+  `task docs-words` holds the pages to this.
+- A draft that an adversary pass files against an open limit of `website/docs/limits.md` or
+  of `docs/checks.md` is
   accepted by the coordinator without asking and named in the wave report (the host operator's
   standing decision, 2026-11-21). It joins no wave that is running.
 - A commit message never puts a closing keyword (`fixes`, `closes`, `resolves` and their forms)

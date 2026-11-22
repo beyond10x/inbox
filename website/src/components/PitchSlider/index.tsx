@@ -8,10 +8,10 @@ const ADVANCE_MS = 7000;
 const SWIPE_PX = 40;
 
 /**
- * The numbers of slide 3 are those of website/docs/status.md (task conform, ESS 0.97.1) and
- * website/docs/limits.md; tests/landing.spec.ts fails when status.md no longer states them.
+ * The count of open security findings is that of website/docs/limits.md; tests/landing.spec.ts
+ * fails when the page counts another number.
  */
-const SUITE = {total: 111, core: 111, http: 31, findings: 2};
+const FINDINGS = 2;
 
 interface Slide {
   label: string;
@@ -41,11 +41,11 @@ const SLIDES: Slide[] = [
   },
   {
     label: 'Why it is solid',
-    claim: `Held to ${SUITE.total} scenarios from its specification.`,
-    line: `All ${SUITE.core} pass against the core; over HTTP ${SUITE.http} can be witnessed and pass, and two security findings stay open.`,
+    claim: 'Held to a suite made from its specification.',
+    line: 'Every scenario passes against the core, every refusal is covered, and two security findings stay open.',
     href: '/docs/limits',
     link: 'The limits, findings first',
-    graphic: <SuiteGraphic {...SUITE} />,
+    graphic: <SuiteGraphic findings={FINDINGS} />,
   },
 ];
 

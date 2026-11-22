@@ -13,9 +13,7 @@ disagree, `ess/` holds.
 [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md):
 the problem, the shape (one service, backends behind one storage contract, signed envelopes),
 the model of two entities, nine commands and nine views, when a message is removed, the eight
-decisions taken while modelling, what ESS 0.97.1 cannot express, and the six stages. Its status
-line was written at the end of stage 1 and says that no service code exists; the code of stage
-2 has since been added (see [what works](status.md)).
+decisions taken while modelling, and what ESS 0.97.1 cannot express.
 
 ## Signing
 
@@ -29,5 +27,5 @@ leaves out.
 
 [`docs/design/service.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/service.md):
 one request in order from reading to the answer, the request signature headers, who the caller
-is, the read rule, the wait on `Pending`, the expiry task, the limits and their defaults,
-binding to loopback and stopping, and what stage 2 leaves out.
+is, the read rule, the wait on `Pending`, the expiry task, the limits and their defaults, and
+binding to loopback and stopping.

@@ -15,13 +15,21 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   show is read from the compiled `ess/`: `tools/animation.py` writes
   `website/src/generated/animation.json` (`task animation`), and `task animation-drift`, in
   `task check`, fails when the file differs from what the script writes. 16 page tests
-  (`website/tests/landing.spec.ts`, Playwright) hold the page, among them the numbers of slide
-  3 to the status page and the count of open security findings to the limits page.
+  (`website/tests/landing.spec.ts`, Playwright) hold the page, among them the count of open
+  security findings to the limits page.
+- `docs/checks.md`: the numbers the gate prints, what the checks do not cover, the closed
+  security findings and the story of each open limit, moved out of the documentation site.
+- `task docs-words`, in `task check`: fails when a page of `website/docs` or
+  `website/product.json` names a wave, a stage, a story, an epic or a count of scenarios.
 
 ### Changed
 
-- The text of the landing page states `main` after wave 8: 38 authored scenarios, 111 in the
-  suite, 31 over HTTP, 2 open security findings. It said that no program and no client exist.
+- The text of the landing page states release 0.2.0 and its 2 open security findings. It said
+  that no program and no client exist.
+- The documentation site is written for a user of the tool. "What works" is now "Features":
+  what is available with its command, the defaults of `inbox serve` with their flags, what is
+  missing, and what is planned. The limits page states each limit as the user meets it. No
+  page names a wave, a stage, a story or a count of scenarios or test cases.
 
 ## [0.2.0] - 2026-11-22
 

@@ -15,6 +15,7 @@ tasks:
       - task: spec
       - task: scenarios-drift
       - task: animation-drift
+      - task: docs-words
       - task: projections-drift
       - task: drift
       - task: coverage
@@ -114,6 +115,11 @@ tasks:
     desc: Rewrite website/src/generated/animation.json, the data of the landing page's hero figure and slides, from the compiled ess/ with tools/animation.py, after its checks pass.
     cmds:
       - python3 tools/animation.py ess
+
+  docs-words:
+    desc: Fail with the matching lines when an end-user page (website/docs, website/product.json) names a wave, a stage, a story, an epic or a count of scenarios; those belong in docs/checks.md. Writes nothing.
+    cmds:
+      - python3 tools/docs_words.py website/docs website/product.json
 
   animation-drift:
     desc: Fail when website/src/generated/animation.json differs from what tools/animation.py writes from the compiled ess/ (edited, missing); writes nothing.

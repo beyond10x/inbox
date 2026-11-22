@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T01:51:07Z",
+  "actor": "agent:inbox",
+  "artifact": "story:end-user-pages-list-features",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check on branch docs/unslop: exit 0 in 226 s and in 83 s with the CI variables; task docs-words 8 files, 0 lines; site build exit 0; 16 of 16 page tests"
+  }
+}

@@ -7,36 +7,26 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. The 5 waves of stage 2 of 6 are on `main`, and 3 more waves: 2 that close security
-findings and 1 that closes gaps in the checks. Release 0.1.0 holds waves 1 to 3, release
-0.2.0 all 8.
+Early. Release 0.2.0 runs on one host, on a loopback address, for the principals of one
+operator.
 
-What works on `main`:
+Available:
 
-- The specification in [ESS](https://github.com/beyond10x/ess) (`ess/`): inboxes, messages,
-  their lifecycle, every refusal, and 38 authored scenarios.
-- The Rust crate ESS generates from it, the core that implements its 2 obligations, the
-  in-memory backend, the signature verifier, the backend test kit, and the HTTP listener (a
-  library, loopback only).
-- The binary `inbox` (`crates/inbox-cli`): `inbox serve` starts the service on a loopback
-  address over the in-memory backend, and the other commands are the client. It is built
-  from source: release 0.2.0 is the first whose source holds it, and no release attaches a
-  binary.
-- The conformance suite: 111 scenarios pass on ESS's interpreted target and against the core,
-  and every refusal of the specification is claimed by an authored scenario
-  (`task coverage`: 93 of 93). ESS reports the run against the core as `passed`.
-- The same suite against a running `inbox serve` over HTTP: 31 scenarios pass, and 80
-  cannot be witnessed over HTTP and are listed with their reasons
-  (`crates/inbox-conformance/unsupported.tsv`).
-- 3 acceptance checks against the built binary (`task acceptance`): a signed request and
-  its reply between 2 keys, removal after a read and after expiry, a repost after a
-  restart.
+- One binary, `inbox` (`crates/inbox-cli`): `inbox serve` starts the service over the in-memory
+  backend, and the other commands are the client. It is built from source; no release attaches
+  a binary.
+- Notes, requests that state the shape of their reply, and decisions with lettered options,
+  each a signed envelope.
+- Reading, answering, refusing and collecting a message, threads, expiry, and a decision
+  answered on silence with the option it names.
+- Ed25519 keys, one key file signed by the operator key, and delegations.
+- An HTTP API: one `POST` per command and one `GET` per view.
 
-What does not exist yet: a persistent
-backend, a second host, wake-up of an idle session, TLS, and any deployment. No release
-attaches a binary.
+Missing: a persistent backend, a second host, wake-up of an idle session, TLS, a binary to
+download, and any deployment.
 
-Numbers and the path that proves each: [what works](https://beyond10x.github.io/inbox/docs/status).
+Every feature, what is missing and what is planned:
+[features](https://beyond10x.github.io/inbox/docs/status).
 
 ## What the inbox is
 
@@ -67,34 +57,24 @@ with that option at `expires`.
 
 ## Known limits
 
-Open security findings, each with its story in `.engineering/planning/story/`:
+Two security findings are open:
 
-1. **A principal that holds a message id learns whether it is live**
-   (`story:message-id-per-sender`, a draft): from a post into an open inbox it learns whether
-   the id is live (`id-taken` against `posted`, which stores a message), and it can take a free
-   id first, after which the sender's post is refused `id-taken`. This is accepted for
-   principals of one operator. A message id unique per sender removes it, and the story is
-   required before principals of different operators share one service. A message id is a ULID
-   the sender's client makes; the client has no flag to choose one. A post to an address no inbox
-   has, or into a closed inbox, answers the same for a held and a free id.
+1. **A principal that holds a message id learns whether it is live**: from a post into an open
+   inbox it learns whether the id is live (`id-taken` against `posted`, which stores a
+   message), and it can take a free id first, after which the sender's post is refused
+   `id-taken`. This is accepted for principals of one operator. A message id unique per sender
+   removes it, and that change is required before principals of different operators share one
+   service. A message id is a ULID the sender's client makes; the client has no flag to choose
+   one. A post to an address no inbox has, or into a closed inbox, answers the same for a held
+   and a free id.
 2. **No record of requests**: a signed request is accepted again inside its 60 s window.
 
-The gate: principals of one operator (that operator's own sessions and hosts) may use the
-service; a release, a listener outside loopback and a deployment each still need the operator's
-own order, and `inbox serve` still refuses an address outside loopback.
-
-Closed since release 0.2.0: the replay of a signed envelope under another caller
-(`story:post-from-is-the-caller`; a post or an answer whose `from` is not the caller is refused
-`not-sender`), the dedup key of another sender (`story:dedup-key-scope`; a key belongs to its
-sender), and a post that told whether a message id of another sender exists for an address no
-inbox has or a closed inbox (`story:post-does-not-tell-a-message-id-exists`; `duplicate` answers
-the sender's own message only, and `id-taken` is new).
+Use the service for the principals of one operator only: that operator's own sessions and
+hosts. `inbox serve` refuses an address outside loopback.
 
 Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
 loses every message; no release attaches a binary; the first `inbox repost` after a restart
-delivers once more a note its recipient read before it; the run of the suite over HTTP
-witnesses 31 of the 111 scenarios;
-gaps in the suite filed as draft stories; three ESS issues worked around; nothing deployed.
+delivers once more a note its recipient read before it; nothing is deployed.
 
 All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/limits).
 
@@ -103,16 +83,18 @@ All of them, stated in full: [limits](https://beyond10x.github.io/inbox/docs/lim
 The specification comes first, in `ess/`. ESS generates a Rust crate, the API projections and
 the specification pages from it, and `task check` fails when any of them differs from a fresh
 generation. Hand-written crates implement what the generated crate leaves open. The conformance
-suite ESS synthesizes runs on ESS's interpreted target and against the core. Each unit of work
-is implemented by one agent and then attacked by a separate adversary pass; a finding that
-predates the unit becomes a draft story. Every change goes through `task check`. The plan and
-its evidence are in `.engineering/`.
+suite ESS synthesizes runs on ESS's interpreted target, against the core and against a running
+`inbox serve`. Every change goes through `task check`.
+
+For contributors: the numbers the gate prints, what the checks do not cover and the story of
+each open limit are in [`docs/checks.md`](docs/checks.md). The plan and its evidence are in
+`.engineering/`.
 
 ## Where things are
 
 | Path | Contents |
 |---|---|
-| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and 38 authored scenarios |
+| `ess/` | The specification: inboxes, messages, their lifecycle, every refusal, and the authored scenarios |
 | `generated/rust/inbox/` | The Rust crate ESS generates from `ess/`; never edited by hand |
 | `generated/{openapi,asyncapi,schema}/` | OpenAPI, AsyncAPI and JSON Schema projections of the specification |
 | `generated/docs/` | The specification pages ESS generates; the site shows them |
@@ -125,6 +107,7 @@ its evidence are in `.engineering/`.
 | `tests/acceptance/` | The 3 acceptance checks against the built binary |
 | `crates/inbox-xtask/` | Repository tasks: the drift check of the generated crate |
 | `docs/design/` | The design notes: the inbox, signing, the HTTP service |
+| `docs/checks.md` | The numbers the gate prints, what the checks do not cover, the story of each open limit |
 | `docs/plan/` | The wave plan of each stage and its results |
 | `website/` | The documentation site |
 | `.engineering/` | The plan |

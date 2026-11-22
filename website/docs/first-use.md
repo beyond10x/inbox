@@ -5,13 +5,13 @@ description: Build the binary, start the service on a loopback address, and send
 
 # First use
 
-One binary, `inbox`, starts the service and is its client. Release 0.2.0 is the first whose
-source holds it; no release attaches a binary: build it from source.
+One binary, `inbox`, starts the service and is its client. No release attaches a binary: build
+it from source.
 
 :::warning[Test keys and loopback only]
 
-The service is for a loopback address, and for the principals of one operator: finding 1 of
-the [limits](limits.md) is open for principals of different operators. Make keys on the spot,
+The service is for a loopback address, and for the principals of one operator: security
+finding 1 of the [limits](limits.md) is open for principals of different operators. Make keys on the spot,
 as below, and never give it a key that matters. `inbox serve` refuses a `--listen` address
 outside loopback, and the client refuses an `INBOX_URL` outside loopback.
 
@@ -92,5 +92,4 @@ beside the outbox file (`<outbox>.epochs`, one line per envelope).
 service for its epoch and posts again the kept envelopes that the epochs file does not record at
 that epoch. An envelope the current start has already answered is left alone and not listed, so
 a second `repost` in the same start posts nothing. A note its recipient read before the restart
-is delivered once more by the first `repost` after it
-(`story:repost-does-not-redeliver-a-handled-note`, [limits](limits.md)).
+is delivered once more by the first `repost` after it ([limits](limits.md)).

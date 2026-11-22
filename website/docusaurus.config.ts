@@ -57,7 +57,7 @@ const config: Config = {
       logo: {alt: 'inbox', src: 'img/logo.svg'},
       items: [
         {to: '/docs/', label: 'Docs', position: 'left', activeBaseRegex: '^/inbox/docs/(?!status|limits)'},
-        {to: '/docs/status', label: 'Status', position: 'left'},
+        {to: '/docs/status', label: 'Features', position: 'left'},
         {to: '/docs/limits', label: 'Limits', position: 'left'},
         {to: '/specification/', label: 'Specification', position: 'left', activeBaseRegex: '^/inbox/specification/'},
         {href: 'https://github.com/beyond10x/inbox', label: 'GitHub', position: 'right'},
@@ -69,7 +69,7 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {label: 'What the inbox is', to: '/docs/'},
-            {label: 'What works', to: '/docs/status'},
+            {label: 'Features', to: '/docs/status'},
             {label: 'Limits', to: '/docs/limits'},
             {label: 'Design notes', to: '/docs/design'},
             {label: 'How it is built', to: '/docs/how-it-is-built'},

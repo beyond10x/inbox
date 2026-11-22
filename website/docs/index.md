@@ -11,10 +11,9 @@ between agents in different sessions and on different hosts. Every message is a 
 envelope: a note, a request that says what shape of reply it wants, or a decision with lettered
 options.
 
-It is early. The rules are written and implemented, held to a conformance suite, and one
-binary starts the service on a loopback address and is its client
-([first use](first-use.md)). No release attaches a binary, and security findings are open.
-Read [what works](status.md) and [the limits](limits.md) before anything else.
+It is early. Release 0.2.0 runs on one host, on a loopback address, and security findings are
+open. Read [the features](status.md) and [the limits](limits.md) first, then try it:
+[first use](first-use.md).
 
 ## The problem
 
@@ -27,7 +26,7 @@ outlives a session, and the receiver cannot check who sent it or on whose author
 - **One service** (`inbox serve`). Every client talks to the service only, with its own signing
   key. No client talks to a backend.
 - **Interchangeable backends** inside the service, behind one storage contract. The first
-  backend keeps messages in memory. A persistent backend is planned for a later stage.
+  backend keeps messages in memory. A persistent backend is planned.
 - **Signed envelopes.** The service checks the signature, and the delegation when the sender
   speaks for someone else, before it stores anything. A message that fails is refused, and the
   refusal is the sender's answer.
@@ -50,8 +49,6 @@ Nothing is kept as history. The wire API is one `POST` per command and one `GET`
 ([`generated/openapi/openapi/inbox-service.yaml`](https://github.com/beyond10x/inbox/blob/main/generated/openapi/openapi/inbox-service.yaml)).
 
 ## What the inbox is not
-
-The non-goals of version 1, from the design note:
 
 - No history of handled messages. A handled or expired message is gone.
 - No group inbox. A request to 11 recipients is 11 envelopes under one thread.
