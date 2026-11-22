@@ -380,6 +380,7 @@ dependencies = [
  "inbox-core",
  "inbox-server",
  "inbox-verify",
+ "libc",
  "signal-hook",
  "zeroize",
 ]

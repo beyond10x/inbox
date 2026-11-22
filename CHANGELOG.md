@@ -25,6 +25,26 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   of `generated/` (the `UnknownInbox` arm of `generated/rust/inbox/src/server/wire.rs` moves above
   `Duplicate`; the contract digest changes) and two digests of the suite
   (`provenance.contract_digest` and `provenance.spec_digest`); no scenario of the suite changes.
+- No case of `crates/inbox-cli/tests/` or of `tests/acceptance/` holds a wall-clock time where
+  a slow host fails it. What is left there is of three kinds: a wait with a lower bound only;
+  a bound of 10 s or more that only ends a hang; and a short wait whose running out cannot fail
+  the case (the 2 s for request lines after the client ended, which were all sent before it
+  ended; a 1 s wait for a request line in a case that expects it to run out; 200 ms after a
+  SIGTERM). The runner's bound of 60 s per case is the only bound of the case that prints
+  65 536 escape characters. The cases of the other crates still hold such
+  times (`inbox-server`, `inbox-backend-testkit`, `inbox-xtask`). A debug build of `inbox
+  serve` takes the hidden flag `--clock-file <path>`: the service's clock reads the RFC 3339
+  instant the file holds each time it asks for the time, and a file that is missing,
+  unreadable, empty, no regular file (it is opened without blocking, so a FIFO refuses too),
+  holds no instant or goes back in time ends the service with exit 4 (`docs/design/service.md`,
+  the expiry task). A release build has no such flag. The acceptance check of an expired
+  request and the case of a due note move that clock past `expires` instead of waiting for it,
+  each `expires` 30 s after the system clock just before its post; the case of an epochs file
+  of 20 001 lines counts the steps of the read instead of holding it to 2 s (each line split,
+  each comparison of two message ids as the read gets them, each read of an id's text; a read
+  that compares the texts themselves is not counted); the cases of a full pipe wait for a
+  thread blocked in `write(2)` instead of 300 ms without a byte. The acceptance check and the
+  epochs case had each failed on a host at a load of 80 to 100.
 
 ### Fixed
 

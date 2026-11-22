@@ -92,12 +92,17 @@ fn proxy(service: &str, steps: Vec<Step>) -> (String, mpsc::Receiver<String>) {
 }
 
 /// [`proxy`] with the wait for each connection given, and the handle of its thread: the case that
-/// holds the bound passes 1 s and checks that the thread ends.
+/// holds the bound passes 1 s and checks that the thread ends. The thread ends with the message
+/// of the connection that did not come, naming the wait, or with none.
 fn proxy_within(
     service: &str,
     steps: Vec<Step>,
     wait: Duration,
-) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
+) -> (
+    String,
+    mpsc::Receiver<String>,
+    std::thread::JoinHandle<Option<String>>,
+) {
     let upstream = service
         .trim_end_matches('/')
         .strip_prefix("http://")
@@ -107,10 +112,14 @@ fn proxy_within(
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let (sender, receiver) = mpsc::channel();
     let thread = std::thread::spawn(move || {
-        for step in steps {
-            let Some(mut stream) = support::accept_within(&listener, wait) else {
-                return;
-            };
+        let total = steps.len();
+        for (n, step) in steps.into_iter().enumerate() {
+            let what = format!("request {} of {total}", n + 1);
+            let mut stream =
+                match support::accept_or_say(&listener, wait, "the proxy's thread", &what) {
+                    Ok(stream) => stream,
+                    Err(message) => return Some(message),
+                };
             let request = read_request(&mut stream);
             let line = String::from_utf8_lossy(&request)
                 .lines()
@@ -140,6 +149,7 @@ fn proxy_within(
                 }
             }
         }
+        None
     });
     (url, receiver, thread)
 }
@@ -325,9 +335,12 @@ fn a_repost_that_cannot_write_the_epochs_file_reports_every_post_and_exits_4_ove
     assert_eq!(held, expected);
 }
 
-/// A proxy whose client never connects ends its thread within its wait plus 2 s, and fails the
-/// case that reads its requests with a message that names the missing request. The wait is 1 s
-/// here and 10 s for every other case.
+/// A proxy whose client never connects ends its thread, and fails the case that reads its
+/// requests with a message that names the missing request. The wait is 1 s here and 10 s for
+/// every other case; the thread's message names the wait it kept, so a proxy that waits longer
+/// than it was told fails the case. The case waits for the thread with `STAND_IN_WAIT` only as
+/// the end of a hang (it held the thread's end to 3 s before, a time a slow host can pass:
+/// story:no-test-holds-a-wall-clock-time).
 #[test]
 #[should_panic(expected = "the proxy received no connection for request 1 of 1")]
 fn a_proxy_whose_client_never_connects_ends_its_thread_and_fails_the_case() {
@@ -336,13 +349,14 @@ fn a_proxy_whose_client_never_connects_ends_its_thread_and_fails_the_case() {
         vec![Step::Close],
         Duration::from_secs(1),
     );
-    let started = std::time::Instant::now();
-    while !thread.is_finished() && started.elapsed() < Duration::from_secs(3) {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    assert!(
-        thread.is_finished(),
-        "the proxy's thread still waited for a connection 3 s after its wait of 1 s"
+    support::wait_until_finished(&thread, "the proxy's thread");
+    let said = thread
+        .join()
+        .expect("the proxy's thread ends without a panic");
+    assert_eq!(
+        said.as_deref(),
+        Some("the proxy's thread received no connection for request 1 of 1 within 1 s"),
+        "what the proxy's thread said"
     );
     let _ = requests_within(&served, 1, Duration::from_secs(1));
 }

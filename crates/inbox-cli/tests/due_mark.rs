@@ -4,20 +4,38 @@
 //! is listed by `pending` and `wait` (exit 0) beside a live one, and `inbox read` of it alone exits
 //! as a refusal naming `inbox.messaging.Expired` and leaves it listed. A due note alone does not
 //! end `wait`: it holds to its bound and prints the note then. A real `inbox serve`, its expiry
-//! task an hour apart; the waits on real time are until the note's `expires` (at most 2 s) and the
-//! one wait of 1 s.
+//! task an hour apart, its clock a file the case moves (`--clock-file`, a debug build's flag): the
+//! note is posted at the clock's start and the clock is moved past its `expires`, so no wait on
+//! real time decides whether the note is due (story:no-test-holds-a-wall-clock-time: the case gave
+//! the note a life of 2 s on the system clock, and a client start of 3 s had the post refused
+//! `AlreadyExpired`). The one wait on real time left is `wait --seconds 1`.
 
 use crate::support;
 
 use std::time::{Duration, SystemTime};
 
-use inbox_server::format_instant;
+use inbox_server::{format_instant, format_reading};
 use inbox_verify::Instant;
 use support::{BOB, REFUSED, Service, World, ids, keys_only, text};
+
+/// The system clock's second.
+fn this_second() -> Instant {
+    Instant::from_unix(
+        Instant::from_system_time(SystemTime::now()).unix_seconds(),
+        0,
+    )
+}
+
+/// Sets the service's clock file whole: written beside it and renamed over it.
+fn set_clock(dir: &std::path::Path, at: Instant) {
+    std::fs::write(dir.join("clock.new"), format_reading(at)).expect("the clock file is written");
+    std::fs::rename(dir.join("clock.new"), dir.join("clock")).expect("the clock file is replaced");
+}
 
 #[test]
 fn a_due_message_stays_listed_and_only_its_own_read_is_refused() {
     let (dir, operator_public_key) = keys_only("due-mark");
+    set_clock(&dir.path, this_second());
     let service = Service::start(
         &dir.path,
         &[
@@ -31,6 +49,8 @@ fn a_due_message_stays_listed_and_only_its_own_read_is_refused() {
             "20",
             "--sweep-interval",
             "3600",
+            "--clock-file",
+            "clock",
         ],
         &[],
     );
@@ -41,8 +61,11 @@ fn a_due_message_stays_listed_and_only_its_own_read_is_refused() {
     };
     world.client("bob", &["open"]).ok();
 
-    let expires_at = Instant::from_system_time(SystemTime::now()).unix_seconds() + 2;
-    let expires = format_instant(Instant::from_unix(expires_at, 0));
+    // 30 s after the system clock just before the post: the client writes `created` from the
+    // system clock and the service refuses an `expires` at or before it, so one process start is
+    // inside the margin. The service's clock stays at its start until the case moves it.
+    let expires_at = this_second().plus_seconds(30);
+    let expires = format_instant(expires_at);
     let due = world
         .client(
             "alice",
@@ -67,12 +90,10 @@ fn a_due_message_stays_listed_and_only_its_own_read_is_refused() {
         .trim()
         .to_owned();
 
-    let until = SystemTime::UNIX_EPOCH
-        + Duration::from_secs(u64::try_from(expires_at).expect("after 1970"))
-        + Duration::from_millis(100);
-    if let Ok(left) = until.duration_since(SystemTime::now()) {
-        std::thread::sleep(left);
-    }
+    // The note is due: the clock is 1 s past its `expires`. The clients sign with the system
+    // clock, and the service takes a request signed within 60 s of its reading, 31 s after the
+    // post; the runner ends a case at 60 s.
+    set_clock(&world.dir.path, expires_at.plus_seconds(1));
 
     let listed = |args: &[&str]| {
         let mut held = ids(&world.client("bob", args).ok().json());

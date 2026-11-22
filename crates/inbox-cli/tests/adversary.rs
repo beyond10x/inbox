@@ -729,38 +729,35 @@ fn serve_stops_on_sigterm_after_the_reader_of_its_standard_error_is_gone() {
 /// SIGTERM there; once the pipe drains it must stop with status 0, not die of the signal.
 #[test]
 fn sigterm_while_the_first_line_is_written_stops_serve_with_status_0() {
+    use std::os::fd::AsRawFd;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let (dir, operator) = keys_only("adv-serve-first-line");
     let (mut reader, writer) = std::io::pipe().expect("a pipe");
     let for_child = writer.try_clone().expect("a second write end");
-    let written = Arc::new(AtomicUsize::new(0));
+    let filled = writer.as_raw_fd();
+    // No thread writes to the pipe yet: a check that answers "blocked" for any pipe fails here.
+    assert!(
+        !support::blocked_in_write(filled),
+        "blocked_in_write answers true before any thread writes to the pipe"
+    );
     let stop = Arc::new(AtomicBool::new(false));
     let filler = {
-        let (written, stop) = (Arc::clone(&written), Arc::clone(&stop));
+        let stop = Arc::clone(&stop);
         let mut writer = writer;
         std::thread::spawn(move || {
             while !stop.load(Ordering::SeqCst) {
-                match writer.write(&[b'.'; 512]) {
-                    Ok(count) => {
-                        written.fetch_add(count, Ordering::SeqCst);
-                    }
-                    Err(_) => break,
+                if writer.write(&[b'.'; 512]).is_err() {
+                    break;
                 }
             }
         })
     };
-    // Full: nothing more was written for 300 ms.
-    let mut last = usize::MAX;
-    loop {
-        std::thread::sleep(Duration::from_millis(300));
-        let now = written.load(Ordering::SeqCst);
-        if now == last {
-            break;
-        }
-        last = now;
-    }
+    // Full: the filler is blocked in write(2) on the pipe. Before, the case took a pipe that
+    // took no byte for 300 ms as full, and a filler that waited 300 ms for a processor left it
+    // with room (story:no-test-holds-a-wall-clock-time). The bound only ends a hang.
+    support::wait_until_blocked_in_write(filled);
     let mut serve = Reaped(Some(
         support::command(&dir.path)
             .args([

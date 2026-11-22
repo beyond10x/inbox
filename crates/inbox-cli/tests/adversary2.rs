@@ -348,37 +348,34 @@ fn the_key_file_refusals_read_as_one_sentence_without_a_run_of_spaces() {
 /// alive) keeps the process from ending after SIGTERM.
 #[test]
 fn sigterm_ends_serve_when_its_standard_error_is_a_full_pipe() {
+    use std::os::fd::AsRawFd;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let (dir, operator) = keys_only("adv2-serve-stderr-full");
     let (mut reader, writer) = std::io::pipe().expect("a pipe");
     let for_child = writer.try_clone().expect("a second write end");
-    let written = Arc::new(AtomicUsize::new(0));
+    let filled = writer.as_raw_fd();
+    assert!(
+        !support::blocked_in_write(filled),
+        "blocked_in_write answers true before any thread writes to the pipe"
+    );
     let stop = Arc::new(AtomicBool::new(false));
     let filler = {
-        let (written, stop) = (Arc::clone(&written), Arc::clone(&stop));
+        let stop = Arc::clone(&stop);
         let mut writer = writer;
         std::thread::spawn(move || {
             while !stop.load(Ordering::SeqCst) {
-                match writer.write(&[b'.'; 512]) {
-                    Ok(count) => {
-                        written.fetch_add(count, Ordering::SeqCst);
-                    }
-                    Err(_) => break,
+                if writer.write(&[b'.'; 512]).is_err() {
+                    break;
                 }
             }
         })
     };
-    let mut last = usize::MAX;
-    loop {
-        std::thread::sleep(Duration::from_millis(300));
-        let now = written.load(Ordering::SeqCst);
-        if now == last {
-            break;
-        }
-        last = now;
-    }
+    // Full: the filler is blocked in write(2) on the pipe. Before, a pipe that took no byte for
+    // 300 ms counted as full, and a filler that waited for a processor left it with room, so the
+    // case passed without a full pipe (story:no-test-holds-a-wall-clock-time).
+    support::wait_until_blocked_in_write(filled);
     let mut serve = Reaped(Some(
         support::command(&dir.path)
             .args([

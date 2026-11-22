@@ -16,6 +16,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, ExitStatus, Stdio};
 
 use inbox::server::json::{self, Value};
+use inbox_server::format_reading;
+use inbox_verify::Instant;
+
+/// The service's clock file in a check's directory ([`World::with_clock`]).
+const CLOCK: &str = "clock";
 
 /// The principal of the first client.
 pub const ALICE: &str = "agent:acceptance/alice";
@@ -131,6 +136,25 @@ impl World {
     /// The binary is missing, a key command fails, or the service prints no first line.
     #[must_use]
     pub fn new(root: &Path, name: &str, serve_args: &[&str]) -> Self {
+        Self::make(root, name, serve_args, None)
+    }
+
+    /// [`World::new`] with the service's clock in the file `clock` of the check's directory
+    /// (`inbox serve --clock-file`, a flag of a debug build only), set to `at` before the
+    /// service starts. The clock reads what the file holds until [`World::set_clock`] moves it:
+    /// it does not move on by itself, so a slow host passes no instant. The client commands sign
+    /// with the system clock, and the service takes a request signed within 60 s of its reading:
+    /// a check keeps the clock within that of the system clock.
+    ///
+    /// # Panics
+    ///
+    /// As [`World::new`], or the clock file cannot be written.
+    #[must_use]
+    pub fn with_clock(root: &Path, name: &str, serve_args: &[&str], at: Instant) -> Self {
+        Self::make(root, name, serve_args, Some(at))
+    }
+
+    fn make(root: &Path, name: &str, serve_args: &[&str], clock: Option<Instant>) -> Self {
         let binary = binary();
         let dir = root.join(format!("acceptance-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -167,8 +191,26 @@ impl World {
                 )
                 .ok();
         }
+        if let Some(at) = clock {
+            world.set_clock(at);
+            world
+                .serve_args
+                .extend(["--clock-file".to_owned(), CLOCK.to_owned()]);
+        }
         world.start();
         world
+    }
+
+    /// Writes `at` into the clock file whole: into a file beside it, renamed over it, so the
+    /// service never reads half an instant.
+    ///
+    /// # Panics
+    ///
+    /// The file cannot be written or renamed.
+    pub fn set_clock(&self, at: Instant) {
+        let staged = self.dir.join(format!("{CLOCK}.new"));
+        fs::write(&staged, format_reading(at)).expect("the clock file is written");
+        fs::rename(&staged, self.dir.join(CLOCK)).expect("the clock file is replaced");
     }
 
     /// The binary, run in the check's directory with no `INBOX_*` variable of the check's own

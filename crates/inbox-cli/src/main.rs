@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod client;
+mod clock_file;
 mod collected;
 mod commands;
 mod failure;
@@ -211,6 +212,12 @@ struct ServeArgs {
     /// expiry task read this clock.
     #[arg(long, value_name = "INSTANT", hide = true)]
     clock_start: Option<String>,
+    /// For tests only, in a debug build only, hidden from `--help` and the reference: a file that
+    /// holds one RFC 3339 instant, which the service's clock reads each time it asks for the
+    /// time (`src/clock_file.rs`). A release build has no such flag.
+    #[cfg(debug_assertions)]
+    #[arg(long, value_name = "PATH", hide = true, conflicts_with = "clock_start")]
+    clock_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -381,6 +388,10 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
                 sweep_interval: args.sweep_interval,
                 answer_retention: args.answer_retention,
                 clock_start: args.clock_start.as_deref(),
+                #[cfg(debug_assertions)]
+                clock_file: args.clock_file.as_deref(),
+                #[cfg(not(debug_assertions))]
+                clock_file: None,
             };
             let backend = std::env::var("INBOX_BACKEND").ok();
             serve::serve(&settings, backend.as_deref(), json)?;

@@ -268,6 +268,37 @@ fixed instants of the suite's envelopes. When it is set, `inbox serve` writes on
 standard error at the start: `inbox serve: the service's clock starts at <instant>, not at the
 system clock`.
 
+`inbox serve --clock-file <path>` is a flag of a debug build only (`cargo build`, the build the
+tests and `task acceptance` run), hidden from `--help` and from the command-line reference; a
+release build (`cargo build --release`, `cargo install`) has no such flag and refuses it as wrong
+usage, exit 2. It is wrong usage beside `--clock-start` too. The file holds one RFC 3339 instant
+and at most one line end after it; the service's clock reads it each time it asks for the time
+(`FileClock` of `crates/inbox-cli/src/clock_file.rs`), and does not move on by itself. A test
+that starts `inbox serve` as a process moves the clock past an `expires` by writing the file
+(written beside it and renamed over it, so no reading meets half an instant), and sleeps until no
+instant passes. It gives no more than `--clock-start`, which sets the clock to any instant, and
+the service still binds a loopback address only. At the start `inbox serve` writes one line on
+standard error: `inbox serve: the service's clock reads the file <path>, at <instant> now, not the
+system clock`. It fails closed:
+
+| The file | At the start | While it serves |
+|---|---|---|
+| missing, or cannot be opened (no permission) | refused before binding, exit 4, `--clock-file <path>: <the OS error>` | the process ends at once, exit 4 |
+| no regular file (a directory, a FIFO, a device); opened with `O_NONBLOCK`, so a FIFO without a writer does not hold the open | refused, exit 4, `it is no regular file` | the process ends at once, exit 4 |
+| empty | refused, exit 4, `it is empty` | the process ends at once, exit 4 |
+| longer than 64 bytes, or not one RFC 3339 instant | refused, exit 4, `it does not hold one RFC 3339 instant` | the process ends at once, exit 4 |
+| an instant before the reading before it | — | the process ends at once, exit 4, `it went back to <instant>, before <instant>, the reading before it` |
+
+While it serves, the end is one line on standard error, `inbox serve: the clock file <path>:
+<cause>: stopping`, and exit 4: the request or the sweep that asked for the time is not answered
+and changes nothing, nothing is decided at a reading of the system clock, and nothing is taken as
+not due. No line repeats a byte of the file. The client commands sign with the system clock and the
+service takes a request signed within 60 s of its reading (step 3), so a test keeps the file within
+60 s of the system clock: the acceptance check sets it to the system clock's second at the start,
+posts a request whose `expires` is 30 s after the system clock just before the post (the post's
+`created` is the system clock, and `expires` must come after it), and moves the file 1 s past that
+`expires`; the runner ends a check at 60 s.
+
 ## The limits
 
 Each is set by the embedding (`Config`); the defaults are this crate's.
