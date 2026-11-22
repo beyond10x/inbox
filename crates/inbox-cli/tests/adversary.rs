@@ -64,10 +64,24 @@ fn member<'a>(value: &'a Value, name: &str) -> &'a Value {
 /// A service stand-in on 127.0.0.1:0 that answers one request with `answer` and reports whether
 /// the outbox file at `outbox` held the posted message id at the moment the request arrived.
 fn stand_in(answer: &'static str, outbox: PathBuf) -> (String, std::thread::JoinHandle<bool>) {
+    stand_in_within(answer, outbox, support::STAND_IN_WAIT)
+}
+
+/// [`stand_in`] with the wait for the request given: the case that holds the bound passes 1 s.
+fn stand_in_within(
+    answer: &'static str,
+    outbox: PathBuf,
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<bool>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("one connection");
+        let mut stream = support::accept_or_panic(
+            &listener,
+            wait,
+            "the stand-in of adversary.rs",
+            "the request of `post`",
+        );
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("a read timeout");
@@ -715,38 +729,35 @@ fn serve_stops_on_sigterm_after_the_reader_of_its_standard_error_is_gone() {
 /// SIGTERM there; once the pipe drains it must stop with status 0, not die of the signal.
 #[test]
 fn sigterm_while_the_first_line_is_written_stops_serve_with_status_0() {
+    use std::os::fd::AsRawFd;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let (dir, operator) = keys_only("adv-serve-first-line");
     let (mut reader, writer) = std::io::pipe().expect("a pipe");
     let for_child = writer.try_clone().expect("a second write end");
-    let written = Arc::new(AtomicUsize::new(0));
+    let filled = writer.as_raw_fd();
+    // No thread writes to the pipe yet: a check that answers "blocked" for any pipe fails here.
+    assert!(
+        !support::blocked_in_write(filled),
+        "blocked_in_write answers true before any thread writes to the pipe"
+    );
     let stop = Arc::new(AtomicBool::new(false));
     let filler = {
-        let (written, stop) = (Arc::clone(&written), Arc::clone(&stop));
+        let stop = Arc::clone(&stop);
         let mut writer = writer;
         std::thread::spawn(move || {
             while !stop.load(Ordering::SeqCst) {
-                match writer.write(&[b'.'; 512]) {
-                    Ok(count) => {
-                        written.fetch_add(count, Ordering::SeqCst);
-                    }
-                    Err(_) => break,
+                if writer.write(&[b'.'; 512]).is_err() {
+                    break;
                 }
             }
         })
     };
-    // Full: nothing more was written for 300 ms.
-    let mut last = usize::MAX;
-    loop {
-        std::thread::sleep(Duration::from_millis(300));
-        let now = written.load(Ordering::SeqCst);
-        if now == last {
-            break;
-        }
-        last = now;
-    }
+    // Full: the filler is blocked in write(2) on the pipe. Before, the case took a pipe that
+    // took no byte for 300 ms as full, and a filler that waited 300 ms for a processor left it
+    // with room (story:no-test-holds-a-wall-clock-time). The bound only ends a hang.
+    support::wait_until_blocked_in_write(filled);
     let mut serve = Reaped(Some(
         support::command(&dir.path)
             .args([
@@ -836,5 +847,23 @@ fn json_without_a_subcommand_prints_one_document() {
         "exit {}, stdout {:?}",
         usage.status,
         usage.stdout
+    );
+}
+
+/// A stand-in whose client never connects ends with a message that names the missing request,
+/// and does not wait for it forever: the case that joins it fails with that message. The wait is
+/// 1 s here and 10 s for every other case.
+#[test]
+fn a_stand_in_whose_client_never_connects_ends_and_names_the_request() {
+    let dir = Dir::new("adv-no-request");
+    let (_url, seen) = stand_in_within("", dir.join("alice.outbox"), Duration::from_secs(1));
+    let message = match seen.join() {
+        Ok(kept) => panic!("the stand-in ended with {kept:?} and no message"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(
+        message
+            .contains("the stand-in of adversary.rs received no connection for the request of `post` within 1 s"),
+        "{message:?}"
     );
 }

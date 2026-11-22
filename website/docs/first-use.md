@@ -82,7 +82,7 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 |---|---|
 | 0 | Done |
 | 1 | The service refused; the output names the error |
-| 2 | Wrong usage, including an `INBOX_URL` that is not a loopback address |
+| 2 | Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address |
 | 3 | The service could not be reached, or its answer was neither a success nor a refusal |
 | 4 | A local file could not be read or written |
 
@@ -95,7 +95,7 @@ error of the specification other than `UnknownInbox`, or when it expires (24 hou
 made, by default). `id-taken` is such an error, so `post` and `repost` exit 1 and drop the line.
 `inbox collect` prints the message as the service held it when it removed it, in the form
 `inbox outbox` prints a row (`--json`: under `message`). An answer that carries no such record,
-as a service of release 0.2.0 answers, makes `collect` exit 3, and the envelope stays.
+as a service of release 0.3.0 or older answers, makes `collect` exit 3, and the envelope stays.
 
 Every answer of the service carries the header `Inbox-Epoch`: 32 hex digits that change with each
 start of the service. When a post arrives, `inbox post` records that value in the epochs file

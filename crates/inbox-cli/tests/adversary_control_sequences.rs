@@ -12,7 +12,7 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use inbox::server::json::{self, Value};
 
@@ -313,10 +313,23 @@ fn every_member_a_service_sets_reaches_the_terminal_escaped() {
 
 /// A stand-in that reads one request head and answers it with the raw bytes `answer`.
 fn raw_stand_in(answer: &'static [u8]) -> (String, std::thread::JoinHandle<()>) {
+    raw_stand_in_within(answer, support::STAND_IN_WAIT)
+}
+
+/// [`raw_stand_in`] with the wait for the request given: the case that holds the bound passes 1 s.
+fn raw_stand_in_within(
+    answer: &'static [u8],
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("one connection");
+        let mut stream = support::accept_or_panic(
+            &listener,
+            wait,
+            "the raw stand-in of adversary_control_sequences.rs",
+            "the request of `pending`",
+        );
         let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
         let mut received = Vec::new();
         let mut buffer = [0_u8; 4096];
@@ -329,6 +342,26 @@ fn raw_stand_in(answer: &'static [u8]) -> (String, std::thread::JoinHandle<()>) 
         let _ = stream.write_all(answer);
     });
     (url, handle)
+}
+
+/// A raw stand-in whose client never connects ends with a message that names it and the missing
+/// request, and does not wait for it forever: the case that joins it fails with that message. The
+/// wait is 1 s here, named in the message, and 10 s for every other case; the case waits for the
+/// thread to end with `STAND_IN_WAIT` only as the end of a hang (it held the join to 3 s before,
+/// a time a slow host can pass: story:no-test-holds-a-wall-clock-time).
+#[test]
+fn a_raw_stand_in_whose_client_never_connects_ends_and_names_the_request() {
+    let (_url, served) = raw_stand_in_within(b"", Duration::from_secs(1));
+    support::wait_until_finished(&served, "the raw stand-in");
+    let message = match served.join() {
+        Ok(()) => panic!("the raw stand-in ended and said nothing"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert_eq!(
+        message,
+        "the raw stand-in of adversary_control_sequences.rs received no connection for the \
+         request of `pending` within 1 s"
+    );
 }
 
 /// Answers that are not UTF-8, not JSON (a lone surrogate escape), or carry control characters in
@@ -376,7 +409,9 @@ fn an_answer_that_is_not_utf8_or_not_json_is_named_without_a_raw_control_charact
 }
 
 /// One body at the model's limit, 65536 escape characters: `pending` shows each as `\u{1b}`
-/// (7 bytes each), none raw, within 20 s on a loaded host.
+/// (7 bytes each), none raw. The case holds no time (it held `pending` to 20 s before, a time a
+/// slow host can pass: story:no-test-holds-a-wall-clock-time); the runner's bound of 60 s ends a
+/// print that never finishes.
 #[test]
 fn one_body_of_escape_characters_at_the_limit_is_shown_whole() {
     let world = World::new("adv-ctl-large");
@@ -384,9 +419,7 @@ fn one_body_of_escape_characters_at_the_limit_is_shown_whole() {
     let body = "\u{1b}".repeat(65_536);
     fs::write(world.dir.join("large.txt"), &body).expect("the body file");
     post_file(&world, "large.txt", &[]);
-    let started = Instant::now();
     let pending = world.client("bob", &["pending"]).ok();
-    let took = started.elapsed();
     assert!(raw(&pending.stdout).is_empty());
     assert!(
         pending
@@ -395,7 +428,6 @@ fn one_body_of_escape_characters_at_the_limit_is_shown_whole() {
         "the body is not shown whole: {} bytes",
         pending.stdout.len()
     );
-    assert!(took < Duration::from_secs(20), "pending took {took:?}");
 }
 
 /// A body with a line end at its end, with its reply printed under it, is printed byte for byte

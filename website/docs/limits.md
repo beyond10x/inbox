@@ -1,11 +1,11 @@
 ---
 title: Limits
-description: What the inbox does not do, or does wrong, in release 0.3.0, the security limits first.
+description: What the inbox does not do, or does wrong, in release 0.3.1, the security limits first.
 ---
 
 # Limits
 
-What the inbox does not do, or does wrong, in release 0.3.0. The security limits come first.
+What the inbox does not do, or does wrong, in release 0.3.1. The security limits come first.
 
 **Use it for the principals of one operator only**: that operator's own sessions and hosts.
 The service refuses, before binding, any address that is not a loopback address, and the

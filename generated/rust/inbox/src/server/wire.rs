@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+// contract digest ab51269fa0786cb62de332826f17f3199db230ea4e52fe7335e4d8ea79e313bc
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -2486,6 +2486,20 @@ pub fn encode_outcome_inbox_messaging_mark_delivered(value: &crate::messaging::M
             encode_error_inbox_messaging_not_recipient(error, out);
             out.push('}');
         }
+        crate::messaging::MarkDeliveredOutcome::DeadlinePassed { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "deadline-passed");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.Expired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_expired(error, out);
+            out.push('}');
+        }
         crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered } => {
             json::member(out, "outcome");
             json::push_text(out, "delivered");
@@ -2579,6 +2593,20 @@ pub fn encode_outcome_inbox_messaging_mark_read(value: &crate::messaging::MarkRe
             json::push_text(out, "inbox.messaging.NotRecipient");
             json::member(out, "payload");
             encode_error_inbox_messaging_not_recipient(error, out);
+            out.push('}');
+        }
+        crate::messaging::MarkReadOutcome::DeadlinePassed { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "deadline-passed");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.Expired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_expired(error, out);
             out.push('}');
         }
         crate::messaging::MarkReadOutcome::Handled { message_handled } => {
@@ -2974,6 +3002,20 @@ pub fn encode_outcome_inbox_messaging_post_message(value: &crate::messaging::Pos
             encode_error_inbox_messaging_no_authority(error, out);
             out.push('}');
         }
+        crate::messaging::PostMessageOutcome::UnknownInbox { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "unknown-inbox");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.UnknownInbox");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_unknown_inbox(error, out);
+            out.push('}');
+        }
         crate::messaging::PostMessageOutcome::Duplicate { error } => {
             json::member(out, "outcome");
             json::push_text(out, "duplicate");
@@ -3000,20 +3042,6 @@ pub fn encode_outcome_inbox_messaging_post_message(value: &crate::messaging::Pos
             json::push_text(out, "inbox.messaging.Duplicate");
             json::member(out, "payload");
             encode_error_inbox_messaging_duplicate(error, out);
-            out.push('}');
-        }
-        crate::messaging::PostMessageOutcome::UnknownInbox { error } => {
-            json::member(out, "outcome");
-            json::push_text(out, "unknown-inbox");
-            json::member(out, "published");
-            out.push('[');
-            out.push(']');
-            json::member(out, "refusal");
-            out.push('{');
-            json::member(out, "error");
-            json::push_text(out, "inbox.messaging.UnknownInbox");
-            json::member(out, "payload");
-            encode_error_inbox_messaging_unknown_inbox(error, out);
             out.push('}');
         }
         crate::messaging::PostMessageOutcome::InboxClosed { error } => {

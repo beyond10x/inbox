@@ -6,12 +6,16 @@
 //! naming the cause, where `INBOX_BIN` names no file. `cargo test --workspace` therefore runs none
 //! of them, and `task acceptance` fails when fewer than 3 ran.
 
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant as Monotonic, SystemTime};
 
 use inbox::server::json::Value;
 use inbox_acceptance::{ALICE, BOB, World, ids, member, rows, text};
 use inbox_server::format_instant;
 use inbox_verify::Instant;
+
+/// The longest wait for the expiry task to sweep at a clock reading the check set: it sweeps
+/// every second (`--sweep-interval 1`), and this bound only ends a hang.
+const SWEEP_WAIT: Duration = Duration::from_secs(10);
 
 /// The directory each check makes its own directory in.
 fn root() -> &'static std::path::Path {
@@ -112,55 +116,54 @@ fn views_holding(world: &World, message: &str) -> Vec<&'static str> {
 #[test]
 #[ignore = "needs the built inbox binary in INBOX_BIN: run by task acceptance"]
 fn a_read_note_and_an_expired_unanswered_request_are_in_no_view() {
-    let world = World::new(root(), "gone", &["--sweep-interval", "1"]);
+    // The service's clock is a file the check moves (`inbox serve --clock-file`): it reads the
+    // system clock's second at the start and stays there until the check moves it, so however
+    // long the client processes take on a loaded host, no view is read after `expires`
+    // (2026-11-22: with the system clock, `Thread` was read after a life of 2 s at a host load
+    // of about 100).
+    let start = Instant::from_unix(
+        Instant::from_system_time(SystemTime::now()).unix_seconds(),
+        0,
+    );
+    let world = World::with_clock(root(), "gone", &["--sweep-interval", "1"], start);
     world.client("bob", &["open"]).ok();
 
-    // A request with a short life, read by bob and not answered. The views are read by 4 client
-    // processes; on a loaded host they can take longer than the request lives, and a view read
-    // after `expires` no longer holds it (2026-11-22: `Thread` was read after a life of 2 s,
-    // host load about 100). So the claim is made only for views read before `expires`; a round
-    // that was too slow is repeated with a longer life.
-    let mut held = None;
-    for life in [2, 8, 30] {
-        let now = Instant::from_system_time(SystemTime::now());
-        let expires_at = now.plus_seconds(life).unix_seconds();
-        let expires = format_instant(Instant::from_unix(expires_at, 0));
-        let request = world
-            .client(
-                "alice",
-                &[
-                    "post",
-                    "--to",
-                    BOB,
-                    "--kind",
-                    "request",
-                    "--reply-shape",
-                    "free",
-                    "--body",
-                    "Answer before it expires",
-                    "--expires",
-                    &expires,
-                ],
-            )
-            .ok()
-            .stdout
-            .trim()
-            .to_owned();
-        world.client("bob", &["read", &request]).ok();
-        let views = views_holding(&world, &request);
-        let read_at = Instant::from_system_time(SystemTime::now()).unix_seconds();
-        if read_at < expires_at {
-            assert_eq!(
-                views,
-                ["Outbox", "Thread"],
-                "a request read and not answered is in its sender's Outbox and in its thread"
-            );
-            held = Some((request, expires_at, expires));
-            break;
-        }
-    }
-    let (request, expires_at, expires) =
-        held.expect("the views of a request were read within its life of 30 s");
+    // A request read by bob and not answered. Its `expires` is 30 s after the system clock just
+    // before the post: the client writes `created` from the system clock and the service refuses
+    // an `expires` at or before it, so only the start of the one `post` process is inside the
+    // margin.
+    let expires_at = Instant::from_unix(
+        Instant::from_system_time(SystemTime::now()).unix_seconds() + 30,
+        0,
+    );
+    let expires = format_instant(expires_at);
+    let request = world
+        .client(
+            "alice",
+            &[
+                "post",
+                "--to",
+                BOB,
+                "--kind",
+                "request",
+                "--reply-shape",
+                "free",
+                "--body",
+                "Answer before it expires",
+                "--expires",
+                &expires,
+            ],
+        )
+        .ok()
+        .stdout
+        .trim()
+        .to_owned();
+    world.client("bob", &["read", &request]).ok();
+    assert_eq!(
+        views_holding(&world, &request),
+        ["Outbox", "Thread"],
+        "a request read and not answered is in its sender's Outbox and in its thread"
+    );
 
     // A note, read by bob: handled, and removed.
     let note = world
@@ -183,13 +186,17 @@ fn a_read_note_and_an_expired_unanswered_request_are_in_no_view() {
         views_holding(&world, &note)
     );
 
-    // The one wait on real time: until 2 sweep intervals (1 s each) after `expires`, and a
-    // quarter of a second for the sweep itself.
-    let until = SystemTime::UNIX_EPOCH
-        + Duration::from_secs(u64::try_from(expires_at + 2).expect("after 1970"))
-        + Duration::from_millis(250);
-    if let Ok(left) = until.duration_since(SystemTime::now()) {
-        std::thread::sleep(left);
+    // The clock passes `expires` by 1 s. The clients sign with the system clock, and the service
+    // takes a request signed within 60 s of its reading: 31 s after the post, it takes every
+    // request the check signs within 91 s of the post, and the runner ends a check at 60 s.
+    world.set_clock(expires_at.plus_seconds(1));
+    // The expiry task sweeps every second at the clock's reading. The event waited for is the
+    // request leaving its sender's `Outbox`, a sweep's work; the bound only ends a hang.
+    let waited = Monotonic::now();
+    while ids(&world.client("alice", &["outbox", "--json"]).ok().json()).contains(&request)
+        && waited.elapsed() < SWEEP_WAIT
+    {
+        std::thread::sleep(Duration::from_millis(100));
     }
     assert!(
         views_holding(&world, &request).is_empty(),

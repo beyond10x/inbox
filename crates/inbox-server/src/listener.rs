@@ -195,14 +195,20 @@ impl<B: Backend> Server<B> {
     }
 }
 
+/// One sweep. When it sent an `Expire`, it counts as an answered command: every wait on `Pending`
+/// reads its view again, so none answers a row the sweep removed or decided.
 fn sweep_now<B: Backend>(shared: &Shared<B>) -> usize {
     let config = &shared.config;
-    sweep(
+    let sent = sweep(
         &shared.backend,
         &config.keys,
         config.clock.now(),
         config.answer_retention,
-    )
+    );
+    if sent > 0 {
+        shared.signals.command_answered();
+    }
+    sent
 }
 
 /// A service serving on a thread of its own. Dropped, it is told to stop and not waited for.

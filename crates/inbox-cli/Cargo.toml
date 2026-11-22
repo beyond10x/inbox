@@ -23,6 +23,7 @@ inbox = { path = "../../generated/rust/inbox", features = ["server"] }
 inbox-core = { path = "../inbox-core" }
 inbox-server = { path = "../inbox-server" }
 inbox-verify = { path = "../inbox-verify" }
+libc = "0.2"
 signal-hook = "0.4"
 zeroize = "1.8"
 

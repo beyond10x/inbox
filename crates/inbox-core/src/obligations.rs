@@ -146,7 +146,7 @@ fn unknown_option(input: &PostMessage) -> bool {
         || !offered(input.default_on_silence.as_ref())
 }
 
-/// `inbox.messaging.PostMessage`, in the order the ESS 0.97.3 interpreter and synthesizer select
+/// `inbox.messaging.PostMessage`, in the order the ESS 0.97.4 interpreter and synthesizer select
 /// its outcomes:
 ///
 /// 1. the input-guarded refusals in declaration order: `not-sender` (`from` is not the caller's
@@ -166,9 +166,10 @@ fn unknown_option(input: &PostMessage) -> bool {
 /// Where the contract text in `PLAN.md` differs (it puts `unknown-inbox` before the input-guarded
 /// refusals and the external branches after every row refusal), this follows the interpreter,
 /// which the conformance suite runs against. The order inside step 3 is measured on the
-/// interpreted target too, pair by pair: the model declares `duplicate` first, but the
-/// interpreter answers `unknown-inbox` (`exists: false`) before every row refusal with `where`,
-/// so `unknown-inbox` comes before `duplicate` and `duplicate-key`; then `duplicate` before
+/// interpreted target too, pair by pair: the interpreter answers `unknown-inbox`
+/// (`exists: false`) before every row refusal with `where`, and the model declares it first
+/// (before ESS 0.97.4 it declared `duplicate` first), so `unknown-inbox` comes before
+/// `duplicate` and `duplicate-key`; then `duplicate` before
 /// `duplicate-key` and before `inbox-closed`, `duplicate-key` before `inbox-closed`, and
 /// `id-taken` after all of them (`tests/adversary.rs` and `tests/post_message_id.rs` hold each
 /// pair). A post under a message id another sender holds is therefore answered as one under a

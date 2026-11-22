@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-22T21:03:20Z",
+  "actor": "agent:inbox",
+  "artifact": "story:no-test-holds-a-wall-clock-time",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:adversary-no-test-holds-a-wall-clock-time-pass-1",
+    "review": "review-result:adversary-no-test-holds-a-wall-clock-time-pass-1",
+    "outcome": "escalated"
+  }
+}

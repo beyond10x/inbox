@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+// contract digest ab51269fa0786cb62de332826f17f3199db230ea4e52fe7335e4d8ea79e313bc
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -1191,6 +1191,13 @@ pub enum MarkDeliveredOutcome {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
         error: NotRecipient,
     },
+    /// `deadline-passed` — externally decided (the service's Clock port reads at or after the message's stored `expires`) when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`.
+    ///
+    /// The deadline has passed: the message stays as it is until the expiry task decides it.
+    DeadlinePassed {
+        /// Why it was refused: `inbox.messaging.Expired`.
+        error: Expired,
+    },
     /// `delivered` — when the existing subject is in Sent.
     Delivered {
         /// The `inbox.messaging.MessageDelivered` this outcome publishes.
@@ -1234,6 +1241,13 @@ pub enum MarkReadOutcome {
     NotRecipient {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
         error: NotRecipient,
+    },
+    /// `deadline-passed` — externally decided (the service's Clock port reads at or after the message's stored `expires`) when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`.
+    ///
+    /// The deadline has passed: the message stays as it is until the expiry task decides it.
+    DeadlinePassed {
+        /// Why it was refused: `inbox.messaging.Expired`.
+        error: Expired,
     },
     /// `handled` — when the existing subject's stored fields satisfy `(kind == note and state in [Sent, Delivered])`.
     ///
@@ -1387,6 +1401,11 @@ pub enum PostMessageOutcome {
         /// Why it was refused: `inbox.messaging.NoAuthority`.
         error: NoAuthority,
     },
+    /// `unknown-inbox` — when no `inbox.messaging.Inbox` carries the identity `input.to` names.
+    UnknownInbox {
+        /// Why it was refused: `inbox.messaging.UnknownInbox`.
+        error: UnknownInbox,
+    },
     /// `duplicate` — when, of the `inbox.messaging.Message` rows satisfying `(message_id == input.message_id and from == input.from)`, at least one row is selected.
     ///
     /// A live message of this sender carries this id.
@@ -1398,11 +1417,6 @@ pub enum PostMessageOutcome {
     DuplicateKey {
         /// Why it was refused: `inbox.messaging.Duplicate`.
         error: Duplicate,
-    },
-    /// `unknown-inbox` — when no `inbox.messaging.Inbox` carries the identity `input.to` names.
-    UnknownInbox {
-        /// Why it was refused: `inbox.messaging.UnknownInbox`.
-        error: UnknownInbox,
     },
     /// `inbox-closed` — when the `inbox.messaging.Inbox` that `input.to` names satisfies `state == Closed`.
     InboxClosed {
@@ -1605,7 +1619,7 @@ pub struct Duplicate;
 
 /// The declared error `inbox.messaging.Expired`.
 ///
-/// The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.
+/// The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expired;
 
@@ -2157,7 +2171,7 @@ pub mod obligations {
     ///
     /// Why it is not generated: kept an obligation by `distinct o in decision.options by o.letter as string`, distinct list members no generated behaviour compares, in `unknown-option`.
     ///
-    /// Contract: given `inbox.messaging.PostMessage` input, decide and enact exactly one outcome. Selection precedence: on commands with `when_related:`, check `existing_instance` then `exists: false` before input-guarded refusals; choose the first declared input refusal whose guard holds; then check addressed-row existence (`unknown_instance`, and `existing_instance` on commands without `when_related:`); then the held state (`when_subject_state` and `when_subject`), with `wrong_state` only if the selected branch moves from a state the row does not hold; then choose the present `when_related:` predicate refusal whose predicate and optional input guard hold; then accepting and external branches in declaration order. An accepting branch that moves nothing answers in every state. Related-presence predicates do not precede input-guarded refusals. Declared outcomes (declaration order, not selection precedence): `not-sender` when `from != caller.principal`, error `inbox.messaging.NotSender`; `no-authority` when `(on_behalf_of != {fact: from} and not (defined(authority)))`, error `inbox.messaging.NoAuthority`; `already-expired` when `expires <= {fact: created} as timestamp`, error `inbox.messaging.AlreadyExpired`; `request-without-shape` when `(kind == request and not (defined(reply_shape)))`, error `inbox.messaging.ShapeMismatch`; `decision-without-options` when `(kind == decision and (not (defined(decision)) or decision.options.count == 0))`, error `inbox.messaging.ShapeMismatch`; `unknown-option` when `((defined(default_on_silence) and not (defined(decision))) or (defined(decision) and (not (distinct o in decision.options by o.letter as string) or (defined(decision.recommended_option) and not (exists o in decision.options: (o.letter == decision.recommended_option))) or (defined(default_on_silence) and not (exists o in decision.options: (o.letter == {fact: default_on_silence}))))))`, error `inbox.messaging.ShapeMismatch`; `expired-on-arrival` externally decided (the service's Clock port reads at or after the post's `expires`), error `inbox.messaging.AlreadyExpired`; `signature-invalid` externally decided (the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify), error `inbox.messaging.SignatureInvalid`; `authority-invalid` externally decided (the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`), error `inbox.messaging.NoAuthority`; `duplicate` when, of the `inbox.messaging.Message` rows satisfying `(message_id == input.message_id and from == input.from)`, at least one row is selected, error `inbox.messaging.Duplicate`; `duplicate-key` when, of the `inbox.messaging.Message` rows satisfying `(dedup_key == input.dedup_key and from == input.from)`, at least one row is selected, error `inbox.messaging.Duplicate`; `unknown-inbox` when no `inbox.messaging.Inbox` carries the identity `input.to` names, error `inbox.messaging.UnknownInbox`; `inbox-closed` when the `inbox.messaging.Inbox` that `input.to` names satisfies `state == Closed`, error `inbox.messaging.UnknownInbox`; `id-taken` when, of the `inbox.messaging.Message` rows satisfying `message_id == input.message_id`, at least one row is selected, error `inbox.messaging.MessageIdTaken`; `posted` otherwise, creates `inbox.messaging.Message`, emits `inbox.messaging.MessagePosted`.
+    /// Contract: given `inbox.messaging.PostMessage` input, decide and enact exactly one outcome. Selection precedence: on commands with `when_related:`, check `existing_instance` then `exists: false` before input-guarded refusals; choose the first declared input refusal whose guard holds; then check addressed-row existence (`unknown_instance`, and `existing_instance` on commands without `when_related:`); then the held state (`when_subject_state` and `when_subject`), with `wrong_state` only if the selected branch moves from a state the row does not hold; then choose the present `when_related:` predicate refusal whose predicate and optional input guard hold; then accepting and external branches in declaration order. An accepting branch that moves nothing answers in every state. Related-presence predicates do not precede input-guarded refusals. Declared outcomes (declaration order, not selection precedence): `not-sender` when `from != caller.principal`, error `inbox.messaging.NotSender`; `no-authority` when `(on_behalf_of != {fact: from} and not (defined(authority)))`, error `inbox.messaging.NoAuthority`; `already-expired` when `expires <= {fact: created} as timestamp`, error `inbox.messaging.AlreadyExpired`; `request-without-shape` when `(kind == request and not (defined(reply_shape)))`, error `inbox.messaging.ShapeMismatch`; `decision-without-options` when `(kind == decision and (not (defined(decision)) or decision.options.count == 0))`, error `inbox.messaging.ShapeMismatch`; `unknown-option` when `((defined(default_on_silence) and not (defined(decision))) or (defined(decision) and (not (distinct o in decision.options by o.letter as string) or (defined(decision.recommended_option) and not (exists o in decision.options: (o.letter == decision.recommended_option))) or (defined(default_on_silence) and not (exists o in decision.options: (o.letter == {fact: default_on_silence}))))))`, error `inbox.messaging.ShapeMismatch`; `expired-on-arrival` externally decided (the service's Clock port reads at or after the post's `expires`), error `inbox.messaging.AlreadyExpired`; `signature-invalid` externally decided (the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify), error `inbox.messaging.SignatureInvalid`; `authority-invalid` externally decided (the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`), error `inbox.messaging.NoAuthority`; `unknown-inbox` when no `inbox.messaging.Inbox` carries the identity `input.to` names, error `inbox.messaging.UnknownInbox`; `duplicate` when, of the `inbox.messaging.Message` rows satisfying `(message_id == input.message_id and from == input.from)`, at least one row is selected, error `inbox.messaging.Duplicate`; `duplicate-key` when, of the `inbox.messaging.Message` rows satisfying `(dedup_key == input.dedup_key and from == input.from)`, at least one row is selected, error `inbox.messaging.Duplicate`; `inbox-closed` when the `inbox.messaging.Inbox` that `input.to` names satisfies `state == Closed`, error `inbox.messaging.UnknownInbox`; `id-taken` when, of the `inbox.messaging.Message` rows satisfying `message_id == input.message_id`, at least one row is selected, error `inbox.messaging.MessageIdTaken`; `posted` otherwise, creates `inbox.messaging.Message`, emits `inbox.messaging.MessagePosted`.
     pub trait PostMessageBehavior {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.PostMessage`.
         ///

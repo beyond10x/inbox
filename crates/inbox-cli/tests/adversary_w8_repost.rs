@@ -10,7 +10,7 @@ use std::net::{TcpListener, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use inbox::server::json::Value;
 
@@ -74,18 +74,39 @@ fn request_line(stream: &mut TcpStream) -> String {
 /// A stand-in on 127.0.0.1:0 that answers one request per connection with `answers` in turn:
 /// `None` closes the connection after reading the request, without an answer; `Some((status,
 /// epoch, body))` answers it. Each request line is sent on the channel as it is read. The thread
-/// is never joined, so a client that sends fewer requests than scripted does not hang the case.
+/// is never joined, so a client that sends fewer requests than scripted does not hang the case;
+/// it ends when no connection comes within 10 s, and [`requests`] fails the case, naming the
+/// missing request, when fewer arrive than the case expects.
 fn stand_in(
     answers: Vec<Option<(u16, Option<&'static str>, &'static str)>>,
 ) -> (String, mpsc::Receiver<String>) {
+    let (url, receiver, _thread) = stand_in_within(answers, support::STAND_IN_WAIT);
+    (url, receiver)
+}
+
+/// [`stand_in`] with the wait for each connection given, and the handle of its thread: the case
+/// that holds the bound passes 1 s and checks that the thread ends. The thread ends with the
+/// message of the connection that did not come, naming the wait, or with none.
+fn stand_in_within(
+    answers: Vec<Option<(u16, Option<&'static str>, &'static str)>>,
+    wait: Duration,
+) -> (
+    String,
+    mpsc::Receiver<String>,
+    std::thread::JoinHandle<Option<String>>,
+) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let (sender, receiver) = mpsc::channel();
-    std::thread::spawn(move || {
-        for answer in answers {
-            let Ok((mut stream, _)) = listener.accept() else {
-                return;
-            };
+    let thread = std::thread::spawn(move || {
+        let total = answers.len();
+        for (n, answer) in answers.into_iter().enumerate() {
+            let what = format!("request {} of {total}", n + 1);
+            let mut stream =
+                match support::accept_or_say(&listener, wait, "the stand-in's thread", &what) {
+                    Ok(stream) => stream,
+                    Err(message) => return Some(message),
+                };
             let line = request_line(&mut stream);
             let _ = sender.send(line);
             if let Some((status, epoch, body)) = answer {
@@ -98,16 +119,23 @@ fn stand_in(
                 let _ = stream.write_all(text.as_bytes());
             }
         }
+        None
     });
-    (url, receiver)
+    (url, receiver, thread)
 }
 
-/// Every request line the stand-in read, waiting up to 2 s after the client ended for each.
-fn requests(receiver: &mpsc::Receiver<String>) -> Vec<String> {
+/// Every request line the stand-in read, waiting up to 2 s after the client ended for each; the
+/// case fails, naming the missing request, when fewer than `count` arrive.
+fn requests(receiver: &mpsc::Receiver<String>, count: usize) -> Vec<String> {
     let mut lines = Vec::new();
     while let Ok(line) = receiver.recv_timeout(Duration::from_secs(2)) {
         lines.push(line);
     }
+    assert!(
+        lines.len() >= count,
+        "the stand-in received no connection for request {} of {count} within 2 s of the client's end; read {lines:?}",
+        lines.len() + 1
+    );
     lines
 }
 
@@ -248,7 +276,7 @@ fn an_answer_without_the_epoch_header_posts_the_kept_lines_without_an_epoch_too(
             ("INBOX_OUTBOX", outbox_text.as_str()),
         ],
     );
-    let lines = requests(&served);
+    let lines = requests(&served, 3);
     let run = run.ok();
     assert_eq!(reposted(&run.json()).len(), 2, "{run:#?}");
     assert_eq!(lines.len(), 3, "{lines:?}");
@@ -283,7 +311,7 @@ fn a_transport_failure_of_the_epoch_question_ends_repost_with_exit_3_and_posts_n
             ("INBOX_OUTBOX", outbox_text.as_str()),
         ],
     );
-    let lines = requests(&served);
+    let lines = requests(&served, 1);
     assert_eq!(run.status, TRANSPORT, "{run:#?}");
     assert_eq!(lines.len(), 1, "only the question: {lines:?}");
     assert!(lines[0].starts_with("GET "), "{lines:?}");
@@ -307,10 +335,15 @@ fn a_post_that_arrived_and_cannot_record_its_epoch_prints_its_id_and_exits_4() {
     assert_eq!(ids(&pending), [message_id]);
 }
 
-/// F3. Every command that touches the outbox file reads the epochs file; reading one of 20 000
-/// lines must take about as long as reading the outbox file, not seconds.
+/// F3. Every command that touches the outbox file reads the epochs file. The binary reads one of
+/// 20 001 lines and finds the one entry of a kept envelope among them: `outbox` lists the
+/// envelope, and `repost` leaves it alone, recorded at the running start. That the read is
+/// linear in the file's lines is counted, not timed, by the unit case
+/// `outbox::tests::an_epochs_file_of_20000_lines_is_read_in_steps_linear_in_its_lines` over the
+/// function both commands read the file with (story:no-test-holds-a-wall-clock-time: this case
+/// held the fastest of 5 runs to 2 s, and failed once at 2.2 s on a loaded host).
 #[test]
-fn an_epochs_file_of_20000_lines_is_read_within_2_seconds() {
+fn an_epochs_file_of_20000_lines_is_read_and_its_entry_is_found() {
     let world = World::new("adv-w8-long-epochs");
     world.client("bob", &["open"]).ok();
     post(&world, "alice", &["--to", BOB, "--body", "recorded"]).ok();
@@ -328,20 +361,37 @@ fn an_epochs_file_of_20000_lines_is_read_within_2_seconds() {
     }
     fs::write(&path, text).expect("written");
 
-    // Wall time on a shared host: one run took 2.2 s at a host load of about 80 (2026-11-22).
-    // A read that is slow because of the file is slow in every run; a run that waited for a
-    // processor is not. So the fastest of at most 5 runs is held to the bound.
-    let mut fastest = Duration::MAX;
-    for _ in 0..5 {
-        let started = Instant::now();
-        world.client("alice", &["outbox", "--json"]).ok();
-        fastest = fastest.min(started.elapsed());
-        if fastest < Duration::from_secs(2) {
-            break;
-        }
-    }
+    let listed = world.client("alice", &["outbox", "--json"]).ok().json();
+    assert_eq!(ids(&listed), world.kept("alice"), "the kept envelope");
+    let document = world.client("alice", &["repost", "--json"]).ok().json();
     assert!(
-        fastest < Duration::from_secs(2),
-        "`inbox outbox` over an epochs file of 20 001 lines took {fastest:?} in the fastest of 5 runs"
+        reposted(&document).is_empty(),
+        "repost posted an envelope the epochs file of 20 001 lines records at the running start: \
+         {document:?}"
     );
+}
+
+/// A stand-in whose client never connects ends its thread, and fails the case that reads its
+/// requests with a message that names the missing request. The wait is 1 s here and 10 s for
+/// every other case; the thread's message names the wait it kept, so a stand-in that waits longer
+/// than it was told fails the case. The case waits for the thread with `STAND_IN_WAIT` only as
+/// the end of a hang (it held the thread's end to 3 s before, a time a slow host can pass:
+/// story:no-test-holds-a-wall-clock-time).
+#[test]
+#[should_panic(expected = "the stand-in received no connection for request 1 of 1")]
+fn a_stand_in_whose_client_never_connects_ends_its_thread_and_fails_the_case() {
+    let (_url, served, thread) = stand_in_within(
+        vec![Some((200, None, r#"{"rows":[]}"#))],
+        Duration::from_secs(1),
+    );
+    support::wait_until_finished(&thread, "the stand-in's thread");
+    let said = thread
+        .join()
+        .expect("the stand-in's thread ends without a panic");
+    assert_eq!(
+        said.as_deref(),
+        Some("the stand-in's thread received no connection for request 1 of 1 within 1 s"),
+        "what the stand-in's thread said"
+    );
+    let _ = requests(&served, 1);
 }

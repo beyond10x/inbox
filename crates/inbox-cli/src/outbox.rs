@@ -206,7 +206,9 @@ impl Outbox {
         let mut lines = unexpired(&before, now);
         let epochs_path = beside(&self.path, ".epochs");
         let mut epochs = if with_epochs {
-            Epochs::parse(&fs::read_to_string(&epochs_path).unwrap_or_default())
+            Epochs::parse(epoch_lines(
+                &fs::read_to_string(&epochs_path).unwrap_or_default(),
+            ))
         } else {
             Epochs::default()
         };
@@ -248,6 +250,84 @@ fn beside(path: &Path, suffix: &str) -> PathBuf {
     beside
 }
 
+#[cfg(test)]
+thread_local! {
+    /// The steps [`Epochs`] took on this thread, read by the unit case that holds a read of the
+    /// epochs file to steps linear in its lines (story:no-test-holds-a-wall-clock-time: a test
+    /// of a read's cost counts work, it holds no time).
+    static STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The most steps the case allows before a step panics, so a read in pairs fails at once
+    /// instead of running for seconds.
+    static MOST: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
+}
+
+/// One step of [`Epochs`]: a line of the file split, a message id of it compared or read as text
+/// ([`LineId`]), an epoch asked for or recorded, a line written. Counted in a test build of this
+/// crate only, where a step past `MOST` panics; in every other build it does nothing.
+fn step() {
+    #[cfg(test)]
+    STEPS.with(|steps| {
+        let taken = steps.get() + 1;
+        steps.set(taken);
+        let most = MOST.with(std::cell::Cell::get);
+        assert!(
+            taken <= most,
+            "the read of the epochs file took more than {most} steps"
+        );
+    });
+}
+
+/// One line of the epochs file's text, split at its first tab: the message id and what follows
+/// it (the epoch's digits when the line is of its form).
+struct EpochLine<'a> {
+    id: LineId<'a>,
+    digits: &'a str,
+}
+
+/// The message id of a line of the epochs file, as [`Epochs::parse`] gets it. Each comparison of
+/// two `LineId` values and each read of its text ([`LineId::text`]) is a [`step`], so a read that
+/// compares every `LineId` with every other is stopped at the bound. Not counted: a hash (a hash
+/// map rehashes its entries as it grows, and compares only the ids whose hashes meet), and a
+/// comparison of the texts themselves once taken through `text()`, so a read in pairs written
+/// over the texts passes the step case.
+#[derive(Clone, Copy)]
+struct LineId<'a>(&'a str);
+
+impl<'a> LineId<'a> {
+    /// The id's text.
+    fn text(self) -> &'a str {
+        step();
+        self.0
+    }
+}
+
+impl PartialEq for LineId<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        step();
+        self.0 == other.0
+    }
+}
+
+impl Eq for LineId<'_> {}
+
+impl std::hash::Hash for LineId<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+/// The lines of the epochs file's text, each a [`step`].
+fn epoch_lines(text: &str) -> impl Iterator<Item = EpochLine<'_>> {
+    text.lines().map(|line| {
+        step();
+        let (id, digits) = line.split_once('\t').unwrap_or((line, ""));
+        EpochLine {
+            id: LineId(id),
+            digits,
+        }
+    })
+}
+
 /// What the epochs file says: the epoch of each message id one line of the form
 /// `<message id>\t<32 lower-case hex digits>` names. A message id that two lines name, whatever
 /// their form, has none.
@@ -258,18 +338,21 @@ struct Epochs {
 }
 
 impl Epochs {
-    /// Reads the file's text in one pass over its lines.
-    fn parse(text: &str) -> Self {
-        let mut named: HashMap<&str, (usize, &str)> = HashMap::new();
-        for line in text.lines() {
-            let (id, digits) = line.split_once('\t').unwrap_or((line, ""));
-            let entry = named.entry(id).or_insert((0, digits));
+    /// Reads the file's lines ([`epoch_lines`]) in one pass.
+    fn parse<'a>(lines: impl Iterator<Item = EpochLine<'a>>) -> Self {
+        let mut named: HashMap<LineId<'a>, (usize, &'a str)> = HashMap::new();
+        for line in lines {
+            let entry = named.entry(line.id).or_insert((0, line.digits));
             entry.0 += 1;
         }
         let recorded = named
             .into_iter()
-            .filter(|(id, (count, _))| !id.is_empty() && *count == 1)
+            .filter(|(_, (count, _))| *count == 1)
             .filter_map(|(id, (_, digits))| {
+                let id = id.text();
+                if id.is_empty() {
+                    return None;
+                }
                 Epoch::parse(digits).map(|epoch| (id.to_owned(), epoch))
             })
             .collect();
@@ -280,10 +363,12 @@ impl Epochs {
     }
 
     fn of(&self, message_id: &str) -> Option<Epoch> {
+        step();
         self.recorded.get(message_id).cloned()
     }
 
     fn record(&mut self, message_id: &str, epoch: &Epoch) {
+        step();
         self.recorded.insert(message_id.to_owned(), epoch.clone());
         self.changed = true;
     }
@@ -294,6 +379,7 @@ impl Epochs {
         kept.iter()
             .filter_map(|line| decode(line).map(|envelope| envelope.message_id.0))
             .filter_map(|id| {
+                step();
                 let epoch = self.recorded.get(&id)?;
                 written
                     .insert(id.clone())
@@ -378,7 +464,7 @@ mod tests {
     use inbox::server::wire;
     use inbox_verify::Instant;
 
-    use super::{Epochs, of_sender, unexpired, unreadable, without};
+    use super::{Epochs, epoch_lines, of_sender, unexpired, unreadable, without};
     use crate::client::Epoch;
 
     #[test]
@@ -476,7 +562,7 @@ mod tests {
     #[test]
     fn an_epochs_line_is_a_message_id_a_tab_and_32_hex_digits() {
         let text = format!("{}\t{EPOCH}\n{}\t{OTHER}\n", id(1), id(2));
-        let epochs = Epochs::parse(&text);
+        let epochs = Epochs::parse(epoch_lines(&text));
         assert_eq!(epochs.of(&id(1)), Some(epoch(EPOCH)));
         assert_eq!(epochs.of(&id(2)), Some(epoch(OTHER)));
         assert_eq!(epochs.of(&id(3)), None);
@@ -498,13 +584,13 @@ mod tests {
             format!("{}\t{EPOCH}", id(6)),
         ]
         .join("\n");
-        let epochs = Epochs::parse(&text);
+        let epochs = Epochs::parse(epoch_lines(&text));
         for n in 1..=5 {
             assert_eq!(epochs.of(&id(n)), None, "{n}");
         }
         assert_eq!(epochs.of(""), None);
         assert_eq!(epochs.of(&id(6)), Some(epoch(EPOCH)));
-        assert_eq!(Epochs::parse("").of(&id(6)), None);
+        assert_eq!(Epochs::parse(epoch_lines("")).of(&id(6)), None);
     }
 
     #[test]
@@ -515,7 +601,7 @@ mod tests {
             id(2),
             id(2)
         );
-        let mut epochs = Epochs::parse(&text);
+        let mut epochs = Epochs::parse(epoch_lines(&text));
         epochs.record(&id(1), &epoch(OTHER));
         epochs.record(&id(2), &epoch(EPOCH));
         assert!(epochs.changed);
@@ -534,7 +620,7 @@ mod tests {
     #[test]
     fn an_entry_whose_envelope_the_outbox_does_not_keep_is_not_written() {
         let text = format!("{}\t{EPOCH}\n{}\t{EPOCH}\n", id(1), id(9));
-        let mut epochs = Epochs::parse(&text);
+        let mut epochs = Epochs::parse(epoch_lines(&text));
         epochs.record(&id(2), &epoch(OTHER));
         let kept = [
             envelope(1, "agent:test/alice", "2026-11-22T12:00:00Z"),
@@ -545,5 +631,88 @@ mod tests {
             epochs.lines(&kept),
             [format!("{}\t{EPOCH}", id(1)), format!("{}\t{OTHER}", id(2))]
         );
+    }
+
+    /// The most steps a read of `lines` lines and 1 envelope may take: 3 per line (it is split,
+    /// the id of a line kept is read as text, and room for the comparisons of ids whose hashes
+    /// meet), a few for the envelope.
+    fn most_steps(lines: u32) -> usize {
+        3 * lines as usize + 16
+    }
+
+    /// The steps `Outbox::kept` (what `outbox` and `repost` read) takes over an outbox file of
+    /// one envelope and an epochs file of `lines` lines, the first of them that envelope's, and
+    /// the epoch it found for the envelope. A step past [`most_steps`] panics, so a read in pairs
+    /// fails within its first few thousand comparisons.
+    fn steps_of_a_read(lines: u32) -> (usize, Option<Epoch>) {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/tmp/epochs-steps")
+            .join(format!("{lines}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the directory is made");
+        let path = dir.join("outbox.jsonl");
+        let line = envelope(0, "agent:test/alice", "2099-01-01T00:00:00Z");
+        std::fs::write(&path, format!("{line}\n")).expect("the outbox file");
+        let mut text = String::new();
+        for n in 0..lines {
+            text.push_str(&format!("{}\t{EPOCH}\n", id(n)));
+        }
+        std::fs::write(dir.join("outbox.jsonl.epochs"), text).expect("the epochs file");
+        let outbox = super::Outbox::locate(Some(&path)).expect("the outbox");
+        super::STEPS.with(|steps| steps.set(0));
+        super::MOST.with(|most| most.set(most_steps(lines)));
+        let contents = outbox
+            .kept("agent:test/alice", at("2026-11-22T12:00:00Z"))
+            .expect("the outbox is read");
+        super::MOST.with(|most| most.set(usize::MAX));
+        let steps = super::STEPS.with(std::cell::Cell::get);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(contents.kept.len(), 1, "the one envelope");
+        (steps, contents.kept[0].epoch.clone())
+    }
+
+    /// The steps of `during`, counted on this thread.
+    fn steps_of<T>(during: impl FnOnce() -> T) -> (usize, T) {
+        let before = super::STEPS.with(std::cell::Cell::get);
+        let value = during();
+        (super::STEPS.with(std::cell::Cell::get) - before, value)
+    }
+
+    /// The step case catches a read in pairs only through these steps: one comparison of two
+    /// `LineId` values is 1 step, whether they are equal or not, and one read of an id's text is
+    /// 1 step.
+    #[test]
+    fn a_comparison_of_two_line_ids_and_a_read_of_one_text_are_one_step_each() {
+        let (a, b, c) = (super::LineId("a"), super::LineId("a"), super::LineId("b"));
+        assert_eq!(steps_of(|| a == b), (1, true), "a comparison of equal ids");
+        assert_eq!(
+            steps_of(|| a == c),
+            (1, false),
+            "a comparison of different ids"
+        );
+        assert_eq!(steps_of(|| c.text()), (1, "b"), "a read of an id's text");
+    }
+
+    /// F3 of wave 8's adversary pass 1: every command that touches the outbox file reads the
+    /// epochs file, and a read that compared every line with every other took 7.67 s for 20 001
+    /// lines. The read is held to steps linear in the file's lines, counted, not timed. A message
+    /// id reaches the read as a `LineId`, whose every comparison with another `LineId` and every
+    /// read of its text is a step, so a read in pairs over `LineId` values is stopped at the
+    /// bound (one that compares the texts themselves is not counted): at most 3 steps per line,
+    /// and at least 1 (each line is split once), so a counter that counts nothing fails too.
+    #[test]
+    fn an_epochs_file_of_20000_lines_is_read_in_steps_linear_in_its_lines() {
+        for lines in [2_001, 20_001] {
+            let (steps, found) = steps_of_a_read(lines);
+            assert_eq!(found, Some(epoch(EPOCH)), "the entry of {lines} lines");
+            assert!(
+                steps >= lines as usize,
+                "{steps} steps for {lines} lines: fewer than one per line"
+            );
+            assert!(
+                steps <= most_steps(lines),
+                "{steps} steps for {lines} lines"
+            );
+        }
     }
 }

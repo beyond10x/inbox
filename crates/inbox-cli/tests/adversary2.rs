@@ -184,10 +184,25 @@ fn stalling_relay(
     target: SocketAddr,
     stall: Duration,
 ) -> (String, std::thread::JoinHandle<String>) {
+    stalling_relay_within(target, stall, support::STAND_IN_WAIT)
+}
+
+/// [`stalling_relay`] with the wait for the request given: the case that holds the bound passes
+/// 1 s.
+fn stalling_relay_within(
+    target: SocketAddr,
+    stall: Duration,
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the relay binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut client, _) = listener.accept().expect("one connection");
+        let mut client = support::accept_or_panic(
+            &listener,
+            wait,
+            "the relay of adversary2.rs",
+            "the request of `post`",
+        );
         client
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("a read timeout");
@@ -333,37 +348,34 @@ fn the_key_file_refusals_read_as_one_sentence_without_a_run_of_spaces() {
 /// alive) keeps the process from ending after SIGTERM.
 #[test]
 fn sigterm_ends_serve_when_its_standard_error_is_a_full_pipe() {
+    use std::os::fd::AsRawFd;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let (dir, operator) = keys_only("adv2-serve-stderr-full");
     let (mut reader, writer) = std::io::pipe().expect("a pipe");
     let for_child = writer.try_clone().expect("a second write end");
-    let written = Arc::new(AtomicUsize::new(0));
+    let filled = writer.as_raw_fd();
+    assert!(
+        !support::blocked_in_write(filled),
+        "blocked_in_write answers true before any thread writes to the pipe"
+    );
     let stop = Arc::new(AtomicBool::new(false));
     let filler = {
-        let (written, stop) = (Arc::clone(&written), Arc::clone(&stop));
+        let stop = Arc::clone(&stop);
         let mut writer = writer;
         std::thread::spawn(move || {
             while !stop.load(Ordering::SeqCst) {
-                match writer.write(&[b'.'; 512]) {
-                    Ok(count) => {
-                        written.fetch_add(count, Ordering::SeqCst);
-                    }
-                    Err(_) => break,
+                if writer.write(&[b'.'; 512]).is_err() {
+                    break;
                 }
             }
         })
     };
-    let mut last = usize::MAX;
-    loop {
-        std::thread::sleep(Duration::from_millis(300));
-        let now = written.load(Ordering::SeqCst);
-        if now == last {
-            break;
-        }
-        last = now;
-    }
+    // Full: the filler is blocked in write(2) on the pipe. Before, a pipe that took no byte for
+    // 300 ms counted as full, and a filler that waited for a processor left it with room, so the
+    // case passed without a full pipe (story:no-test-holds-a-wall-clock-time).
+    support::wait_until_blocked_in_write(filled);
     let mut serve = Reaped(Some(
         support::command(&dir.path)
             .args([
@@ -405,5 +417,25 @@ fn sigterm_ends_serve_when_its_standard_error_is_a_full_pipe() {
         status.is_some_and(|status| status.code() == Some(0)),
         "inbox serve after SIGTERM with a full standard error pipe: {status:?} (None: still \
          running 10 s later)"
+    );
+}
+
+/// A relay whose client never connects ends with a message that names the missing request, and
+/// does not wait for it forever: the case that joins it fails with that message. The wait is 1 s
+/// here and 10 s for every other case.
+#[test]
+fn a_relay_whose_client_never_connects_ends_and_names_the_request() {
+    let target: SocketAddr = "127.0.0.1:9".parse().expect("an address");
+    let (_relay, relayed) =
+        stalling_relay_within(target, Duration::from_millis(1), Duration::from_secs(1));
+    let message = match relayed.join() {
+        Ok(id) => panic!("the relay ended with {id:?} and no message"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(
+        message.contains(
+            "the relay of adversary2.rs received no connection for the request of `post` within 1 s"
+        ),
+        "{message:?}"
     );
 }

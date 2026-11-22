@@ -9,8 +9,9 @@ use inbox_core::CommandClock;
 use inbox_verify::Instant;
 
 /// Where the service reads the time: the request window of every authentication, the instant
-/// every envelope and delegation is checked at, every sweep of the expiry task, and the deadline
-/// of a message a post, an answer or a refusal meets ([`CommandReading`]).
+/// every envelope and delegation is checked at, every sweep of the expiry task, the deadline of a
+/// message a post, an answer, a refusal, a read mark or a delivery mark meets ([`CommandReading`]),
+/// and the rows a wait on `Pending` holds as due.
 ///
 /// A parameter of the library, so a test moves time without sleeping ([`ManualClock`]).
 pub trait Clock: Send + Sync + fmt::Debug {
@@ -114,8 +115,9 @@ impl CommandClock for CommandReading {
 /// `at` as RFC 3339 text in UTC with its fraction of a second, the digits it needs:
 /// `2026-11-21T12:00:00.7Z`, and `2026-11-21T12:00:00Z` where the fraction is 0.
 ///
-/// The clock reading a deadline is compared with: the reading `Answer`, `Refuse` and
-/// `PostMessage` compare `expires` with, and `Due`'s and `Expire`'s `now` and `keep_until` of
+/// The clock reading a deadline is compared with: the reading `PostMessage`, `Answer`, `Refuse`,
+/// `MarkDelivered` and `MarkRead` compare `expires` with, the one a wait on `Pending` holds its rows
+/// to, and `Due`'s and `Expire`'s `now` and `keep_until` of
 /// the expiry task. An instant outside the years RFC 3339 writes is written as
 /// [`format_instant`] holds it, without a fraction.
 #[must_use]

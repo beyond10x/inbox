@@ -14,6 +14,7 @@ use inbox_verify::{Instant, KeyRing, PublicKey};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
+use crate::clock_file::FileClock;
 use crate::failure::Failure;
 use crate::output::{print_document, print_text, warn};
 
@@ -45,6 +46,8 @@ pub struct Settings<'a> {
     pub answer_retention: u64,
     /// `--clock-start`, RFC 3339; the system clock where absent.
     pub clock_start: Option<&'a str>,
+    /// `--clock-file`, a debug build's only; the system clock where absent.
+    pub clock_file: Option<&'a Path>,
 }
 
 /// Serves until SIGINT or SIGTERM. The first line on standard output is the URL the service
@@ -56,8 +59,8 @@ pub struct Settings<'a> {
 /// [`Failure::Usage`] for an `INBOX_BACKEND` other than `memory`, an operator public key that is
 /// not one, a body limit over the generated reader's, a `--clock-start` that is no RFC 3339
 /// instant, or an address that is not loopback;
-/// [`Failure::Local`] for a key file that cannot be read or does not read as one, and an address
-/// that cannot be bound.
+/// [`Failure::Local`] for a key file that cannot be read or does not read as one, a clock file
+/// that does not hold one instant ([`crate::clock_file`]), and an address that cannot be bound.
 pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Result<(), Failure> {
     if let Some(backend) = backend.filter(|backend| !BACKENDS.contains(backend)) {
         return Err(Failure::Usage(format!(
@@ -100,6 +103,16 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
             "inbox serve: the service's clock starts at {}, not at the system clock",
             inbox_server::format_reading(start)
         ));
+    }
+    if let Some(path) = settings.clock_file {
+        let clock = FileClock::open(path)
+            .map_err(|cause| Failure::Local(format!("--clock-file {}: {cause}", path.display())))?;
+        warn(&format!(
+            "inbox serve: the service's clock reads the file {}, at {} now, not the system clock",
+            path.display(),
+            inbox_server::format_reading(clock.first())
+        ));
+        config.clock = Arc::new(clock);
     }
     let server =
         Server::bind(config, MemoryBackend::new()).map_err(|error| match error.kind() {

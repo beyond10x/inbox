@@ -503,7 +503,7 @@
       "path": [
         "wait"
       ],
-      "about": "`pending`, held open by the service until it has a row or the wait ends",
+      "about": "`pending`, held open by the service until it has a row whose `expires` has not passed, or the wait ends; then every row, those past their `expires` included",
       "arguments": [
         {
           "name": "url",
@@ -550,7 +550,7 @@
       "path": [
         "read"
       ],
-      "about": "Mark a message read: a note is handled and removed, a request or decision waits for its answer",
+      "about": "Mark a message read: a note is handled and removed, a request or decision waits for its answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1; the expiry task removes it or decides it on silence",
       "arguments": [
         {
           "name": "url",
@@ -936,7 +936,7 @@
     },
     {
       "code": 2,
-      "meaning": "Wrong usage, including an `INBOX_URL` that is not a loopback address."
+      "meaning": "Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address."
     },
     {
       "code": 3,

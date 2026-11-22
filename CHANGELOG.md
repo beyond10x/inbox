@@ -8,6 +8,82 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Changed
+
+- Test builds compile every dependency at `opt-level = 2` (`[profile.dev.package."*"]` in
+  `.cargo/config.toml`); the crates of the workspace stay unoptimized. The test step of the
+  gate ran 108 s of its bound of 120 s for 633 cases at a load average of 134 to 146 on 20
+  CPUs, and failed at the bound twice that day; with the setting it took 39 s at 105 to 139. No
+  shipped code changes: `cargo build --release` and `cargo install` do not read the dev
+  profile.
+- The repository uses ESS 0.97.4 (`ess/ess-inputs.yaml` and `ESS_VERSION` of the check workflow).
+  Before the reorder below, 0.97.4 writes `generated/` and the conformance suite byte for byte as
+  the committed tree did. `PostMessage` now declares its outcome `unknown-inbox` above `duplicate`
+  and `duplicate-key`: the `SYNTHESIS` note of `ess/domains/messaging.yaml` records that ESS
+  answers it before them. The next ESS release refuses a declaration order that disagrees with
+  that precedence; this is not measured for `PostMessage` on 0.97.4. The reorder changes 35 files
+  of `generated/` (the `UnknownInbox` arm of `generated/rust/inbox/src/server/wire.rs` moves above
+  `Duplicate`; the contract digest changes) and two digests of the suite
+  (`provenance.contract_digest` and `provenance.spec_digest`); no scenario of the suite changes.
+- No case of `crates/inbox-cli/tests/` or of `tests/acceptance/` holds a wall-clock time where
+  a slow host fails it. What is left there is of three kinds: a wait with a lower bound only;
+  a bound of 10 s or more that only ends a hang; and a short wait whose running out cannot fail
+  the case (the 2 s for request lines after the client ended, which were all sent before it
+  ended; a 1 s wait for a request line in a case that expects it to run out; 200 ms after a
+  SIGTERM). The runner's bound of 60 s per case is the only bound of the case that prints
+  65 536 escape characters. The cases of the other crates still hold such
+  times (`inbox-server`, `inbox-backend-testkit`, `inbox-xtask`). A debug build of `inbox
+  serve` takes the hidden flag `--clock-file <path>`: the service's clock reads the RFC 3339
+  instant the file holds each time it asks for the time, and a file that is missing,
+  unreadable, empty, no regular file (it is opened without blocking, so a FIFO refuses too),
+  holds no instant or goes back in time ends the service with exit 4 (`docs/design/service.md`,
+  the expiry task). A release build has no such flag. The acceptance check of an expired
+  request and the case of a due note move that clock past `expires` instead of waiting for it,
+  each `expires` 30 s after the system clock just before its post; the case of an epochs file
+  of 20 001 lines counts the steps of the read instead of holding it to 2 s (each line split,
+  each comparison of two message ids as the read gets them, each read of an id's text; a read
+  that compares the texts themselves is not counted); the cases of a full pipe wait for a
+  thread blocked in `write(2)` instead of 300 ms without a byte. The acceptance check and the
+  epochs case had each failed on a host at a load of 80 to 100.
+
+### Fixed
+
+- An argument of `inbox` that a command reads as text and that is not UTF-8 (a positional
+  argument, an option value, an argument before the subcommand) ends the client with the exit
+  status 2 and one line on standard error, `inbox: usage: argument <n> is not UTF-8:
+  "<argument>"`, in printable ASCII (each byte that is not printable ASCII written `\xE9`, a
+  control character `\x1B`, a line feed, carriage return and tab `\n`, `\r` and `\t`, a
+  quote and a backslash behind a backslash), and sends no request; with `--json` the usual
+  usage document is printed as well. In every release up to and including 0.3.1 clap read
+  the arguments as `OsString`: the option that takes a
+  file name (`--out`, `--secret-key-file`, `--outbox`, `--key-file`, `--file`,
+  `--operator-secret-key-file`, `--body-file`) took a name that is not UTF-8, and still does.
+  An argument read as text made clap fail, and the client then called `std::env::args()` on
+  that error path (to look for `--json`), which panicked: the exit status 101, outside the
+  documented statuses 0 to 4, and a panic message in place of the usage line
+  (story:an-argument-that-is-not-utf-8-is-a-usage-error).
+
+- A message whose `expires` the service's clock has reached takes no read mark and no
+  delivery mark: `read` and `mark-delivered` of a message in `Sent`, `Delivered` or `Read`
+  answer `deadline-passed` (502, error `Expired`; `inbox read` exits 1), change nothing and
+  publish nothing, and the message stays until the expiry task removes it or decides it on
+  silence. A third principal still gets `unknown-message`. In every release up to and
+  including 0.3.1 a due note its recipient read before the sweep was removed with
+  `MessageHandled`, and the same note read after the sweep with `MessageExpired`: the event the
+  sender got depended on when the task ran; now it is `MessageExpired` in both orders.
+  `inbox pending` and `inbox wait` mark nothing and still list a due message until the sweep
+  (story:a-due-message-takes-no-mark).
+- A wait on `Pending` (`GET /messaging/views/pending?wait=N`, `inbox wait`) is not ended by a
+  row whose `expires` is at or before the service's clock, which its owner can no longer read
+  or mark: it ends with a row that is not due, at its bound, or at the stop, and then answers
+  the whole view, due rows included. Without this, a wake loop of `wait` and `read` would get
+  the due row back at once, again and again, until the sweep. `pending` without `wait` is
+  unchanged. A wait that ends at its bound or at the stop reads the view once more and answers
+  that read, so it lists no row the expiry task removed while it slept; a sweep that expired a
+  message wakes every wait, which reads its view again.
+
+## [0.3.1] - 2026-11-22
+
 ### Security
 
 - A message whose `expires` the service's clock has reached takes no answer and no refusal:
@@ -15,10 +91,10 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   exit status 1), change nothing and publish nothing, and the expiry task decides the
   message as before, by silence with its `default_on_silence` or by removal. The clock is
   read inside the command's section at its full precision, the precision the expiry task's
-  sweep reads it at, and is not taken from the request. In 0.2.0 a late answer that arrived
+  sweep reads it at, and is not taken from the request. In 0.3.0 a late answer that arrived
   before the sweep replaced the decision silence was due to take.
 - `post` refuses an envelope whose `expires` is at or before the service's clock: the new
-  outcome `expired-on-arrival` (502, error `AlreadyExpired`), and nothing is stored. 0.2.0
+  outcome `expired-on-arrival` (502, error `AlreadyExpired`), and nothing is stored. 0.3.0
   compared `expires` with the envelope's own `created` only.
 - `answer` refuses a reply to an open message whose own `expires` is at or before the
   service's clock with the same outcome and error, and the message stays as it was. An answer
@@ -31,13 +107,13 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `CollectedReply`: the fields of `Reply`, its body as plain text; the JSON is the row's.
   `inbox collect` sends only the `Collect`, prints that record and then drops the outbox line.
   The text is the form `outbox` prints a row in, and `--json` puts the record under `message`
-  with the member names and order 0.2.0 printed there; the values are those the service held
-  when it removed the message. In 0.2.0 it read `Outbox` first and printed that row: a reply or
+  with the member names and order 0.3.0 printed there; the values are those the service held
+  when it removed the message. In 0.3.0 it read `Outbox` first and printed that row: a reply or
   a refusal that arrived between the two requests was deleted without the sender seeing it, and
   the outbox line was dropped. The behaviour of `Collect` is now an obligation of the
   generated crate, implemented in `inbox-core` (87 of 90 capabilities generated, 3
   obligations). A success answer that is not `collected` with the settled record of the message
-  collected (no `response`, as a 0.2.0 service answers; another outcome or none; a record that
+  collected (no `response`, as a 0.3.0 service answers; another outcome or none; a record that
   does not decode as the declared response of `Collect`, is of another message or is not
   `Answered` or `Refused`; a member stated twice) makes `inbox collect` exit 3 with one line on
   standard error, and the outbox line stays. The conformance runner interprets the suite step
@@ -49,7 +125,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   and a carriage return before a line end, DEL, C1) is shown as its escape `\u{1b}`: a reply
   body, a refusal reason, a message body, an option or an address printed by `collect`,
   `pending`, `wait`, `outbox`, `thread` or `replies`, and a line on standard error that repeats
-  text of the service. In 0.2.0 they were printed as written, so a recipient could clear the
+  text of the service. In 0.3.0 they were printed as written, so a recipient could clear the
   sender's screen, set its window title or write over a line with its reply, and a sender
   could do the same to whoever lists an inbox. With `--json`, DEL and C1 are written as `\u`
   escapes as well (C0 was escaped already); a JSON reader gets the same values. Text without
@@ -59,7 +135,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   client only the rows of `Pending`, `Unanswered`, `Outbox`, `Settled`, `Thread` and
   `Replies` whose `to` is its inbox or whose `from` is its principal, whatever parameter it
   sends; the new `inbox_core::readable` is the rule, and the HTTP service calls it in place of
-  its own copy. In 0.2.0 only `inbox serve` filtered the rows: an embedding of `inbox-core`
+  its own copy. In 0.3.0 only `inbox serve` filtered the rows: an embedding of `inbox-core`
   that handed the core's answer on gave a third principal the bodies, replies and signatures
   of messages between others. `Due` and `Messages` stay whole for the expiry task, and a
   client is still refused both (story:the-core-applies-the-read-rule).
@@ -68,7 +144,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   message, from `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` and `Collect`, with the answer
   of an id no message carries (`unknown-message`, error `UnknownMessage`, nothing published),
   member for member. The new `inbox_core::as_unknown` is the rename, and the HTTP service
-  calls it in place of its own copy; the bytes of every HTTP answer are unchanged. In 0.2.0
+  calls it in place of its own copy; the bytes of every HTTP answer are unchanged. In 0.3.0
   only `inbox serve` renamed the model's `foreign-message`: an embedding of `inbox-core` that
   handed the core's answer on told a third principal that a message id exists. The new entry
   `inbox_core::handle_as_specified` answers the model's `foreign-message`; the conformance run

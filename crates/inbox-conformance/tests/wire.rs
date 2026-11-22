@@ -16,6 +16,8 @@ use std::sync::{Arc, Mutex};
 use inbox_conformance::suite::{self, Scenario};
 use inbox_conformance::{Status, WireTarget, run_scenario};
 
+use crate::support;
+
 /// The `coverage` block of a coverage suite whose one scenario, `probe`, is generated.
 const PROBE_COVERAGE: &str = r#"{"authored": [], "authored_sources": {},
     "counts": {"authored": 0, "generated": 1, "outside": 0, "refused": 0},
@@ -197,15 +199,41 @@ fn a_signature_the_service_refuses_is_the_outcome_signature_invalid() {
 }
 
 /// A stand-in for the service on 127.0.0.1:0 that answers every request with `status` and
-/// `body`, and records each request line; answers its address and the record.
+/// `body`, and records each request line; answers its address and the record. Its thread is
+/// detached: no case joins it, so a case whose client never connects ends on its own assertion, not
+/// on the thread, and the wait of 10 s for each connection only ends the thread.
 fn stand_in(status: u16, body: &'static str) -> (std::net::SocketAddr, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let address = listener.local_addr().expect("an address");
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let record = Arc::clone(&seen);
+    serve(
+        listener,
+        status,
+        body,
+        Arc::clone(&seen),
+        support::STAND_IN_WAIT,
+    );
+    (address, seen)
+}
+
+/// The thread of [`stand_in`]: it ends, answering the message that says what it waited for, when
+/// no connection comes within `wait`.
+fn serve(
+    listener: TcpListener,
+    status: u16,
+    body: &'static str,
+    record: Arc<Mutex<Vec<String>>>,
+    wait: std::time::Duration,
+) -> std::thread::JoinHandle<String> {
     std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
+        loop {
+            let mut stream = match support::accept_within(&listener, wait, "a request") {
+                Ok(stream) => stream,
+                Err(message) => {
+                    eprintln!("{message}");
+                    return message;
+                }
+            };
             let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
             let mut received = Vec::new();
             let mut buffer = [0_u8; 4096];
@@ -241,8 +269,26 @@ fn stand_in(status: u16, body: &'static str) -> (std::net::SocketAddr, Arc<Mutex
             );
             let _ = stream.write_all(answer.as_bytes());
         }
-    });
-    (address, seen)
+    })
+}
+
+/// A stand-in whose client never connects ends its thread and says what it waited for. `stand_in`
+/// detaches that thread, so no real case sees the message; this case calls `serve` and joins it.
+/// The wait is 1 s here and 10 s for every other case.
+#[test]
+fn a_stand_in_whose_client_never_connects_ends_and_names_the_request() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
+    let ended = serve(
+        listener,
+        200,
+        "{}",
+        Arc::default(),
+        std::time::Duration::from_secs(1),
+    );
+    assert_eq!(
+        ended.join().expect("the stand-in ends"),
+        "the stand-in received no connection for a request within 1 s"
+    );
 }
 
 #[test]

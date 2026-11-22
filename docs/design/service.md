@@ -27,7 +27,7 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | 5. A post: the message count, inside the backend's section | the store holds `max_messages` messages or more | `503` | `{"refused": "message limit", "limit": <max_messages>}` |
 | 6. The generated `dispatch`, inside the backend's section | everything the generated surface answers: `404`, `405`, `400`, `403` (not granted), the declared outcomes, `501` | as generated | as generated |
 | 6a. A command answer of the outcome `foreign-message`: the core's rename, `inbox_core::as_unknown` | the caller is neither party to the message (the model's guard) | `404` | the generated body with `outcome` `unknown-message` |
-| 6b. `PostMessage`, `Answer`, `Refuse`: the deadline, at the clock reading inside the same section | a post whose `expires` is at or before the reading (`expired-on-arrival`, error `AlreadyExpired`); an answer or refusal of a message in `Sent`, `Delivered` or `Read` whose stored `expires` is at or before the reading (`deadline-passed`, error `Expired`); a reply to such a message whose own `expires` is at or before the reading (`expired-on-arrival` of `Answer`, error `AlreadyExpired`) | `502`, the status the generated contract gives an external outcome | the generated body |
+| 6b. `PostMessage`, `Answer`, `Refuse`, `MarkDelivered`, `MarkRead`: the deadline, at the clock reading inside the same section | a post whose `expires` is at or before the reading (`expired-on-arrival`, error `AlreadyExpired`); an answer, a refusal, a read mark or a delivery mark of a message in `Sent`, `Delivered` or `Read` whose stored `expires` is at or before the reading (`deadline-passed`, error `Expired`); a reply to such a message whose own `expires` is at or before the reading (`expired-on-arrival` of `Answer`, error `AlreadyExpired`) | `502`, the status the generated contract gives an external outcome | the generated body |
 | 7. A view answer: the read rule | rows the caller may not see are removed | `200` | the generated body without them |
 
 So an unauthenticated request never reaches the duplicate check's answer, the message limit or a
@@ -178,16 +178,28 @@ specification's `signature-invalid` (`502`, from `PostMessage` and `Answer`); it
 ## The deadline
 
 The context of each command (`inbox_core::ServiceContext`) carries the service's clock as an
-`inbox_core::CommandClock`. `PostMessage`, `Answer` and `Refuse` read it inside the backend's
-section, after the checks of the caller and the party, so a principal that is no party to a
-message still gets `unknown-message`, and no other command runs between the reading and the
-change. The reading is written as the expiry task writes `Due`'s and `Expire`'s `now`
+`inbox_core::CommandClock`. `PostMessage`, `Answer`, `Refuse`, `MarkDelivered` and `MarkRead`
+read it inside the backend's section, after the checks of the caller and the party, so a
+principal that is no party to a message still gets `unknown-message` and its sender
+`not-recipient`, and no other command runs between the reading and the change. The reading is
+written as the expiry task writes `Due`'s and `Expire`'s `now`
 (`format_reading`: RFC 3339, UTC, with the fraction of a second the clock holds), and every
 comparison is of instants at full precision, so a message is due at its `expires` exactly, as
 for `Expire`: a message due at `…:00.500Z` is due at a reading of `…:00.700Z`. So a late answer
 and a sweep, in either order and at any reading, leave the message the same, decided on silence
 with its `default_on_silence` or removed. A refused answer or refusal changes nothing and
 publishes nothing. No member of a request replaces the reading.
+
+`read` and `mark-delivered` of a message in `Sent`, `Delivered` or `Read` whose stored `expires`
+is at or before the reading are refused `deadline-passed` (`Expired`) the same way: no row
+changes and no event is published, and the message stays in its state until the expiry task
+removes it or decides it on silence. So a due note read before the sweep and one read after it
+both end with the sweep's `MessageExpired` to the sender, never with `MessageHandled`. A message
+already answered or refused keeps the answers `already-read` and `already-delivered`. The client
+sends `read` only for `inbox read <id>` and `mark-delivered` never: `inbox pending` and
+`inbox wait` read the `Pending` view, which lists a due message until the sweep, and mark
+nothing. A due row does not end a wait on `Pending` (see "The wait"), so a wake loop of `wait`
+and `read` does not get the row it cannot read back at once, again and again, until the sweep.
 
 A reply to a message in `Sent`, `Delivered` or `Read` is checked against the clock as a post is: a
 reply whose own `expires` is at or before the reading is refused `expired-on-arrival`
@@ -216,9 +228,17 @@ specification cannot say).
 
 `GET /messaging/views/pending?inbox=<address>&wait=<seconds>`: `wait` is a whole number of seconds,
 read by the generated query reader. The request is held open until the view, after the read rule,
-has a row for the caller, or the wait ends, or the service stops; then it is answered as without
-`wait` (an empty `rows` when it ended). The wait is cut to `max_wait`, which the embedding sets.
-`wait=0` reads once. A `wait` that is not a whole number of seconds is `400`
+has a row for the caller that is not due, or the wait ends, or the service stops; then it is
+answered as without `wait`: every row, due ones included (an empty `rows` when it ended with
+none). A row is due when its `expires` is at or before the service's clock, read after the view
+and compared as `MarkRead` and `MarkDelivered` compare it (`inbox_core::due`): its owner can
+neither read nor mark it, and only the expiry task takes it out of `Pending`. A wait with only
+due rows sleeps as one with none; a row that becomes due while it sleeps wakes nothing. A sweep
+of the expiry task that sent an `Expire` counts as an answered command, so a wait reads its view
+again after it. A wait that ends at its bound or at the stop reads the view once more and
+answers that read, what `pending` lists then, not the read it slept on. The wait is cut to
+`max_wait`, which the embedding sets.
+`wait=0` answers at once. A `wait` that is not a whole number of seconds is `400`
 `{"refused": "wait is not a whole number of seconds"}`. `wait` on another view is ignored, as the
 generated reader ignores any key a view does not declare.
 
@@ -247,6 +267,37 @@ the most); without it, the system clock. The run uses it to serve before the
 fixed instants of the suite's envelopes. When it is set, `inbox serve` writes one line on
 standard error at the start: `inbox serve: the service's clock starts at <instant>, not at the
 system clock`.
+
+`inbox serve --clock-file <path>` is a flag of a debug build only (`cargo build`, the build the
+tests and `task acceptance` run), hidden from `--help` and from the command-line reference; a
+release build (`cargo build --release`, `cargo install`) has no such flag and refuses it as wrong
+usage, exit 2. It is wrong usage beside `--clock-start` too. The file holds one RFC 3339 instant
+and at most one line end after it; the service's clock reads it each time it asks for the time
+(`FileClock` of `crates/inbox-cli/src/clock_file.rs`), and does not move on by itself. A test
+that starts `inbox serve` as a process moves the clock past an `expires` by writing the file
+(written beside it and renamed over it, so no reading meets half an instant), and sleeps until no
+instant passes. It gives no more than `--clock-start`, which sets the clock to any instant, and
+the service still binds a loopback address only. At the start `inbox serve` writes one line on
+standard error: `inbox serve: the service's clock reads the file <path>, at <instant> now, not the
+system clock`. It fails closed:
+
+| The file | At the start | While it serves |
+|---|---|---|
+| missing, or cannot be opened (no permission) | refused before binding, exit 4, `--clock-file <path>: <the OS error>` | the process ends at once, exit 4 |
+| no regular file (a directory, a FIFO, a device); opened with `O_NONBLOCK`, so a FIFO without a writer does not hold the open | refused, exit 4, `it is no regular file` | the process ends at once, exit 4 |
+| empty | refused, exit 4, `it is empty` | the process ends at once, exit 4 |
+| longer than 64 bytes, or not one RFC 3339 instant | refused, exit 4, `it does not hold one RFC 3339 instant` | the process ends at once, exit 4 |
+| an instant before the reading before it | — | the process ends at once, exit 4, `it went back to <instant>, before <instant>, the reading before it` |
+
+While it serves, the end is one line on standard error, `inbox serve: the clock file <path>:
+<cause>: stopping`, and exit 4: the request or the sweep that asked for the time is not answered
+and changes nothing, nothing is decided at a reading of the system clock, and nothing is taken as
+not due. No line repeats a byte of the file. The client commands sign with the system clock and the
+service takes a request signed within 60 s of its reading (step 3), so a test keeps the file within
+60 s of the system clock: the acceptance check sets it to the system clock's second at the start,
+posts a request whose `expires` is 30 s after the system clock just before the post (the post's
+`created` is the system clock, and `expires` must come after it), and moves the file 1 s past that
+`expires`; the runner ends a check at 60 s.
 
 ## The limits
 

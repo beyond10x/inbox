@@ -150,8 +150,8 @@ impl Drop for Starting {
 ///   runs on a clock that starts before all of them ([`CLOCK_START`]) and moves on with the
 ///   system's, a few seconds per scenario. It reads that clock for the request window (the target
 ///   signs each request at the same reading), for the lapse of a key entry or delegation (every
-///   entry is live until 9999), for the deadline of a post, an answer and a refusal (none is due
-///   at that reading) and in the expiry task, which the sweep interval keeps from running.
+///   entry is live until 9999), for the deadline of a post, an answer, a refusal and a mark (none
+///   is due at that reading) and in the expiry task, which the sweep interval keeps from running.
 ///
 /// What the target cannot witness makes the scenario unsupported, before anything is sent: a step
 /// as the `Sweeper` or as no actor, a caller whose `principal` and `inbox` differ, a row claim on

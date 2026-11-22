@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T20:30:34Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-due-message-takes-no-mark",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

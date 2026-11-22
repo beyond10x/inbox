@@ -1,11 +1,11 @@
 ---
 title: Features
-description: What the inbox does in release 0.3.0, what is missing, and what is planned.
+description: What the inbox does in release 0.3.1, what is missing, and what is planned.
 ---
 
 # Features
 
-The state of release 0.3.0. The inbox runs on one host, on a loopback address, for the
+The state of release 0.3.1. The inbox runs on one host, on a loopback address, for the
 principals of one operator. Read [the limits](limits.md) before you use it.
 
 ## Available
@@ -19,12 +19,12 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | A request says what its reply must look like: free text, a number of lines or a schema | `inbox post --reply-shape` |
 | A decision carries lettered options, the option the sender recommends and the option silence takes | `inbox post --option`, `--recommended-option`, `--default-on-silence` |
 | List what an inbox holds that its owner has not read | `inbox pending` |
-| Wait until a message arrives. The service holds the request open, 60 s at most by default | `inbox wait` |
-| Read a message. A note is removed once read | `inbox read` |
+| Wait until a message arrives. The service holds the request open, 60 s at most by default; a message past its `expires` does not end the wait, and is listed when it ends | `inbox wait` |
+| Read a message. A note is removed once read. The read of a message past its `expires` is refused (`Expired`, exit status 1) | `inbox read` |
 | Answer a request or a decision, or refuse it and say why; a note takes neither | `inbox answer`, `inbox refuse` |
 | List the live messages a sender posted, and take the answer or the refusal of one | `inbox outbox`, `inbox collect` |
 | Follow a thread: its live messages and its answered ones | `inbox thread`, `inbox replies` |
-| Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires`. From `expires` on, by the service's clock, a message takes no answer and no refusal (`Expired`), and a post or a reply whose own `expires` has passed is refused (`AlreadyExpired`) | `inbox post --expires` |
+| Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires`. From `expires` on, by the service's clock, a message takes no answer, no refusal and no read or delivery mark (`Expired`) and stays listed until it is removed, and a post or a reply whose own `expires` has passed is refused (`AlreadyExpired`) | `inbox post --expires` |
 | A message arrives once: a second post with the message id or the dedup key of a stored message of the same sender stores nothing | `inbox post --dedup-key` |
 | Post again after a restart of the service, from the sender's outbox file | `inbox repost` |
 

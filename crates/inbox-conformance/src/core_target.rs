@@ -213,10 +213,11 @@ fn event(published: &SystemEvent) -> Result<Event, String> {
 ///
 /// A branch is taken exactly when it is the outcome the step expects, so a step that expects
 /// `signature-invalid` finds the signature refused and every other branch not taken, and a step
-/// that expects `posted` finds none taken. The 5 branches of `Answer` and the 1 of `Refuse` are
-/// asked through [`TryContext::try_external`], the 3 of `PostMessage` through [`PostExternals`].
-/// The 4 that read the service's clock (the 2 `expired-on-arrival`, the 2 `deadline-passed`) are
-/// answered so too: a scenario states no clock, and its instants are literals.
+/// that expects `posted` finds none taken. The 5 branches of `Answer` and the 1 each of `Refuse`,
+/// `MarkDelivered` and `MarkRead` are asked through [`TryContext::try_external`], the 3 of
+/// `PostMessage` through [`PostExternals`]. The 6 that read the service's clock (the 2
+/// `expired-on-arrival`, the 4 `deadline-passed`) are answered so too: a scenario states no clock,
+/// and its instants are literals.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StepContext {
     principal: Option<Principal>,

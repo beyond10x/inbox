@@ -6,9 +6,10 @@ use std::time::Duration;
 use inbox::actor::{Actor, Caller};
 use inbox::behaviour::{InboxStorage, MessageStorage};
 use inbox::messaging::Address;
+use inbox::primitives::Timestamp;
 use inbox::server::json::{self, Value};
 use inbox::server::{http, inbox_service};
-use inbox_core::{CallerAttributes, Exclusive, ServiceContext};
+use inbox_core::{CallerAttributes, CommandClock, Exclusive, ServiceContext};
 use inbox_verify::{Instant, duplicate_member};
 
 use crate::auth::{RingVerifier, authenticate};
@@ -175,8 +176,17 @@ fn as_unknown(answer: http::Response) -> http::Response {
     http::Response::new(UNKNOWN_STATUS, http::JSON, body)
 }
 
-/// `Pending` held open: read, and while it has no row for the caller, wait for the next command
-/// answered on another connection, without the section, until `wait` ends or the service stops.
+/// `Pending` held open: read, and while it has no row for the caller that is not due, wait for the
+/// next command answered on another connection, without the section, until `wait` ends or the
+/// service stops. A due row (its `expires` at or before the clock reading taken after the view
+/// was read, compared as the marks compare it: [`inbox_core::due`]) does not end the wait: its
+/// owner can neither read nor mark it, and only the expiry task takes it out of `Pending`. The
+/// answer the wait ends with is the whole view, due rows included. A wait with only due rows
+/// sleeps on the next command as one with no row does, and reads the view again only after one:
+/// a message that becomes due while it sleeps needs no wake. A sweep that sent an `Expire` counts
+/// as a command (`crate::listener`), so a wait reads again after the expiry task removed a row.
+/// A wait that sleeps to its deadline or to the stop reads the view once more and answers that
+/// read, never the one it slept on: what `pending` lists then, with no second clock reading.
 fn waited<B: Backend>(
     shared: &Shared<B>,
     request: &http::Request,
@@ -191,23 +201,31 @@ fn waited<B: Backend>(
         // would move the count unseen, and the wait would sleep past the row it brought.
         let seen = shared.signals.generation();
         let answered = once(shared, request, caller, at);
-        if answered.status != 200
-            || has_rows(&answered)
-            || !shared.signals.wait_for_command(seen, deadline)
-        {
+        let now = CommandReading(Arc::clone(&shared.config.clock)).now();
+        if answered.status != 200 || has_rows_not_due(&answered, &now) {
             return answered;
+        }
+        if !shared.signals.wait_for_command(seen, deadline) {
+            return once(shared, request, caller, at);
         }
     }
 }
 
-fn has_rows(answer: &http::Response) -> bool {
-    json::parse_written(&answer.body)
-        .ok()
-        .and_then(|value| match value.member("rows") {
-            Some(Value::Array(rows)) => Some(!rows.is_empty()),
-            _ => None,
-        })
-        .unwrap_or(false)
+/// Whether a view answer has a row whose `expires` is not at or before `now`. A row without a
+/// readable `expires` counts as not due.
+fn has_rows_not_due(answer: &http::Response, now: &Timestamp) -> bool {
+    let Ok(value) = json::parse_written(&answer.body) else {
+        return false;
+    };
+    let Some(Value::Array(rows)) = value.member("rows") else {
+        return false;
+    };
+    rows.iter().any(|row| match row.member("expires") {
+        Some(Value::Text(expires)) => {
+            inbox_core::due(&Timestamp(expires.clone()), now) != Some(true)
+        }
+        _ => true,
+    })
 }
 
 /// A view answer held to the core's read rule ([`inbox_core::readable`], the one copy of it) for

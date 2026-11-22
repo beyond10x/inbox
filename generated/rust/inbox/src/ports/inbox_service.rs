@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+// contract digest ab51269fa0786cb62de332826f17f3199db230ea4e52fe7335e4d8ea79e313bc
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! inbox-service — the `inbox-service` component of `inbox` v1.
@@ -167,6 +167,7 @@ where
             crate::messaging::MarkDeliveredOutcome::UnknownMessage { .. } => {}
             crate::messaging::MarkDeliveredOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkDeliveredOutcome::NotRecipient { .. } => {}
+            crate::messaging::MarkDeliveredOutcome::DeadlinePassed { .. } => {}
             crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered, .. } => {
                 self.outbox.push(PublishedEvent::MessageDelivered(message_delivered.clone()));
             }
@@ -186,6 +187,7 @@ where
             crate::messaging::MarkReadOutcome::UnknownMessage { .. } => {}
             crate::messaging::MarkReadOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkReadOutcome::NotRecipient { .. } => {}
+            crate::messaging::MarkReadOutcome::DeadlinePassed { .. } => {}
             crate::messaging::MarkReadOutcome::Handled { message_handled, .. } => {
                 self.outbox.push(PublishedEvent::MessageHandled(message_handled.clone()));
             }
@@ -234,9 +236,9 @@ where
             crate::messaging::PostMessageOutcome::ExpiredOnArrival { .. } => {}
             crate::messaging::PostMessageOutcome::SignatureInvalid { .. } => {}
             crate::messaging::PostMessageOutcome::AuthorityInvalid { .. } => {}
+            crate::messaging::PostMessageOutcome::UnknownInbox { .. } => {}
             crate::messaging::PostMessageOutcome::Duplicate { .. } => {}
             crate::messaging::PostMessageOutcome::DuplicateKey { .. } => {}
-            crate::messaging::PostMessageOutcome::UnknownInbox { .. } => {}
             crate::messaging::PostMessageOutcome::InboxClosed { .. } => {}
             crate::messaging::PostMessageOutcome::IdTaken { .. } => {}
             crate::messaging::PostMessageOutcome::Posted { message_posted, .. } => {

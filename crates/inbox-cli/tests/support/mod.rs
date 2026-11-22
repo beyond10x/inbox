@@ -160,6 +160,21 @@ impl Service {
         self.child.id()
     }
 
+    /// Waits up to `limit` for the exit it makes itself; `None` when it is still running then.
+    /// The limit only ends a hang.
+    pub fn exit_within(&mut self, limit: std::time::Duration) -> Option<ExitStatus> {
+        let started = std::time::Instant::now();
+        loop {
+            if let Ok(Some(status)) = self.child.try_wait() {
+                return Some(status);
+            }
+            if started.elapsed() >= limit {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
     /// Sends SIGTERM and waits for the exit.
     pub fn terminate(mut self) -> ExitStatus {
         let sent = Command::new("kill")
@@ -426,10 +441,64 @@ pub fn stand_in(status: u16, body: &'static str) -> (String, std::thread::JoinHa
 
 /// How long a stand-in waits for each connection: a case whose client never connects fails
 /// within seconds, naming the answer that was not asked for, and does not wait forever.
-const STAND_IN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+pub const STAND_IN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The bound of the acceptance: a stand-in whose client never connects ends within 15 s. A longer
+/// `STAND_IN_WAIT` does not compile.
+const _: () = assert!(STAND_IN_WAIT.as_secs() <= 15);
+
+/// Whether a thread of this process is in write(2) (x86-64 number 1) on the file descriptor
+/// `fd`, read from `/proc/self/task/<tid>/syscall`: a writer of a pipe that is full.
+pub fn blocked_in_write(fd: std::os::fd::RawFd) -> bool {
+    let state = format!("1 {fd:#x} ");
+    fs::read_dir("/proc/self/task")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|task| {
+            fs::read_to_string(task.path().join("syscall"))
+                .is_ok_and(|line| line.starts_with(&state))
+        })
+}
+
+/// Waits until a thread of this process is blocked writing to `fd` ([`blocked_in_write`]): the
+/// pipe is full. [`STAND_IN_WAIT`] only ends a hang.
+///
+/// # Panics
+///
+/// No thread blocks within it.
+pub fn wait_until_blocked_in_write(fd: std::os::fd::RawFd) {
+    let started = std::time::Instant::now();
+    while !blocked_in_write(fd) {
+        assert!(
+            started.elapsed() < STAND_IN_WAIT,
+            "no thread blocked writing to the pipe within {} s",
+            STAND_IN_WAIT.as_secs()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
+/// Waits until `thread` has ended. [`STAND_IN_WAIT`] only ends a hang: a thread whose own wait
+/// is shorter ends long before it.
+///
+/// # Panics
+///
+/// It has not ended within it.
+pub fn wait_until_finished<T>(thread: &std::thread::JoinHandle<T>, what: &str) {
+    let started = std::time::Instant::now();
+    while !thread.is_finished() {
+        assert!(
+            started.elapsed() < STAND_IN_WAIT,
+            "{what} still waited {} s later",
+            STAND_IN_WAIT.as_secs()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
 
 /// The next connection on `listener`, or `None` when none comes within `wait`.
-fn accept_within(
+pub fn accept_within(
     listener: &std::net::TcpListener,
     wait: std::time::Duration,
 ) -> Option<std::net::TcpStream> {
@@ -454,6 +523,34 @@ fn accept_within(
             Err(error) => panic!("the stand-in's listener failed: {error}"),
         }
     }
+}
+
+/// The next connection on `listener`; a stand-in that is joined by its case panics with a message
+/// that names itself (`who`) and what did not arrive (`what`) when none comes within `wait`.
+pub fn accept_or_panic(
+    listener: &std::net::TcpListener,
+    wait: std::time::Duration,
+    who: &str,
+    what: &str,
+) -> std::net::TcpStream {
+    accept_or_say(listener, wait, who, what).unwrap_or_else(|message| panic!("{message}"))
+}
+
+/// The next connection on `listener`, or, when none comes within `wait`, a message that names
+/// `who`, what did not arrive (`what`) and the wait it was given: a case that passes a short wait
+/// asserts the message, so a stand-in that waits longer than it was told fails it.
+pub fn accept_or_say(
+    listener: &std::net::TcpListener,
+    wait: std::time::Duration,
+    who: &str,
+    what: &str,
+) -> Result<std::net::TcpStream, String> {
+    accept_within(listener, wait).ok_or_else(|| {
+        format!(
+            "{who} received no connection for {what} within {} s",
+            wait.as_secs()
+        )
+    })
 }
 
 /// Reads one request in full from `stream`: the head, then as many bytes as `Content-Length`
