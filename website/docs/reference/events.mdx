@@ -1,0 +1,15 @@
+---
+title: Events
+description: The events of the inbox service, each with its payload and the command that emits it.
+---
+
+import reference from '@b10x-reference/events.json';
+
+A command that changes a message or an inbox emits events. The answer to the command lists them
+in its `published` member, in the order they were emitted. No transport delivers an event to a
+subscriber yet ([features](../status.md#missing)).
+
+The page is rendered from `generated/asyncapi/asyncapi/inbox-service.yaml`, the AsyncAPI 3.0
+document the specification generates.
+
+<ApiReference reference={reference} />

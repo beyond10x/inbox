@@ -19,6 +19,16 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   security findings to the limits page.
 - `docs/checks.md`: the numbers the gate prints, what the checks do not cover, the closed
   security findings and the story of each open limit, moved out of the documentation site.
+- 3 reference pages on the documentation site, each rendered by `ApiReference` of
+  `@beyond10x/docs-system` from a generated document and each with a link that downloads
+  the document: the HTTP API (`generated/openapi/openapi/inbox-service.yaml`), the events
+  (`generated/asyncapi/asyncapi/inbox-service.yaml`) and the command line
+  (`generated/cli/inbox.json`). 10 page tests (`website/tests/reference.spec.ts`) hold
+  them.
+- `generated/cli/inbox.json`: every command of `inbox` with its arguments, defaults,
+  environment variables and exit statuses, written from the clap definition by
+  `task cli-reference`. The case `the_cli_reference_document_is_current` of `cargo test`
+  fails when a flag changes without the document.
 - `task docs-words`, in `task check`: fails when a page of `website/docs` or
   `website/product.json` names a wave, a stage, a story, an epic or a count of scenarios.
 

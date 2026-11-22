@@ -10,6 +10,12 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Reference',
+      collapsed: false,
+      items: ['reference/cli', 'reference/http-api', 'reference/events'],
+    },
+    {
+      type: 'category',
       label: 'Background',
       collapsed: false,
       items: ['design', 'how-it-is-built'],

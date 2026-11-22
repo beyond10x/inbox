@@ -117,6 +117,11 @@ tasks:
     cmds:
       - python3 tools/animation.py ess
 
+  cli-reference:
+    desc: Rewrite generated/cli/inbox.json, the reference document of the command line, from the clap definition of crates/inbox-cli. cargo test fails when the file differs (the_cli_reference_document_is_current).
+    cmds:
+      - INBOX_WRITE_CLI_REFERENCE=1 cargo test -q --locked -p inbox-cli the_cli_reference_document_is_current
+
   docs-words:
     desc: Fail with the matching lines when an end-user page (website/docs, website/product.json) names a wave, a stage, a story, an epic or a count of scenarios; those belong in docs/checks.md. Writes nothing.
     cmds:

@@ -14,6 +14,8 @@ mod ids;
 mod keys;
 mod outbox;
 mod output;
+#[cfg(test)]
+mod reference;
 mod serve;
 
 use std::io::Write;
@@ -41,7 +43,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Serve the inbox on a loopback address until SIGINT or SIGTERM. The backend is
-    /// INBOX_BACKEND: `memory` (the default) is the only one in this stage.
+    /// INBOX_BACKEND: `memory` (the default) is the only one.
     Serve(ServeArgs),
     /// Key pairs.
     #[command(subcommand)]
@@ -526,5 +528,86 @@ mod tests {
     #[test]
     fn the_command_line_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    /// `generated/cli/inbox.json` is what `reference` writes from the clap definition.
+    /// `INBOX_WRITE_CLI_REFERENCE=1` (`task cli-reference`) writes the file instead.
+    #[test]
+    fn the_cli_reference_document_is_current() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../generated/cli/inbox.json");
+        let fresh = crate::reference::pretty(&crate::reference::reference(&Cli::command()));
+        if std::env::var_os("INBOX_WRITE_CLI_REFERENCE").is_some() {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, &fresh).unwrap();
+            return;
+        }
+        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            committed == fresh,
+            "{}: generated/cli/inbox.json; run `task cli-reference` and commit the file",
+            if committed.is_empty() {
+                "missing"
+            } else {
+                "edited"
+            }
+        );
+    }
+
+    #[test]
+    fn the_cli_reference_lists_every_command_with_its_flags() {
+        use inbox::server::json::Value;
+        let document = crate::reference::reference(&Cli::command());
+        let Some(Value::Array(commands)) = document.member("commands") else {
+            panic!("no commands");
+        };
+        let paths: Vec<String> = commands
+            .iter()
+            .map(|command| match command.member("path") {
+                Some(Value::Array(tokens)) => tokens
+                    .iter()
+                    .map(|token| match token {
+                        Value::Text(token) => token.clone(),
+                        _ => panic!("a path token that is not text"),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                _ => panic!("a command without a path"),
+            })
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                "serve",
+                "key new",
+                "keyfile add-key",
+                "keyfile add-delegation",
+                "open",
+                "close",
+                "post",
+                "pending",
+                "wait",
+                "read",
+                "answer",
+                "refuse",
+                "outbox",
+                "collect",
+                "thread",
+                "replies",
+                "repost"
+            ]
+        );
+        let text = crate::reference::pretty(&document);
+        for expected in [
+            "\"env\": \"INBOX_URL\"",
+            "\"default\": \"terminal\"",
+            "\"repeatable\": true",
+            "\"kind\": \"positional\"",
+            "\"kind\": \"switch\"",
+            "\"name\": \"BodyArgs\"",
+            "\"code\": 4",
+        ] {
+            assert!(text.contains(expected), "the document lacks {expected}");
+        }
     }
 }

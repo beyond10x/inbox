@@ -1,0 +1,14 @@
+---
+title: HTTP API
+description: Every command and view of inbox serve as an HTTP operation, with its request, its answers and its refusals.
+---
+
+import reference from '@b10x-reference/http-api.json';
+
+`inbox serve` answers one `POST` per command and one `GET` per view, on a loopback address. The
+`inbox` commands are a client of this API ([command line](cli.mdx)).
+
+The page is rendered from `generated/openapi/openapi/inbox-service.yaml`, the OpenAPI 3.1
+document the specification generates. It sends no request.
+
+<ApiReference reference={reference} />

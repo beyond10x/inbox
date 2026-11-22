@@ -42,8 +42,9 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 
 | Feature | Command |
 |---|---|
-| One binary is the service and its client | `inbox serve` |
-| An HTTP API: one `POST` per command, one `GET` per view | [OpenAPI document](https://github.com/beyond10x/inbox/blob/main/generated/openapi/openapi/inbox-service.yaml) |
+| One binary is the service and its client | `inbox serve`, [command line](reference/cli.mdx) |
+| An HTTP API: one `POST` per command, one `GET` per view | [HTTP API](reference/http-api.mdx) |
+| Every answer lists the events its command emitted | [events](reference/events.mdx) |
 | Every command prints text, or one JSON document | `--json` |
 | Exit statuses 0 to 4 tell a refusal from wrong usage, an unreachable service and a file error | [first use](first-use.md#exit-statuses) |
 

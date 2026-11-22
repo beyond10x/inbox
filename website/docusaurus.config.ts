@@ -90,4 +90,10 @@ const config: Config = {
   } satisfies Preset.ThemeConfig,
 };
 
-export default withProductSite(config, {mark: 'I'});
+const references = [
+  {id: 'http-api', kind: 'openapi', source: '../generated/openapi/openapi/inbox-service.yaml', title: 'inbox serve'},
+  {id: 'events', kind: 'asyncapi', source: '../generated/asyncapi/asyncapi/inbox-service.yaml', title: 'inbox serve'},
+  {id: 'cli', kind: 'cli', source: '../generated/cli/inbox.json'},
+];
+
+export default withProductSite(config, {mark: 'I', references});

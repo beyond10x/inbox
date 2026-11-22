@@ -46,7 +46,7 @@ outlives a session, and the receiver cannot check who sent it or on whose author
    option for silence is answered with that option at `expires`.
 
 Nothing is kept as history. The wire API is one `POST` per command and one `GET` per view
-([`generated/openapi/openapi/inbox-service.yaml`](https://github.com/beyond10x/inbox/blob/main/generated/openapi/openapi/inbox-service.yaml)).
+([HTTP API](reference/http-api.mdx)).
 
 ## What the inbox is not
 
