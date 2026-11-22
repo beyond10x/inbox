@@ -21,6 +21,6 @@ pub mod obligation;
 pub mod primitives;
 
 pub mod ports;
-pub mod system;
 #[cfg(feature = "server")]
 pub mod server;
+pub mod system;

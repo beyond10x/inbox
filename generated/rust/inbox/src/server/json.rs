@@ -655,7 +655,11 @@ pub struct DecodeError {
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: expected {}, found {}", self.at, self.expected, self.found)
+        write!(
+            f,
+            "{}: expected {}, found {}",
+            self.at, self.expected, self.found
+        )
     }
 }
 
@@ -748,7 +752,9 @@ fn whole_number(spelling: &str) -> Option<i64> {
     // Saturated: past any bound an `i64` cares about, a larger exponent says nothing new.
     let mut scale: i64 = 0;
     for digit in magnitude.bytes() {
-        scale = scale.saturating_mul(10).saturating_add(i64::from(digit - b'0'));
+        scale = scale
+            .saturating_mul(10)
+            .saturating_add(i64::from(digit - b'0'));
     }
     let digits = format!("{whole}{fraction}");
     let digits = digits.trim_start_matches('0');
@@ -789,10 +795,17 @@ pub fn decimal_at<'a>(value: &'a Value, at: &str, expected: &str) -> Result<&'a 
         Some((whole, fraction)) => (whole, Some(fraction)),
         None => (unsigned, None),
     };
-    if digits(whole) && !(whole.len() > 1 && whole.starts_with('0')) && fraction.map_or(true, digits) {
+    if digits(whole)
+        && !(whole.len() > 1 && whole.starts_with('0'))
+        && fraction.map_or(true, digits)
+    {
         Ok(text)
     } else {
-        Err(DecodeError { at: at.to_owned(), expected: expected.to_owned(), found: format!("`{text}`") })
+        Err(DecodeError {
+            at: at.to_owned(),
+            expected: expected.to_owned(),
+            found: format!("`{text}`"),
+        })
     }
 }
 
@@ -806,12 +819,20 @@ pub fn decimal_at<'a>(value: &'a Value, at: &str, expected: &str) -> Result<&'a 
 /// the contract refuses it. An admitted text is what `format: date-time` admits, which is not
 /// always an instant the server can order: a leap second (`23:59:60`) and a fraction past nine
 /// digits are admitted, and a guard comparing either reads it as unknown.
-pub fn timestamp_at<'a>(value: &'a Value, at: &str, expected: &str) -> Result<&'a str, DecodeError> {
+pub fn timestamp_at<'a>(
+    value: &'a Value,
+    at: &str,
+    expected: &str,
+) -> Result<&'a str, DecodeError> {
     let text = text_at(value, at, expected)?;
     if date_time(text) {
         Ok(text)
     } else {
-        Err(DecodeError { at: at.to_owned(), expected: expected.to_owned(), found: format!("`{text}`") })
+        Err(DecodeError {
+            at: at.to_owned(),
+            expected: expected.to_owned(),
+            found: format!("`{text}`"),
+        })
     }
 }
 
@@ -820,9 +841,10 @@ fn date_time(text: &str) -> bool {
     let bytes = text.as_bytes();
     let digits = |from: usize, to: usize| -> Option<u32> {
         let part = bytes.get(from..to)?;
-        part.iter()
-            .all(u8::is_ascii_digit)
-            .then(|| part.iter().fold(0, |held, digit| held * 10 + u32::from(digit - b'0')))
+        part.iter().all(u8::is_ascii_digit).then(|| {
+            part.iter()
+                .fold(0, |held, digit| held * 10 + u32::from(digit - b'0'))
+        })
     };
     if bytes.len() < 20
         || bytes[4] != b'-'
@@ -836,7 +858,8 @@ fn date_time(text: &str) -> bool {
     let (Some(year), Some(month), Some(day)) = (digits(0, 4), digits(5, 7), digits(8, 10)) else {
         return false;
     };
-    let (Some(hour), Some(minute), Some(second)) = (digits(11, 13), digits(14, 16), digits(17, 19)) else {
+    let (Some(hour), Some(minute), Some(second)) = (digits(11, 13), digits(14, 16), digits(17, 19))
+    else {
         return false;
     };
     let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
@@ -866,7 +889,9 @@ fn date_time(text: &str) -> bool {
     let utc = match bytes.get(at) {
         Some(b'Z' | b'z') if at + 1 == bytes.len() => hour * 60 + minute,
         Some(sign @ (b'+' | b'-')) if at + 6 == bytes.len() && bytes[at + 3] == b':' => {
-            let (Some(offset_hour), Some(offset_minute)) = (digits(at + 1, at + 3), digits(at + 4, at + 6)) else {
+            let (Some(offset_hour), Some(offset_minute)) =
+                (digits(at + 1, at + 3), digits(at + 4, at + 6))
+            else {
                 return false;
             };
             if offset_hour > 23 || offset_minute > 59 {
@@ -874,7 +899,11 @@ fn date_time(text: &str) -> bool {
             }
             let local = hour * 60 + minute + day_minutes;
             let offset = offset_hour * 60 + offset_minute;
-            if *sign == b'+' { (local - offset) % day_minutes } else { (local + offset) % day_minutes }
+            if *sign == b'+' {
+                (local - offset) % day_minutes
+            } else {
+                (local + offset) % day_minutes
+            }
         }
         _ => return false,
     };
@@ -894,7 +923,11 @@ fn date_time(text: &str) -> bool {
 pub fn closed_at(value: &Value, at: &str, declared: &[&str]) -> Result<(), DecodeError> {
     for (name, member) in members_at(value, at, "an object")? {
         if !declared.contains(&name.as_str()) {
-            return Err(DecodeError::of(&nested(at, name), "no member: no field is named so", member));
+            return Err(DecodeError::of(
+                &nested(at, name),
+                "no member: no field is named so",
+                member,
+            ));
         }
     }
     Ok(())
@@ -915,7 +948,11 @@ pub fn uuid_at<'a>(value: &'a Value, at: &str, expected: &str) -> Result<&'a str
     if valid {
         Ok(text)
     } else {
-        Err(DecodeError { at: at.to_owned(), expected: expected.to_owned(), found: format!("`{text}`") })
+        Err(DecodeError {
+            at: at.to_owned(),
+            expected: expected.to_owned(),
+            found: format!("`{text}`"),
+        })
     }
 }
 
@@ -1083,7 +1120,11 @@ pub fn member(out: &mut String, name: &str) {
 /// # Errors
 ///
 /// [`DecodeError`] when the value is anything else.
-pub fn items_at<'a>(value: &'a Value, at: &str, expected: &str) -> Result<&'a [Value], DecodeError> {
+pub fn items_at<'a>(
+    value: &'a Value,
+    at: &str,
+    expected: &str,
+) -> Result<&'a [Value], DecodeError> {
     match value {
         Value::Array(items) => Ok(items),
         other => Err(DecodeError::of(at, expected, other)),

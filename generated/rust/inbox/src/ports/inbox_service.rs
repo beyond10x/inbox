@@ -69,14 +69,34 @@ impl<B> InboxService<B> {
 
 impl<B> InboxService<B>
 where
-    B: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    B: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     /// Accepts `inbox.messaging.Answer`: runs the behaviour obligation, then publishes the declared events
     /// the outcome carries.
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn answer(&mut self, input: crate::messaging::Answer) -> Result<crate::messaging::AnswerOutcome, crate::obligation::UnmetObligation> {
+    pub fn answer(
+        &mut self,
+        input: crate::messaging::Answer,
+    ) -> Result<crate::messaging::AnswerOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.answer(input)?;
         match &outcome {
             crate::messaging::AnswerOutcome::NotSender { .. } => {}
@@ -90,8 +110,11 @@ where
             crate::messaging::AnswerOutcome::AlreadySettled { .. } => {}
             crate::messaging::AnswerOutcome::Note { .. } => {}
             crate::messaging::AnswerOutcome::ShapeMismatch { .. } => {}
-            crate::messaging::AnswerOutcome::Answered { message_answered, .. } => {
-                self.outbox.push(PublishedEvent::MessageAnswered(message_answered.clone()));
+            crate::messaging::AnswerOutcome::Answered {
+                message_answered, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageAnswered(message_answered.clone()));
             }
         }
         Ok(outcome)
@@ -102,13 +125,17 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn close_inbox(&mut self, input: crate::messaging::CloseInbox) -> Result<crate::messaging::CloseInboxOutcome, crate::obligation::UnmetObligation> {
+    pub fn close_inbox(
+        &mut self,
+        input: crate::messaging::CloseInbox,
+    ) -> Result<crate::messaging::CloseInboxOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.close_inbox(input)?;
         match &outcome {
             crate::messaging::CloseInboxOutcome::UnknownInbox { .. } => {}
             crate::messaging::CloseInboxOutcome::NotOwner { .. } => {}
             crate::messaging::CloseInboxOutcome::Closed { inbox_closed, .. } => {
-                self.outbox.push(PublishedEvent::InboxClosed(inbox_closed.clone()));
+                self.outbox
+                    .push(PublishedEvent::InboxClosed(inbox_closed.clone()));
             }
             crate::messaging::CloseInboxOutcome::AlreadyClosed { .. } => {}
         }
@@ -120,14 +147,20 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn collect(&mut self, input: crate::messaging::Collect) -> Result<crate::messaging::CollectOutcome, crate::obligation::UnmetObligation> {
+    pub fn collect(
+        &mut self,
+        input: crate::messaging::Collect,
+    ) -> Result<crate::messaging::CollectOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.collect(input)?;
         match &outcome {
             crate::messaging::CollectOutcome::UnknownMessage { .. } => {}
             crate::messaging::CollectOutcome::ForeignMessage { .. } => {}
             crate::messaging::CollectOutcome::NotSender { .. } => {}
-            crate::messaging::CollectOutcome::Collected { message_handled, .. } => {
-                self.outbox.push(PublishedEvent::MessageHandled(message_handled.clone()));
+            crate::messaging::CollectOutcome::Collected {
+                message_handled, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageHandled(message_handled.clone()));
             }
             crate::messaging::CollectOutcome::NotSettled { .. } => {}
         }
@@ -139,16 +172,27 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn expire(&mut self, input: crate::messaging::Expire) -> Result<crate::messaging::ExpireOutcome, crate::obligation::UnmetObligation> {
+    pub fn expire(
+        &mut self,
+        input: crate::messaging::Expire,
+    ) -> Result<crate::messaging::ExpireOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.expire(input)?;
         match &outcome {
             crate::messaging::ExpireOutcome::UnknownMessage { .. } => {}
             crate::messaging::ExpireOutcome::NotDue { .. } => {}
-            crate::messaging::ExpireOutcome::DecidedOnSilence { decision_taken_on_silence, .. } => {
-                self.outbox.push(PublishedEvent::DecisionTakenOnSilence(decision_taken_on_silence.clone()));
+            crate::messaging::ExpireOutcome::DecidedOnSilence {
+                decision_taken_on_silence,
+                ..
+            } => {
+                self.outbox.push(PublishedEvent::DecisionTakenOnSilence(
+                    decision_taken_on_silence.clone(),
+                ));
             }
-            crate::messaging::ExpireOutcome::Expired { message_expired, .. } => {
-                self.outbox.push(PublishedEvent::MessageExpired(message_expired.clone()));
+            crate::messaging::ExpireOutcome::Expired {
+                message_expired, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageExpired(message_expired.clone()));
             }
         }
         Ok(outcome)
@@ -159,14 +203,20 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn mark_delivered(&mut self, input: crate::messaging::MarkDelivered) -> Result<crate::messaging::MarkDeliveredOutcome, crate::obligation::UnmetObligation> {
+    pub fn mark_delivered(
+        &mut self,
+        input: crate::messaging::MarkDelivered,
+    ) -> Result<crate::messaging::MarkDeliveredOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.mark_delivered(input)?;
         match &outcome {
             crate::messaging::MarkDeliveredOutcome::UnknownMessage { .. } => {}
             crate::messaging::MarkDeliveredOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkDeliveredOutcome::NotRecipient { .. } => {}
-            crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered, .. } => {
-                self.outbox.push(PublishedEvent::MessageDelivered(message_delivered.clone()));
+            crate::messaging::MarkDeliveredOutcome::Delivered {
+                message_delivered, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageDelivered(message_delivered.clone()));
             }
             crate::messaging::MarkDeliveredOutcome::AlreadyDelivered { .. } => {}
         }
@@ -178,17 +228,24 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn mark_read(&mut self, input: crate::messaging::MarkRead) -> Result<crate::messaging::MarkReadOutcome, crate::obligation::UnmetObligation> {
+    pub fn mark_read(
+        &mut self,
+        input: crate::messaging::MarkRead,
+    ) -> Result<crate::messaging::MarkReadOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.mark_read(input)?;
         match &outcome {
             crate::messaging::MarkReadOutcome::UnknownMessage { .. } => {}
             crate::messaging::MarkReadOutcome::ForeignMessage { .. } => {}
             crate::messaging::MarkReadOutcome::NotRecipient { .. } => {}
-            crate::messaging::MarkReadOutcome::Handled { message_handled, .. } => {
-                self.outbox.push(PublishedEvent::MessageHandled(message_handled.clone()));
+            crate::messaging::MarkReadOutcome::Handled {
+                message_handled, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageHandled(message_handled.clone()));
             }
             crate::messaging::MarkReadOutcome::Read { message_read, .. } => {
-                self.outbox.push(PublishedEvent::MessageRead(message_read.clone()));
+                self.outbox
+                    .push(PublishedEvent::MessageRead(message_read.clone()));
             }
             crate::messaging::MarkReadOutcome::AlreadyRead { .. } => {}
         }
@@ -200,15 +257,20 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn open_inbox(&mut self, input: crate::messaging::OpenInbox) -> Result<crate::messaging::OpenInboxOutcome, crate::obligation::UnmetObligation> {
+    pub fn open_inbox(
+        &mut self,
+        input: crate::messaging::OpenInbox,
+    ) -> Result<crate::messaging::OpenInboxOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.open_inbox(input)?;
         match &outcome {
             crate::messaging::OpenInboxOutcome::NotOwner { .. } => {}
             crate::messaging::OpenInboxOutcome::Opened { inbox_opened, .. } => {
-                self.outbox.push(PublishedEvent::InboxOpened(inbox_opened.clone()));
+                self.outbox
+                    .push(PublishedEvent::InboxOpened(inbox_opened.clone()));
             }
             crate::messaging::OpenInboxOutcome::Reopened { inbox_opened, .. } => {
-                self.outbox.push(PublishedEvent::InboxOpened(inbox_opened.clone()));
+                self.outbox
+                    .push(PublishedEvent::InboxOpened(inbox_opened.clone()));
             }
             crate::messaging::OpenInboxOutcome::AlreadyOpen { .. } => {}
         }
@@ -220,7 +282,10 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn post_message(&mut self, input: crate::messaging::PostMessage) -> Result<crate::messaging::PostMessageOutcome, crate::obligation::UnmetObligation> {
+    pub fn post_message(
+        &mut self,
+        input: crate::messaging::PostMessage,
+    ) -> Result<crate::messaging::PostMessageOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.post_message(input)?;
         match &outcome {
             crate::messaging::PostMessageOutcome::NotSender { .. } => {}
@@ -237,7 +302,8 @@ where
             crate::messaging::PostMessageOutcome::InboxClosed { .. } => {}
             crate::messaging::PostMessageOutcome::IdTaken { .. } => {}
             crate::messaging::PostMessageOutcome::Posted { message_posted, .. } => {
-                self.outbox.push(PublishedEvent::MessagePosted(message_posted.clone()));
+                self.outbox
+                    .push(PublishedEvent::MessagePosted(message_posted.clone()));
             }
         }
         Ok(outcome)
@@ -248,14 +314,20 @@ where
     ///
     /// `Err` is the typed refusal of an unmet obligation — never a domain outcome, which always
     /// arrives as a variant of the outcome type, refusals included.
-    pub fn refuse(&mut self, input: crate::messaging::Refuse) -> Result<crate::messaging::RefuseOutcome, crate::obligation::UnmetObligation> {
+    pub fn refuse(
+        &mut self,
+        input: crate::messaging::Refuse,
+    ) -> Result<crate::messaging::RefuseOutcome, crate::obligation::UnmetObligation> {
         let outcome = self.behaviors.refuse(input)?;
         match &outcome {
             crate::messaging::RefuseOutcome::UnknownMessage { .. } => {}
             crate::messaging::RefuseOutcome::ForeignMessage { .. } => {}
             crate::messaging::RefuseOutcome::NotRecipient { .. } => {}
-            crate::messaging::RefuseOutcome::Refused { message_refused, .. } => {
-                self.outbox.push(PublishedEvent::MessageRefused(message_refused.clone()));
+            crate::messaging::RefuseOutcome::Refused {
+                message_refused, ..
+            } => {
+                self.outbox
+                    .push(PublishedEvent::MessageRefused(message_refused.clone()));
             }
             crate::messaging::RefuseOutcome::AlreadySettled { .. } => {}
         }
@@ -263,47 +335,72 @@ where
     }
 
     /// Serves `inbox.messaging.Due` at `read_your_writes` consistency, from the owed projection.
-    pub fn due(&self, now: crate::primitives::Timestamp) -> Result<Vec<crate::messaging::Due>, crate::obligation::UnmetObligation> {
+    pub fn due(
+        &self,
+        now: crate::primitives::Timestamp,
+    ) -> Result<Vec<crate::messaging::Due>, crate::obligation::UnmetObligation> {
         self.behaviors.due(now)
     }
 
     /// Serves `inbox.messaging.Inboxes` at `read_your_writes` consistency, from the owed projection.
-    pub fn inboxes(&self) -> Result<Vec<crate::messaging::Inboxes>, crate::obligation::UnmetObligation> {
+    pub fn inboxes(
+        &self,
+    ) -> Result<Vec<crate::messaging::Inboxes>, crate::obligation::UnmetObligation> {
         self.behaviors.inboxes()
     }
 
     /// Serves `inbox.messaging.Messages` at `read_your_writes` consistency, from the owed projection.
-    pub fn messages(&self) -> Result<Vec<crate::messaging::Messages>, crate::obligation::UnmetObligation> {
+    pub fn messages(
+        &self,
+    ) -> Result<Vec<crate::messaging::Messages>, crate::obligation::UnmetObligation> {
         self.behaviors.messages()
     }
 
     /// Serves `inbox.messaging.Outbox` at `read_your_writes` consistency, from the owed projection.
-    pub fn outbox(&self, sender: crate::messaging::Principal) -> Result<Vec<crate::messaging::Outbox>, crate::obligation::UnmetObligation> {
+    pub fn outbox(
+        &self,
+        sender: crate::messaging::Principal,
+    ) -> Result<Vec<crate::messaging::Outbox>, crate::obligation::UnmetObligation> {
         self.behaviors.outbox(sender)
     }
 
     /// Serves `inbox.messaging.Pending` at `read_your_writes` consistency, from the owed projection.
-    pub fn pending(&self, inbox: crate::messaging::Address) -> Result<Vec<crate::messaging::Pending>, crate::obligation::UnmetObligation> {
+    pub fn pending(
+        &self,
+        inbox: crate::messaging::Address,
+    ) -> Result<Vec<crate::messaging::Pending>, crate::obligation::UnmetObligation> {
         self.behaviors.pending(inbox)
     }
 
     /// Serves `inbox.messaging.Replies` at `read_your_writes` consistency, from the owed projection.
-    pub fn replies(&self, thread: crate::messaging::ThreadId) -> Result<Vec<crate::messaging::Replies>, crate::obligation::UnmetObligation> {
+    pub fn replies(
+        &self,
+        thread: crate::messaging::ThreadId,
+    ) -> Result<Vec<crate::messaging::Replies>, crate::obligation::UnmetObligation> {
         self.behaviors.replies(thread)
     }
 
     /// Serves `inbox.messaging.Settled` at `read_your_writes` consistency, from the owed projection.
-    pub fn settled(&self, sender: crate::messaging::Principal) -> Result<Vec<crate::messaging::Settled>, crate::obligation::UnmetObligation> {
+    pub fn settled(
+        &self,
+        sender: crate::messaging::Principal,
+    ) -> Result<Vec<crate::messaging::Settled>, crate::obligation::UnmetObligation> {
         self.behaviors.settled(sender)
     }
 
     /// Serves `inbox.messaging.Thread` at `read_your_writes` consistency, from the owed projection.
-    pub fn thread(&self, thread: crate::messaging::ThreadId) -> Result<Vec<crate::messaging::Thread>, crate::obligation::UnmetObligation> {
+    pub fn thread(
+        &self,
+        thread: crate::messaging::ThreadId,
+    ) -> Result<Vec<crate::messaging::Thread>, crate::obligation::UnmetObligation> {
         self.behaviors.thread(thread)
     }
 
     /// Serves `inbox.messaging.Unanswered` at `read_your_writes` consistency, from the owed projection.
-    pub fn unanswered(&self, inbox: crate::messaging::Address) -> Result<Vec<crate::messaging::Unanswered>, crate::obligation::UnmetObligation> {
+    pub fn unanswered(
+        &self,
+        inbox: crate::messaging::Address,
+    ) -> Result<Vec<crate::messaging::Unanswered>, crate::obligation::UnmetObligation> {
         self.behaviors.unanswered(inbox)
     }
 }

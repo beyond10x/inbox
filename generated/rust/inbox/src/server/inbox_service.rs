@@ -95,21 +95,71 @@ fn announce(address: &std::net::SocketAddr) {
 /// # Errors
 ///
 /// What binding the address refuses: the address is taken, or the port is privileged.
-pub fn serve<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, address: &str, authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>) -> std::io::Result<()>
+pub fn serve<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    address: &str,
+    authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>,
+) -> std::io::Result<()>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
-{ serve_with_static(system, address, authenticate, None) }
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
+{
+    serve_with_static(system, address, authenticate, None)
+}
 
 /// Serves the declared surface, with files only for paths outside its route table.
 ///
 /// # Errors
 /// Returns a listener or static-root error before announcing readiness.
-pub fn serve_with_static<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, address: &str, authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>, static_root: Option<&std::path::Path>) -> std::io::Result<()>
+pub fn serve_with_static<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    address: &str,
+    authenticate: impl Fn(&http::Request) -> Option<crate::actor::Caller>,
+    static_root: Option<&std::path::Path>,
+) -> std::io::Result<()>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let static_root = static_root.map(std::fs::canonicalize).transpose()?;
-    if static_root.as_ref().is_some_and(|root| !root.is_dir()) { return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "static root is not a directory")); }
+    if static_root.as_ref().is_some_and(|root| !root.is_dir()) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "static root is not a directory",
+        ));
+    }
     let listener = std::net::TcpListener::bind(address)?;
     announce(&listener.local_addr()?);
     for connection in listener.incoming() {
@@ -128,12 +178,16 @@ where
             Ok(request) => {
                 if !ROUTES.iter().any(|(_, path)| *path == request.path) {
                     if let Some(root) = &static_root {
-                        let _ = crate::server::static_assets::answer(reader.get_mut(), root, &request);
+                        let _ =
+                            crate::server::static_assets::answer(reader.get_mut(), root, &request);
                         continue;
                     }
                 }
-                (dispatch(system, authenticate(&request).as_ref(), &request), false)
-            },
+                (
+                    dispatch(system, authenticate(&request).as_ref(), &request),
+                    false,
+                )
+            }
             Err(refusal) => (refusal, true),
         };
         let mut stream = reader.into_inner();
@@ -158,9 +212,30 @@ where
 /// checks its grant before it runs, and answers the standard refusal when the caller is none
 /// or is an actor the specification does not grant the command.
 /// A view some actor's grant names checks the reader's grant the same way before it is read.
-pub fn dispatch<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, caller: Option<&crate::actor::Caller>, request: &http::Request) -> http::Response
+pub fn dispatch<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    caller: Option<&crate::actor::Caller>,
+    request: &http::Request,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     dispatch_with_events(system, caller, request).0
 }
@@ -174,9 +249,30 @@ where
 /// it failed after the command took effect. An event a component's port published through a
 /// direct call is in that component's outbox until a pump collects it, so one no pump has
 /// collected yet is listed as this call's: call `pump` after calling a port directly.
-pub fn dispatch_with_events<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, caller: Option<&crate::actor::Caller>, request: &http::Request) -> (http::Response, Vec<crate::system::SystemEvent>)
+pub fn dispatch_with_events<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    caller: Option<&crate::actor::Caller>,
+    request: &http::Request,
+) -> (http::Response, Vec<crate::system::SystemEvent>)
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let mut taken = Vec::new();
     let answer = route_request(system, caller, request, &mut taken);
@@ -185,9 +281,31 @@ where
 
 /// The route match behind [`dispatch_with_events`]: each command pushes what it took off the
 /// log onto `taken`.
-fn route_request<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, caller: Option<&crate::actor::Caller>, request: &http::Request, taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn route_request<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    caller: Option<&crate::actor::Caller>,
+    request: &http::Request,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match request.path.as_str() {
         "/docs" => {
@@ -397,9 +515,31 @@ where
 /// `Json` value the realization built with a number JSON does not spell is not JSON, and is
 /// [`entry::Refused::Undelivered`] for a command, whose effect stands, and [`entry::Refused::Unmet`]
 /// for a view.
-pub fn handle<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, caller: Option<&crate::actor::Caller>, name: &str, input: json::Value) -> Result<json::Value, entry::Refused>
+pub fn handle<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    caller: Option<&crate::actor::Caller>,
+    name: &str,
+    input: json::Value,
+) -> Result<json::Value, entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     handle_with_events(system, caller, name, input).0
 }
@@ -413,9 +553,34 @@ where
 /// command took effect. An event a component's port published through a direct call is in
 /// that component's outbox until a pump collects it, so one no pump has collected yet is
 /// listed as this call's: call `pump` after calling a port directly.
-pub fn handle_with_events<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, caller: Option<&crate::actor::Caller>, name: &str, input: json::Value) -> (Result<json::Value, entry::Refused>, Vec<crate::system::SystemEvent>)
+pub fn handle_with_events<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    caller: Option<&crate::actor::Caller>,
+    name: &str,
+    input: json::Value,
+) -> (
+    Result<json::Value, entry::Refused>,
+    Vec<crate::system::SystemEvent>,
+)
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let mut taken = Vec::new();
     let checked = |input: &json::Value| {
@@ -425,15 +590,18 @@ where
     };
     let answered = match name {
         "inbox.messaging.Answer" => match admit(caller, "inbox.messaging.Answer") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_answer(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_answer(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.CloseInbox" => match admit(caller, "inbox.messaging.CloseInbox") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_close_inbox(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_close_inbox(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Collect" => match admit(caller, "inbox.messaging.Collect") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_collect(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_collect(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Due" => match admit_read(caller, "inbox.messaging.Due") {
@@ -441,7 +609,8 @@ where
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Expire" => match admit(caller, "inbox.messaging.Expire") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_expire(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_expire(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Inboxes" => match admit_read(caller, "inbox.messaging.Inboxes") {
@@ -449,11 +618,13 @@ where
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.MarkDelivered" => match admit(caller, "inbox.messaging.MarkDelivered") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_mark_delivered(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_mark_delivered(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.MarkRead" => match admit(caller, "inbox.messaging.MarkRead") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_mark_read(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_mark_read(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Messages" => match admit_read(caller, "inbox.messaging.Messages") {
@@ -461,7 +632,8 @@ where
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.OpenInbox" => match admit(caller, "inbox.messaging.OpenInbox") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_open_inbox(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_open_inbox(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Outbox" => match admit_read(caller, "inbox.messaging.Outbox") {
@@ -473,11 +645,13 @@ where
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.PostMessage" => match admit(caller, "inbox.messaging.PostMessage") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_post_message(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_post_message(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Refuse" => match admit(caller, "inbox.messaging.Refuse") {
-            Ok(()) => checked(&input).and_then(|()| run_inbox_messaging_refuse(system, &input, &mut taken)),
+            Ok(()) => checked(&input)
+                .and_then(|()| run_inbox_messaging_refuse(system, &input, &mut taken)),
             Err(actor) => Err(entry::Refused::NotGranted(actor.map(str::to_owned))),
         },
         "inbox.messaging.Replies" => match admit_read(caller, "inbox.messaging.Replies") {
@@ -522,7 +696,10 @@ where
 /// Checked before the command runs, on the caller the realization authenticated the request
 /// as and never on anything the request says about itself. Public, so code that drives the system
 /// in process checks the grant exactly as every route does.
-pub fn admit(caller: Option<&crate::actor::Caller>, command: &str) -> Result<(), Option<&'static str>> {
+pub fn admit(
+    caller: Option<&crate::actor::Caller>,
+    command: &str,
+) -> Result<(), Option<&'static str>> {
     match caller {
         Some(caller) if caller.may(command) => Ok(()),
         Some(caller) => Err(Some(caller.actor.name())),
@@ -550,7 +727,10 @@ fn not_granted(actor: Option<&str>) -> http::Response {
 ///
 /// Checked before the view is read, on the caller the realization authenticated the request as.
 /// Public, so code that reads the system in process checks the grant exactly as every route does.
-pub fn admit_read(caller: Option<&crate::actor::Caller>, view: &str) -> Result<(), Option<&'static str>> {
+pub fn admit_read(
+    caller: Option<&crate::actor::Caller>,
+    view: &str,
+) -> Result<(), Option<&'static str>> {
     match caller {
         Some(caller) if caller.may_read(view) => Ok(()),
         Some(caller) => Err(Some(caller.actor.name())),
@@ -559,9 +739,30 @@ pub fn admit_read(caller: Option<&crate::actor::Caller>, view: &str) -> Result<(
 }
 
 /// `POST` `inbox.messaging.Answer`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_answer<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_answer<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -584,9 +785,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_answer<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_answer<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -608,7 +830,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_answer(&outcome))
 }
@@ -731,7 +955,9 @@ fn answer_inbox_messaging_answer(outcome: &crate::messaging::AnswerOutcome) -> (
             json::push_text(&mut body, "inbox.messaging.ShapeMismatch");
             502
         }
-        crate::messaging::AnswerOutcome::Answered { message_answered, .. } => {
+        crate::messaging::AnswerOutcome::Answered {
+            message_answered, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "answered");
             json::member(&mut body, "published");
@@ -751,9 +977,30 @@ fn answer_inbox_messaging_answer(outcome: &crate::messaging::AnswerOutcome) -> (
 }
 
 /// `POST` `inbox.messaging.CloseInbox`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_close_inbox<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_close_inbox<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -776,9 +1023,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_close_inbox<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_close_inbox<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -800,7 +1068,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_close_inbox(&outcome))
 }
@@ -808,7 +1078,9 @@ where
 /// One declared outcome of `inbox.messaging.CloseInbox`: the branch that was taken, every event it published in
 /// publication order, the declared error where there is one, and that error's own payload —
 /// with the status the contract declares for that branch.
-fn answer_inbox_messaging_close_inbox(outcome: &crate::messaging::CloseInboxOutcome) -> (u16, String) {
+fn answer_inbox_messaging_close_inbox(
+    outcome: &crate::messaging::CloseInboxOutcome,
+) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
         crate::messaging::CloseInboxOutcome::UnknownInbox { .. } => {
@@ -859,9 +1131,30 @@ fn answer_inbox_messaging_close_inbox(outcome: &crate::messaging::CloseInboxOutc
 }
 
 /// `POST` `inbox.messaging.Collect`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_collect<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_collect<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -884,9 +1177,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_collect<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_collect<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -908,7 +1222,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_collect(&outcome))
 }
@@ -949,7 +1265,9 @@ fn answer_inbox_messaging_collect(outcome: &crate::messaging::CollectOutcome) ->
             json::push_text(&mut body, "inbox.messaging.NotSender");
             403
         }
-        crate::messaging::CollectOutcome::Collected { message_handled, .. } => {
+        crate::messaging::CollectOutcome::Collected {
+            message_handled, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "collected");
             json::member(&mut body, "published");
@@ -979,9 +1297,30 @@ fn answer_inbox_messaging_collect(outcome: &crate::messaging::CollectOutcome) ->
 }
 
 /// `POST` `inbox.messaging.Expire`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_expire<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_expire<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1004,9 +1343,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_expire<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_expire<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1028,7 +1388,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_expire(&outcome))
 }
@@ -1059,7 +1421,10 @@ fn answer_inbox_messaging_expire(outcome: &crate::messaging::ExpireOutcome) -> (
             json::push_text(&mut body, "inbox.messaging.NotDue");
             409
         }
-        crate::messaging::ExpireOutcome::DecidedOnSilence { decision_taken_on_silence, .. } => {
+        crate::messaging::ExpireOutcome::DecidedOnSilence {
+            decision_taken_on_silence,
+            ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "decided-on-silence");
             json::member(&mut body, "published");
@@ -1068,12 +1433,17 @@ fn answer_inbox_messaging_expire(outcome: &crate::messaging::ExpireOutcome) -> (
             json::member(&mut body, "event");
             json::push_text(&mut body, "inbox.messaging.DecisionTakenOnSilence");
             json::member(&mut body, "payload");
-            wire::encode_event_inbox_messaging_decision_taken_on_silence(decision_taken_on_silence, &mut body);
+            wire::encode_event_inbox_messaging_decision_taken_on_silence(
+                decision_taken_on_silence,
+                &mut body,
+            );
             body.push('}');
             body.push(']');
             202
         }
-        crate::messaging::ExpireOutcome::Expired { message_expired, .. } => {
+        crate::messaging::ExpireOutcome::Expired {
+            message_expired, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "expired");
             json::member(&mut body, "published");
@@ -1093,9 +1463,30 @@ fn answer_inbox_messaging_expire(outcome: &crate::messaging::ExpireOutcome) -> (
 }
 
 /// `POST` `inbox.messaging.MarkDelivered`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_mark_delivered<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_mark_delivered<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1118,9 +1509,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_mark_delivered<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_mark_delivered<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1142,7 +1554,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_mark_delivered(&outcome))
 }
@@ -1150,7 +1564,9 @@ where
 /// One declared outcome of `inbox.messaging.MarkDelivered`: the branch that was taken, every event it published in
 /// publication order, the declared error where there is one, and that error's own payload —
 /// with the status the contract declares for that branch.
-fn answer_inbox_messaging_mark_delivered(outcome: &crate::messaging::MarkDeliveredOutcome) -> (u16, String) {
+fn answer_inbox_messaging_mark_delivered(
+    outcome: &crate::messaging::MarkDeliveredOutcome,
+) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
         crate::messaging::MarkDeliveredOutcome::UnknownMessage { .. } => {
@@ -1183,7 +1599,9 @@ fn answer_inbox_messaging_mark_delivered(outcome: &crate::messaging::MarkDeliver
             json::push_text(&mut body, "inbox.messaging.NotRecipient");
             403
         }
-        crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered, .. } => {
+        crate::messaging::MarkDeliveredOutcome::Delivered {
+            message_delivered, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "delivered");
             json::member(&mut body, "published");
@@ -1211,9 +1629,30 @@ fn answer_inbox_messaging_mark_delivered(outcome: &crate::messaging::MarkDeliver
 }
 
 /// `POST` `inbox.messaging.OpenInbox`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_open_inbox<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_open_inbox<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1236,9 +1675,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_open_inbox<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_open_inbox<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1260,7 +1720,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_open_inbox(&outcome))
 }
@@ -1268,7 +1730,9 @@ where
 /// One declared outcome of `inbox.messaging.OpenInbox`: the branch that was taken, every event it published in
 /// publication order, the declared error where there is one, and that error's own payload —
 /// with the status the contract declares for that branch.
-fn answer_inbox_messaging_open_inbox(outcome: &crate::messaging::OpenInboxOutcome) -> (u16, String) {
+fn answer_inbox_messaging_open_inbox(
+    outcome: &crate::messaging::OpenInboxOutcome,
+) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
         crate::messaging::OpenInboxOutcome::NotOwner { .. } => {
@@ -1323,9 +1787,30 @@ fn answer_inbox_messaging_open_inbox(outcome: &crate::messaging::OpenInboxOutcom
 }
 
 /// `POST` `inbox.messaging.PostMessage`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_post_message<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_post_message<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1348,9 +1833,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_post_message<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_post_message<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1372,7 +1878,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_post_message(&outcome))
 }
@@ -1380,7 +1888,9 @@ where
 /// One declared outcome of `inbox.messaging.PostMessage`: the branch that was taken, every event it published in
 /// publication order, the declared error where there is one, and that error's own payload —
 /// with the status the contract declares for that branch.
-fn answer_inbox_messaging_post_message(outcome: &crate::messaging::PostMessageOutcome) -> (u16, String) {
+fn answer_inbox_messaging_post_message(
+    outcome: &crate::messaging::PostMessageOutcome,
+) -> (u16, String) {
     let mut body = String::from("{");
     let status = match outcome {
         crate::messaging::PostMessageOutcome::NotSender { .. } => {
@@ -1533,9 +2043,30 @@ fn answer_inbox_messaging_post_message(outcome: &crate::messaging::PostMessageOu
 }
 
 /// `POST` `inbox.messaging.MarkRead`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_mark_read<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_mark_read<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1558,9 +2089,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_mark_read<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_mark_read<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1582,7 +2134,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_mark_read(&outcome))
 }
@@ -1623,7 +2177,9 @@ fn answer_inbox_messaging_mark_read(outcome: &crate::messaging::MarkReadOutcome)
             json::push_text(&mut body, "inbox.messaging.NotRecipient");
             403
         }
-        crate::messaging::MarkReadOutcome::Handled { message_handled, .. } => {
+        crate::messaging::MarkReadOutcome::Handled {
+            message_handled, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "handled");
             json::member(&mut body, "published");
@@ -1665,9 +2221,30 @@ fn answer_inbox_messaging_mark_read(outcome: &crate::messaging::MarkReadOutcome)
 }
 
 /// `POST` `inbox.messaging.Refuse`: reads the declared input, runs the port, answers the declared outcome.
-fn serve_inbox_messaging_refuse<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, body: &[u8], taken: &mut Vec<crate::system::SystemEvent>) -> http::Response
+fn serve_inbox_messaging_refuse<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    body: &[u8],
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let text = match std::str::from_utf8(body) {
         Ok(text) => text,
@@ -1690,9 +2267,30 @@ where
 /// `body`, as the route reports it. Every event published while the call runs is pushed onto
 /// `taken`, in log order, whatever it answers; what was on the log before it is taken off
 /// the log but not pushed.
-fn run_inbox_messaging_refuse<InboxServiceBehaviors>(system: &mut crate::system::System<InboxServiceBehaviors>, value: &json::Value, taken: &mut Vec<crate::system::SystemEvent>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_refuse<InboxServiceBehaviors>(
+    system: &mut crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+    taken: &mut Vec<crate::system::SystemEvent>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     // What is on the log before this call is not what this call published: it is delivered
     // and taken with the rest, and never pushed onto `taken`.
@@ -1714,7 +2312,9 @@ where
     let delivered = system.pump();
     taken.extend(system.take_published().into_iter().skip(before));
     if let Err(failure) = delivered {
-        return Err(entry::Refused::Undelivered(format!("delivering what the command published: {failure}")));
+        return Err(entry::Refused::Undelivered(format!(
+            "delivering what the command published: {failure}"
+        )));
     }
     Ok(answer_inbox_messaging_refuse(&outcome))
 }
@@ -1755,7 +2355,9 @@ fn answer_inbox_messaging_refuse(outcome: &crate::messaging::RefuseOutcome) -> (
             json::push_text(&mut body, "inbox.messaging.NotRecipient");
             403
         }
-        crate::messaging::RefuseOutcome::Refused { message_refused, .. } => {
+        crate::messaging::RefuseOutcome::Refused {
+            message_refused, ..
+        } => {
             json::member(&mut body, "outcome");
             json::push_text(&mut body, "refused");
             json::member(&mut body, "published");
@@ -1788,9 +2390,29 @@ fn answer_inbox_messaging_refuse(outcome: &crate::messaging::RefuseOutcome) -> (
 
 /// `GET` `inbox.messaging.Due`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_due<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_due<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("now", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_due(system, &value)),
@@ -1803,9 +2425,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_due<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_due<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_due(value, "query") {
         Ok(params) => params,
@@ -1833,9 +2475,28 @@ where
 /// `GET` `inbox.messaging.Inboxes` at `read_your_writes` consistency: every row the owed projection holds.
 ///
 /// The one path the `GET` route and [`handle`] share.
-fn run_inbox_messaging_inboxes<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_inboxes<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match system.inbox_service.inboxes() {
         Ok(rows) => {
@@ -1859,9 +2520,28 @@ where
 /// `GET` `inbox.messaging.Messages` at `read_your_writes` consistency: every row the owed projection holds.
 ///
 /// The one path the `GET` route and [`handle`] share.
-fn run_inbox_messaging_messages<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_messages<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match system.inbox_service.messages() {
         Ok(rows) => {
@@ -1884,9 +2564,29 @@ where
 
 /// `GET` `inbox.messaging.Outbox`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_outbox<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_outbox<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("sender", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_outbox(system, &value)),
@@ -1899,9 +2599,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_outbox<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_outbox<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_outbox(value, "query") {
         Ok(params) => params,
@@ -1928,9 +2648,29 @@ where
 
 /// `GET` `inbox.messaging.Pending`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_pending<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_pending<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("inbox", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_pending(system, &value)),
@@ -1943,9 +2683,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_pending<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_pending<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_pending(value, "query") {
         Ok(params) => params,
@@ -1972,9 +2732,29 @@ where
 
 /// `GET` `inbox.messaging.Replies`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_replies<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_replies<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("thread", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_replies(system, &value)),
@@ -1987,9 +2767,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_replies<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_replies<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_replies(value, "query") {
         Ok(params) => params,
@@ -2016,9 +2816,29 @@ where
 
 /// `GET` `inbox.messaging.Settled`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_settled<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_settled<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("sender", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_settled(system, &value)),
@@ -2031,9 +2851,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_settled<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_settled<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_settled(value, "query") {
         Ok(params) => params,
@@ -2060,9 +2900,29 @@ where
 
 /// `GET` `inbox.messaging.Thread`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_thread<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_thread<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("thread", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_thread(system, &value)),
@@ -2075,9 +2935,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_thread<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_thread<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_thread(value, "query") {
         Ok(params) => params,
@@ -2104,9 +2984,29 @@ where
 
 /// `GET` `inbox.messaging.Unanswered`: reads the declared parameters from the query string by their wire names, runs the
 /// port, answers its rows. A key the view does not declare is ignored.
-fn serve_inbox_messaging_unanswered<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, query: &str) -> http::Response
+fn serve_inbox_messaging_unanswered<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    query: &str,
+) -> http::Response
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     match http::query_object(query, &[("inbox", http::Scalar::Text)], "query") {
         Ok(value) => http::answer(run_inbox_messaging_unanswered(system, &value)),
@@ -2119,9 +3019,29 @@ where
 ///
 /// The one path the `GET` route and [`handle`] share. A decoding failure is located under
 /// `query`, as the route reports it.
-fn run_inbox_messaging_unanswered<InboxServiceBehaviors>(system: &crate::system::System<InboxServiceBehaviors>, value: &json::Value) -> Result<(u16, String), entry::Refused>
+fn run_inbox_messaging_unanswered<InboxServiceBehaviors>(
+    system: &crate::system::System<InboxServiceBehaviors>,
+    value: &json::Value,
+) -> Result<(u16, String), entry::Refused>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     let (param0,) = match wire::decode_params_inbox_messaging_unanswered(value, "query") {
         Ok(params) => params,

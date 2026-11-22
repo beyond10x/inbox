@@ -1,5 +1,9 @@
 //! Synthesis of `generated/rust/inbox` from `ess/`, and the drift check that holds the checked-in
-//! crate to a fresh synthesis.
+//! crate to a fresh synthesis. The other tasks of the repository are the modules below.
+
+pub mod animation;
+pub mod docs_words;
+pub mod scenarios;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -23,6 +27,14 @@ const LOCK: &str = "Cargo.lock";
 const BUILD: &str = "target";
 /// Top-level entries of the crate directory the comparison does not read.
 const IGNORED: [&str; 3] = [STATE, LOCK, BUILD];
+
+/// What a task prints, line by line, and the status it exits with.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Answer {
+    pub stdout: Vec<String>,
+    pub stderr: Vec<String>,
+    pub code: u8,
+}
 
 /// One way the checked-in crate differs from a fresh synthesis.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

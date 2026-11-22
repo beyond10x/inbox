@@ -20,10 +20,7 @@ pub enum Actor {
 
 impl Actor {
     /// Every declared actor, ordered by qualified name.
-    pub const ALL: &'static [Actor] = &[
-        Actor::Client,
-        Actor::Sweeper,
-    ];
+    pub const ALL: &'static [Actor] = &[Actor::Client, Actor::Sweeper];
 
     /// The actor's qualified name, as the specification spells it.
     pub const fn name(self) -> &'static str {
@@ -48,9 +45,7 @@ pub fn may(actor: Actor) -> &'static [&'static str] {
             "inbox.messaging.PostMessage",
             "inbox.messaging.Refuse",
         ],
-        Actor::Sweeper => &[
-            "inbox.messaging.Expire",
-        ],
+        Actor::Sweeper => &["inbox.messaging.Expire"],
     }
 }
 
@@ -86,10 +81,7 @@ pub fn may_read(actor: Actor) -> &'static [&'static str] {
             "inbox.messaging.Thread",
             "inbox.messaging.Unanswered",
         ],
-        Actor::Sweeper => &[
-            "inbox.messaging.Due",
-            "inbox.messaging.Messages",
-        ],
+        Actor::Sweeper => &["inbox.messaging.Due", "inbox.messaging.Messages"],
     }
 }
 

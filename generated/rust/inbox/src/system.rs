@@ -61,16 +61,36 @@ impl SystemEvent {
 impl From<crate::ports::inbox_service::PublishedEvent> for SystemEvent {
     fn from(event: crate::ports::inbox_service::PublishedEvent) -> Self {
         match event {
-            crate::ports::inbox_service::PublishedEvent::DecisionTakenOnSilence(event) => Self::DecisionTakenOnSilence(event),
-            crate::ports::inbox_service::PublishedEvent::InboxClosed(event) => Self::InboxClosed(event),
-            crate::ports::inbox_service::PublishedEvent::InboxOpened(event) => Self::InboxOpened(event),
-            crate::ports::inbox_service::PublishedEvent::MessageAnswered(event) => Self::MessageAnswered(event),
-            crate::ports::inbox_service::PublishedEvent::MessageDelivered(event) => Self::MessageDelivered(event),
-            crate::ports::inbox_service::PublishedEvent::MessageExpired(event) => Self::MessageExpired(event),
-            crate::ports::inbox_service::PublishedEvent::MessageHandled(event) => Self::MessageHandled(event),
-            crate::ports::inbox_service::PublishedEvent::MessagePosted(event) => Self::MessagePosted(event),
-            crate::ports::inbox_service::PublishedEvent::MessageRead(event) => Self::MessageRead(event),
-            crate::ports::inbox_service::PublishedEvent::MessageRefused(event) => Self::MessageRefused(event),
+            crate::ports::inbox_service::PublishedEvent::DecisionTakenOnSilence(event) => {
+                Self::DecisionTakenOnSilence(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::InboxClosed(event) => {
+                Self::InboxClosed(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::InboxOpened(event) => {
+                Self::InboxOpened(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageAnswered(event) => {
+                Self::MessageAnswered(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageDelivered(event) => {
+                Self::MessageDelivered(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageExpired(event) => {
+                Self::MessageExpired(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageHandled(event) => {
+                Self::MessageHandled(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessagePosted(event) => {
+                Self::MessagePosted(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageRead(event) => {
+                Self::MessageRead(event)
+            }
+            crate::ports::inbox_service::PublishedEvent::MessageRefused(event) => {
+                Self::MessageRefused(event)
+            }
         }
     }
 }
@@ -89,7 +109,9 @@ pub struct System<InboxServiceBehaviors> {
 
 impl<InboxServiceBehaviors> System<InboxServiceBehaviors> {
     /// Assembles the system from its components.
-    pub fn new(inbox_service: crate::ports::inbox_service::InboxService<InboxServiceBehaviors>) -> Self {
+    pub fn new(
+        inbox_service: crate::ports::inbox_service::InboxService<InboxServiceBehaviors>,
+    ) -> Self {
         Self {
             inbox_service,
             published: Vec::new(),
@@ -118,7 +140,24 @@ impl<InboxServiceBehaviors> System<InboxServiceBehaviors> {
 
 impl<InboxServiceBehaviors> System<InboxServiceBehaviors>
 where
-    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior + crate::messaging::obligations::CloseInboxBehavior + crate::messaging::obligations::CollectBehavior + crate::messaging::obligations::ExpireBehavior + crate::messaging::obligations::MarkDeliveredBehavior + crate::messaging::obligations::MarkReadBehavior + crate::messaging::obligations::OpenInboxBehavior + crate::messaging::obligations::PostMessageBehavior + crate::messaging::obligations::RefuseBehavior + crate::messaging::obligations::DueQuery + crate::messaging::obligations::InboxesQuery + crate::messaging::obligations::MessagesQuery + crate::messaging::obligations::OutboxQuery + crate::messaging::obligations::PendingQuery + crate::messaging::obligations::RepliesQuery + crate::messaging::obligations::SettledQuery + crate::messaging::obligations::ThreadQuery + crate::messaging::obligations::UnansweredQuery,
+    InboxServiceBehaviors: crate::messaging::obligations::AnswerBehavior
+        + crate::messaging::obligations::CloseInboxBehavior
+        + crate::messaging::obligations::CollectBehavior
+        + crate::messaging::obligations::ExpireBehavior
+        + crate::messaging::obligations::MarkDeliveredBehavior
+        + crate::messaging::obligations::MarkReadBehavior
+        + crate::messaging::obligations::OpenInboxBehavior
+        + crate::messaging::obligations::PostMessageBehavior
+        + crate::messaging::obligations::RefuseBehavior
+        + crate::messaging::obligations::DueQuery
+        + crate::messaging::obligations::InboxesQuery
+        + crate::messaging::obligations::MessagesQuery
+        + crate::messaging::obligations::OutboxQuery
+        + crate::messaging::obligations::PendingQuery
+        + crate::messaging::obligations::RepliesQuery
+        + crate::messaging::obligations::SettledQuery
+        + crate::messaging::obligations::ThreadQuery
+        + crate::messaging::obligations::UnansweredQuery,
 {
     /// Delivers until quiescent: collects every component's outbox onto the log. No binding
     /// reacts to anything this specification publishes, so collecting is the whole delivery.

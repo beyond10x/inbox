@@ -53,10 +53,9 @@ impl Refused {
 impl std::fmt::Display for Refused {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unknown(name) => write!(
-                f,
-                "`{name}` is not a command or view this surface declares"
-            ),
+            Self::Unknown(name) => {
+                write!(f, "`{name}` is not a command or view this surface declares")
+            }
             Self::Input(detail) | Self::Unmet(detail) | Self::Undelivered(detail) => {
                 f.write_str(detail)
             }
@@ -79,6 +78,8 @@ impl std::error::Error for Refused {}
 ///
 /// The reader's refusal when the answer is not JSON, which only a `Json` value the realization
 /// built can make it: a number spelled the way JSON does not spell one.
-pub(crate) fn read(body: &str) -> Result<crate::server::json::Value, crate::server::json::ParseError> {
+pub(crate) fn read(
+    body: &str,
+) -> Result<crate::server::json::Value, crate::server::json::ParseError> {
     crate::server::json::parse_written(body)
 }

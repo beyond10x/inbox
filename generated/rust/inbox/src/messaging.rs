@@ -58,7 +58,13 @@ impl Body {
     /// interpreter reads it. A wrapped newtype's own constraints are its own to check.
     pub fn broken_constraint(&self) -> Option<&'static str> {
         use crate::primitives::invariant as iv;
-        if iv::broken(iv::compare(Some(iv::Fact::count(self.0.as_str().len())), iv::Op::Le, iv::Fact::number("65536"), false, true)) {
+        if iv::broken(iv::compare(
+            Some(iv::Fact::count(self.0.as_str().len())),
+            iv::Op::Le,
+            iv::Fact::number("65536"),
+            false,
+            true,
+        )) {
             return Some("a value satisfying `value.utf8_bytes <= 65536`");
         }
         None
@@ -118,8 +124,7 @@ pub struct DelegationId(pub String);
 
 /// FreeShape — `inbox.messaging.FreeShape`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FreeShape {
-}
+pub struct FreeShape {}
 
 /// The states of `inbox.messaging.Inbox`, as runtime values.
 ///
@@ -212,10 +217,22 @@ impl MessageId {
     /// interpreter reads it. A wrapped newtype's own constraints are its own to check.
     pub fn broken_constraint(&self) -> Option<&'static str> {
         use crate::primitives::invariant as iv;
-        if !self.0.chars().all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c)) {
-            return Some("a value whose every character is one of `0123456789ABCDEFGHJKMNPQRSTVWXYZ`");
+        if !self
+            .0
+            .chars()
+            .all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c))
+        {
+            return Some(
+                "a value whose every character is one of `0123456789ABCDEFGHJKMNPQRSTVWXYZ`",
+            );
         }
-        if iv::broken(iv::compare(Some(iv::Fact::count(self.0.chars().count())), iv::Op::Eq, iv::Fact::number("26"), false, true)) {
+        if iv::broken(iv::compare(
+            Some(iv::Fact::count(self.0.chars().count())),
+            iv::Op::Eq,
+            iv::Fact::number("26"),
+            false,
+            true,
+        )) {
             return Some("a value satisfying `value.count == 26`");
         }
         None
@@ -240,10 +257,20 @@ impl OptionLetter {
     /// interpreter reads it. A wrapped newtype's own constraints are its own to check.
     pub fn broken_constraint(&self) -> Option<&'static str> {
         use crate::primitives::invariant as iv;
-        if !self.0.chars().all(|c| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(c)) {
+        if !self
+            .0
+            .chars()
+            .all(|c| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(c))
+        {
             return Some("a value whose every character is one of `ABCDEFGHIJKLMNOPQRSTUVWXYZ`");
         }
-        if iv::broken(iv::compare(Some(iv::Fact::count(self.0.chars().count())), iv::Op::Eq, iv::Fact::number("1"), false, true)) {
+        if iv::broken(iv::compare(
+            Some(iv::Fact::count(self.0.chars().count())),
+            iv::Op::Eq,
+            iv::Fact::number("1"),
+            false,
+            true,
+        )) {
             return Some("a value satisfying `value.count == 1`");
         }
         None
@@ -323,10 +350,22 @@ impl ThreadId {
     /// interpreter reads it. A wrapped newtype's own constraints are its own to check.
     pub fn broken_constraint(&self) -> Option<&'static str> {
         use crate::primitives::invariant as iv;
-        if !self.0.chars().all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c)) {
-            return Some("a value whose every character is one of `0123456789ABCDEFGHJKMNPQRSTVWXYZ`");
+        if !self
+            .0
+            .chars()
+            .all(|c| "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c))
+        {
+            return Some(
+                "a value whose every character is one of `0123456789ABCDEFGHJKMNPQRSTVWXYZ`",
+            );
         }
-        if iv::broken(iv::compare(Some(iv::Fact::count(self.0.chars().count())), iv::Op::Eq, iv::Fact::number("26"), false, true)) {
+        if iv::broken(iv::compare(
+            Some(iv::Fact::count(self.0.chars().count())),
+            iv::Op::Eq,
+            iv::Fact::number("26"),
+            false,
+            true,
+        )) {
             return Some("a value satisfying `value.count == 26`");
         }
         None
@@ -1963,7 +2002,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.Answer`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn answer(&mut self, input: super::Answer) -> Result<super::AnswerOutcome, crate::obligation::UnmetObligation>;
+        fn answer(
+            &mut self,
+            input: super::Answer,
+        ) -> Result<super::AnswerOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.CloseInbox` — generated.
@@ -1974,7 +2016,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.CloseInbox`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn close_inbox(&mut self, input: super::CloseInbox) -> Result<super::CloseInboxOutcome, crate::obligation::UnmetObligation>;
+        fn close_inbox(
+            &mut self,
+            input: super::CloseInbox,
+        ) -> Result<super::CloseInboxOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.Collect` — generated.
@@ -1985,7 +2030,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.Collect`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn collect(&mut self, input: super::Collect) -> Result<super::CollectOutcome, crate::obligation::UnmetObligation>;
+        fn collect(
+            &mut self,
+            input: super::Collect,
+        ) -> Result<super::CollectOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.Expire` — an implementation obligation.
@@ -1998,7 +2046,10 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of an obligation nothing has satisfied; a satisfying
         /// implementation never returns it.
-        fn expire(&mut self, input: super::Expire) -> Result<super::ExpireOutcome, crate::obligation::UnmetObligation>;
+        fn expire(
+            &mut self,
+            input: super::Expire,
+        ) -> Result<super::ExpireOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.MarkDelivered` — generated.
@@ -2009,7 +2060,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.MarkDelivered`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn mark_delivered(&mut self, input: super::MarkDelivered) -> Result<super::MarkDeliveredOutcome, crate::obligation::UnmetObligation>;
+        fn mark_delivered(
+            &mut self,
+            input: super::MarkDelivered,
+        ) -> Result<super::MarkDeliveredOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.MarkRead` — generated.
@@ -2020,7 +2074,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.MarkRead`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn mark_read(&mut self, input: super::MarkRead) -> Result<super::MarkReadOutcome, crate::obligation::UnmetObligation>;
+        fn mark_read(
+            &mut self,
+            input: super::MarkRead,
+        ) -> Result<super::MarkReadOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.OpenInbox` — generated.
@@ -2031,7 +2088,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.OpenInbox`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn open_inbox(&mut self, input: super::OpenInbox) -> Result<super::OpenInboxOutcome, crate::obligation::UnmetObligation>;
+        fn open_inbox(
+            &mut self,
+            input: super::OpenInbox,
+        ) -> Result<super::OpenInboxOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.PostMessage` — an implementation obligation.
@@ -2044,7 +2104,10 @@ pub mod obligations {
         ///
         /// `Err` is the typed refusal of an obligation nothing has satisfied; a satisfying
         /// implementation never returns it.
-        fn post_message(&mut self, input: super::PostMessage) -> Result<super::PostMessageOutcome, crate::obligation::UnmetObligation>;
+        fn post_message(
+            &mut self,
+            input: super::PostMessage,
+        ) -> Result<super::PostMessageOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The behaviour `inbox.messaging.Refuse` — generated.
@@ -2055,7 +2118,10 @@ pub mod obligations {
         /// Decides and enacts exactly one declared outcome of `inbox.messaging.Refuse`.
         ///
         /// `Err` is the typed refusal of a request the model declares no outcome for.
-        fn refuse(&mut self, input: super::Refuse) -> Result<super::RefuseOutcome, crate::obligation::UnmetObligation>;
+        fn refuse(
+            &mut self,
+            input: super::Refuse,
+        ) -> Result<super::RefuseOutcome, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Due` — generated.
@@ -2066,7 +2132,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Due` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn due(&self, now: crate::primitives::Timestamp) -> Result<Vec<super::Due>, crate::obligation::UnmetObligation>;
+        fn due(
+            &self,
+            now: crate::primitives::Timestamp,
+        ) -> Result<Vec<super::Due>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Inboxes` — generated.
@@ -2099,7 +2168,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Outbox` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn outbox(&self, sender: crate::messaging::Principal) -> Result<Vec<super::Outbox>, crate::obligation::UnmetObligation>;
+        fn outbox(
+            &self,
+            sender: crate::messaging::Principal,
+        ) -> Result<Vec<super::Outbox>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Pending` — generated.
@@ -2110,7 +2182,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Pending` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn pending(&self, inbox: crate::messaging::Address) -> Result<Vec<super::Pending>, crate::obligation::UnmetObligation>;
+        fn pending(
+            &self,
+            inbox: crate::messaging::Address,
+        ) -> Result<Vec<super::Pending>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Replies` — generated.
@@ -2121,7 +2196,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Replies` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn replies(&self, thread: crate::messaging::ThreadId) -> Result<Vec<super::Replies>, crate::obligation::UnmetObligation>;
+        fn replies(
+            &self,
+            thread: crate::messaging::ThreadId,
+        ) -> Result<Vec<super::Replies>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Settled` — generated.
@@ -2132,7 +2210,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Settled` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn settled(&self, sender: crate::messaging::Principal) -> Result<Vec<super::Settled>, crate::obligation::UnmetObligation>;
+        fn settled(
+            &self,
+            sender: crate::messaging::Principal,
+        ) -> Result<Vec<super::Settled>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Thread` — generated.
@@ -2143,7 +2224,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Thread` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn thread(&self, thread: crate::messaging::ThreadId) -> Result<Vec<super::Thread>, crate::obligation::UnmetObligation>;
+        fn thread(
+            &self,
+            thread: crate::messaging::ThreadId,
+        ) -> Result<Vec<super::Thread>, crate::obligation::UnmetObligation>;
     }
 
     /// The query `inbox.messaging.Unanswered` — generated.
@@ -2154,7 +2238,10 @@ pub mod obligations {
         /// Serves `inbox.messaging.Unanswered` rows at the view's declared consistency.
         ///
         /// `Err` is the typed refusal of a row whose declared type cannot hold its value.
-        fn unanswered(&self, inbox: crate::messaging::Address) -> Result<Vec<super::Unanswered>, crate::obligation::UnmetObligation>;
+        fn unanswered(
+            &self,
+            inbox: crate::messaging::Address,
+        ) -> Result<Vec<super::Unanswered>, crate::obligation::UnmetObligation>;
     }
 
     /// Every obligation of this bounded context, refused in the type system.
@@ -2164,14 +2251,26 @@ pub mod obligations {
     pub struct Unimplemented;
 
     impl ExpireBehavior for Unimplemented {
-        fn expire(&mut self, _input: super::Expire) -> Result<super::ExpireOutcome, crate::obligation::UnmetObligation> {
-            Err(crate::obligation::UnmetObligation { capability: "command behaviour", source: "inbox.messaging.Expire" })
+        fn expire(
+            &mut self,
+            _input: super::Expire,
+        ) -> Result<super::ExpireOutcome, crate::obligation::UnmetObligation> {
+            Err(crate::obligation::UnmetObligation {
+                capability: "command behaviour",
+                source: "inbox.messaging.Expire",
+            })
         }
     }
 
     impl PostMessageBehavior for Unimplemented {
-        fn post_message(&mut self, _input: super::PostMessage) -> Result<super::PostMessageOutcome, crate::obligation::UnmetObligation> {
-            Err(crate::obligation::UnmetObligation { capability: "command behaviour", source: "inbox.messaging.PostMessage" })
+        fn post_message(
+            &mut self,
+            _input: super::PostMessage,
+        ) -> Result<super::PostMessageOutcome, crate::obligation::UnmetObligation> {
+            Err(crate::obligation::UnmetObligation {
+                capability: "command behaviour",
+                source: "inbox.messaging.PostMessage",
+            })
         }
     }
 }

@@ -12,9 +12,9 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 - The landing page of the documentation site has an animated figure of one message going
   through the inbox, and 3 slides below it. Every command, view, error, state and actor they
-  show is read from the compiled `ess/`: `tools/animation.py` writes
+  show is read from the compiled `ess/`: `inbox-xtask animation` writes
   `website/src/generated/animation.json` (`task animation`), and `task animation-drift`, in
-  `task check`, fails when the file differs from what the script writes. 16 page tests
+  `task check`, fails when the file differs from what the command writes. 16 page tests
   (`website/tests/landing.spec.ts`, Playwright) hold the page, among them the count of open
   security findings to the limits page.
 - `docs/checks.md`: the numbers the gate prints, what the checks do not cover, the closed
@@ -26,8 +26,19 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 - The CI job `inbox / task check` ends green without installing a tool when a pull request
   or a push changes only planning or prose files: paths under `.engineering/`, and `*.md`
-  files outside `website/` and `generated/` other than `README.md`. `tools/gate_paths.py`
+  files outside `website/` and `generated/` other than `README.md`. `tools/gate-paths.sh`
   holds the decision and `task gate-paths`, in `task check`, its 12 cases.
+- No file of the repository is Python any more. The authored scenarios are the files of
+  `ess/scenarios/`, written by hand; `task scenarios` checks them and rewrites
+  `ess/ess-inputs.yaml` from them, and `task scenarios-drift` runs the same checks (one
+  claimant per covered id, each claim of a type invariant at a view field resting on a row
+  value, the scenario named as its file, a summary of at most 200 characters, message ids of
+  26 characters) and names each path that keeps the manifest from listing every file once
+  (`edited:`, `missing:`, `not in the manifest:`). `task animation`, `task animation-drift`
+  and `task docs-words` are commands of `crates/inbox-xtask`; the path decision of the CI job
+  is the POSIX shell script `tools/gate-paths.sh`, with the same 12 cases; the release
+  workflow reads the workspace version with `cargo metadata` and `jq`. The scenario files,
+  the manifest and `website/src/generated/animation.json` are unchanged.
 - The text of the landing page states release 0.2.0 and its 2 open security findings. It said
   that no program and no client exist.
 - The documentation site is written for a user of the tool. "What works" is now "Features":
