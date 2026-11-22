@@ -107,7 +107,7 @@ fn a_declared_outcome_under_a_status_the_contract_does_not_give_it_fails_the_sce
 }
 
 /// `unsupported.tsv` is `<id>\t<reason>` per line, "each with every reason of its scenario",
-/// and the reason column is the only account of why the serve lane may report 80 scenarios it
+/// and the reason column is the only account of why the serve lane may report 81 scenarios it
 /// did not run. The gate holds the ids alone: a list whose every reason is false passes.
 #[test]
 fn the_gate_refuses_a_listed_reason_that_is_not_the_reason_of_the_run() {
@@ -121,7 +121,7 @@ fn the_gate_refuses_a_listed_reason_that_is_not_the_reason_of_the_run() {
         .map(|id| format!("{id}\tthe service was not running\n"))
         .collect();
     let report = Report {
-        total: 111,
+        total: 112,
         passed: 31,
         unsupported: ids.clone(),
         ..Report::default()

@@ -1,4 +1,4 @@
-//! The context port: the caller's attributes and the answers to the 6 `external:` branches.
+//! The context port: the caller's attributes and the answers to the 5 `external:` branches.
 
 use inbox::behaviour::{ExternalCommand, MessageStorage, TryContext, unmet_context};
 use inbox::messaging::{
@@ -129,15 +129,12 @@ impl<V: SignatureVerifier + ?Sized> SignatureVerifier for std::sync::Arc<V> {
     }
 }
 
-/// The 3 `external:` branches of `PostMessage`, which the generated crate does not ask its
+/// The 2 `external:` branches of `PostMessage`, which the generated crate does not ask its
 /// context port about: the obligation in [`crate::Core`] asks this, one question per branch, in
 /// declaration order, after the input-guarded refusals and before any row is read. `true` takes
-/// the branch. Object-safe.
+/// the branch. Object-safe. `unknown-option` is a declared guard, which the core decides from the
+/// envelope.
 pub trait PostExternals {
-    /// `unknown-option`: `recommended_option` or `default_on_silence` names no option of the
-    /// decision, or two options carry one letter.
-    fn unknown_option(&mut self, input: &PostMessage) -> bool;
-
     /// `signature-invalid`: the SignatureVerifier port does not know the key, finds it lapsed, or
     /// finds that the signature does not verify.
     fn signature_invalid(&mut self, input: &PostMessage) -> bool;
@@ -150,8 +147,8 @@ pub trait PostExternals {
 /// The service's context: the generated context port and [`PostExternals`] in one.
 ///
 /// Built from the caller, a verifier and the backend it reads the answered message from, and
-/// nothing else: no outside code sets an answer on it. `unknown-option` is computed from the
-/// envelope, `shape-mismatch` from the reply and the stored message, and the 2
+/// nothing else: no outside code sets an answer on it. `shape-mismatch` is computed from the reply
+/// and the stored message, and the 2
 /// `signature-invalid` and 2 `authority-invalid` branches are asked of the verifier.
 #[derive(Debug, Clone)]
 pub struct ServiceContext<V, B> {
@@ -204,24 +201,6 @@ impl<V: SignatureVerifier, B: MessageStorage> TryContext for ServiceContext<V, B
 }
 
 impl<V: SignatureVerifier, B> PostExternals for ServiceContext<V, B> {
-    fn unknown_option(&mut self, input: &PostMessage) -> bool {
-        let letters = letters(input.decision.as_ref());
-        let repeated = letters
-            .iter()
-            .enumerate()
-            .any(|(at, letter)| letters[..at].contains(letter));
-        let offered = |letter: &Option<OptionLetter>| {
-            letter
-                .as_ref()
-                .is_none_or(|letter| letters.contains(&letter))
-        };
-        let recommended = input
-            .decision
-            .as_ref()
-            .and_then(|decision| decision.recommended_option.clone());
-        repeated || !offered(&recommended) || !offered(&input.default_on_silence)
-    }
-
     fn signature_invalid(&mut self, input: &PostMessage) -> bool {
         !self.verifier.verifies(Envelope::Post(input))
     }

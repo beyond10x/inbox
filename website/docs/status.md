@@ -21,7 +21,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | List what an inbox holds that its owner has not read | `inbox pending` |
 | Wait until a message arrives. The service holds the request open, 60 s at most by default | `inbox wait` |
 | Read a message. A note is removed once read | `inbox read` |
-| Answer a request or a decision, or refuse a message and say why | `inbox answer`, `inbox refuse` |
+| Answer a request or a decision, or refuse it and say why; a note takes neither | `inbox answer`, `inbox refuse` |
 | List the live messages a sender posted, and take the answer or the refusal of one | `inbox outbox`, `inbox collect` |
 | Follow a thread: its live messages and its answered ones | `inbox thread`, `inbox replies` |
 | Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires` | `inbox post --expires` |

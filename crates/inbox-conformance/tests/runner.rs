@@ -1508,3 +1508,78 @@ fn a_member_stated_twice_refuses_the_suite() {
     let refused = suite::read(&text).map(|_| ()).unwrap_err();
     assert!(refused.contains("`value` twice"), "{refused}");
 }
+
+/// `unknown-option` of `PostMessage` is a declared guard, not an `external:` branch: the target
+/// over the core answers it from the envelope while the step forces no branch, so a core that
+/// leaves it to its context posts the envelope and fails here.
+#[test]
+fn the_core_target_answers_unknown_option_from_the_envelope_with_no_branch_forced() {
+    let as_principal = |who: &str| {
+        vec![
+            ("principal".to_owned(), who.to_owned()),
+            ("inbox".to_owned(), who.to_owned()),
+        ]
+    };
+    let worker = as_principal("agent:box/worker");
+    let planner = as_principal("agent:ws/planner");
+    let options = r#"[{"letter":"A","text":"Ship."},{"letter":"B","text":"Hold."}]"#;
+    let cases = [
+        (
+            "a silence option the decision does not offer",
+            format!(r#""kind":"decision","decision":{{"options":{options}}},"default_on_silence":"C","#),
+        ),
+        (
+            "a recommended option the decision does not offer",
+            format!(
+                r#""kind":"decision","decision":{{"options":{options},"recommended_option":"Z"}},"#
+            ),
+        ),
+        (
+            "two options with one letter",
+            r#""kind":"decision","decision":{"options":[{"letter":"A","text":"Ship."},{"letter":"A","text":"Hold."}]},"#
+                .to_owned(),
+        ),
+        (
+            "a silence option on a request, which has no decision",
+            r#""kind":"request","reply_shape":{"shape":"lines","value":1},"default_on_silence":"A","#
+                .to_owned(),
+        ),
+    ];
+    for (n, (case, fields)) in cases.iter().enumerate() {
+        let mut target = CoreTarget::new();
+        let opened = target.execute(&Command {
+            name: "inbox.messaging.OpenInbox",
+            actor: Some("inbox.messaging.Client"),
+            caller: &worker,
+            input: parse(r#"{"address":"agent:box/worker","adapter":"claude_code"}"#),
+            expected: Some("opened"),
+        });
+        assert!(
+            matches!(&opened.answer, Answer::Outcome { outcome, .. } if outcome == "opened"),
+            "{opened:?}"
+        );
+        let id = format!("01JGT0W9{n:018}");
+        let input = parse(&format!(
+            r#"{{"message_id":"{id}","from":"agent:ws/planner","on_behalf_of":"agent:ws/planner",
+                "to":"agent:box/worker",{fields}"thread":"{id}","created":"2026-01-05T09:00:00Z",
+                "expires":"2026-01-06T09:00:00Z","dedup_key":"{id}","body":"b",
+                "signature":{{"key_id":"key-1","value":"c2lnbmF0dXJl"}}}}"#
+        ));
+        let posted = target.execute(&Command {
+            name: "inbox.messaging.PostMessage",
+            actor: Some("inbox.messaging.Client"),
+            caller: &planner,
+            input,
+            expected: Some("posted"),
+        });
+        assert_eq!(
+            posted.answer,
+            Answer::Outcome {
+                outcome: "unknown-option".to_owned(),
+                error: Some("inbox.messaging.ShapeMismatch".to_owned()),
+            },
+            "{case}"
+        );
+        assert!(posted.events.is_empty(), "{case}: {:?}", posted.events);
+    }
+}

@@ -2,6 +2,7 @@ type: ess-scenario/7
 covers:
 - inbox.messaging.Expire/outcome/expired
 - inbox.messaging.Expire/outcome/not-due
+- inbox.messaging.Expire/outcome/unknown-message
 domain: inbox.messaging
 scenario: note-expires
 summary: A note nobody reads before `expires` is removed by the expiry task. Before that instant the task
@@ -75,6 +76,8 @@ timeline:
   - event: inbox.messaging.MessageExpired
     payload:
       message_id: 01JGT0NX000000000000000001
+      to: agent:ws/planner
+      thread: 01JGT0NX000000000000000001
 - at: '2026-01-05T09:04:00Z'
   command: inbox.messaging.Expire
   actor: inbox.messaging.Sweeper

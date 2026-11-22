@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:8e2e22d2b822308ba6b7c105f39e0f55dc0c242f0e109e712ce096d5593136a5"
+      "contract_digest": "slice-sha256/2:e5bc16a653c531c53bff2e6bac1ce76abf9f7860ee1f3e4313d03cad90e7778f"
     },
     "x-ess-reached-by": "network"
   },
@@ -988,7 +988,7 @@
             }
           },
           "422": {
-            "description": "Outcomes `no-authority`, `already-expired`, `request-without-shape` and `decision-without-options`: the request was understood and refused on domain grounds. The body names the declared error and carries whatever that error declares.",
+            "description": "Outcomes `no-authority`, `already-expired`, `request-without-shape`, `decision-without-options` and `unknown-option`: the request was understood and refused on domain grounds. The body names the declared error and carries whatever that error declares.",
             "content": {
               "application/json": {
                 "schema": {
@@ -997,7 +997,8 @@
                       "already-expired": "#/components/schemas/inbox.messaging.PostMessage.already-expired.Response",
                       "decision-without-options": "#/components/schemas/inbox.messaging.PostMessage.decision-without-options.Response",
                       "no-authority": "#/components/schemas/inbox.messaging.PostMessage.no-authority.Response",
-                      "request-without-shape": "#/components/schemas/inbox.messaging.PostMessage.request-without-shape.Response"
+                      "request-without-shape": "#/components/schemas/inbox.messaging.PostMessage.request-without-shape.Response",
+                      "unknown-option": "#/components/schemas/inbox.messaging.PostMessage.unknown-option.Response"
                     },
                     "propertyName": "outcome"
                   },
@@ -1013,6 +1014,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/inbox.messaging.PostMessage.decision-without-options.Response"
+                    },
+                    {
+                      "$ref": "#/components/schemas/inbox.messaging.PostMessage.unknown-option.Response"
                     }
                   ]
                 }
@@ -1045,22 +1049,18 @@
             }
           },
           "502": {
-            "description": "Outcomes `unknown-option`, `signature-invalid` and `authority-invalid`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.",
+            "description": "Outcomes `signature-invalid` and `authority-invalid`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.",
             "content": {
               "application/json": {
                 "schema": {
                   "discriminator": {
                     "mapping": {
                       "authority-invalid": "#/components/schemas/inbox.messaging.PostMessage.authority-invalid.Response",
-                      "signature-invalid": "#/components/schemas/inbox.messaging.PostMessage.signature-invalid.Response",
-                      "unknown-option": "#/components/schemas/inbox.messaging.PostMessage.unknown-option.Response"
+                      "signature-invalid": "#/components/schemas/inbox.messaging.PostMessage.signature-invalid.Response"
                     },
                     "propertyName": "outcome"
                   },
                   "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/inbox.messaging.PostMessage.unknown-option.Response"
-                    },
                     {
                       "$ref": "#/components/schemas/inbox.messaging.PostMessage.signature-invalid.Response"
                     },
@@ -1320,11 +1320,25 @@
             }
           },
           "409": {
-            "description": "Outcome `already-settled`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
+            "description": "Outcomes `note` and `already-settled`: the input was acceptable and the subject is in a state this command does not act from. Resending the same request changes nothing until something else moves it.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/inbox.messaging.Refuse.already-settled.Response"
+                  "discriminator": {
+                    "mapping": {
+                      "already-settled": "#/components/schemas/inbox.messaging.Refuse.already-settled.Response",
+                      "note": "#/components/schemas/inbox.messaging.Refuse.note.Response"
+                    },
+                    "propertyName": "outcome"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/inbox.messaging.Refuse.note.Response"
+                    },
+                    {
+                      "$ref": "#/components/schemas/inbox.messaging.Refuse.already-settled.Response"
+                    }
+                  ]
                 }
               }
             }
@@ -2935,7 +2949,7 @@
       },
       "inbox.messaging.Expire.expired.Response": {
         "additionalProperties": false,
-        "description": "Taken when no other outcome's condition matched. A `inbox.messaging.Message` no longer exists. The instance is the one `message_id` names. Emits `MessageExpired`, published to consumers and listed under `published`.",
+        "description": "Taken when no other outcome's condition matched. Emits `MessageExpired`, published to consumers and listed under `published`.",
         "properties": {
           "outcome": {
             "const": "expired",
@@ -3543,10 +3557,18 @@
         "properties": {
           "message_id": {
             "$ref": "#/components/schemas/inbox.messaging.MessageId"
+          },
+          "to": {
+            "$ref": "#/components/schemas/inbox.messaging.Principal"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/inbox.messaging.ThreadId"
           }
         },
         "required": [
-          "message_id"
+          "message_id",
+          "to",
+          "thread"
         ],
         "additionalProperties": false
       },
@@ -4141,10 +4163,28 @@
             "$ref": "#/components/schemas/inbox.messaging.ReplyShape"
           },
           "decision": {
-            "$ref": "#/components/schemas/inbox.messaging.DecisionAsk"
+            "$ref": "#/components/schemas/inbox.messaging.DecisionAsk",
+            "examples": [
+              {
+                "options": [
+                  {
+                    "letter": "A",
+                    "text": "Ship"
+                  },
+                  {
+                    "letter": "B",
+                    "text": "Hold"
+                  }
+                ],
+                "recommended_option": "A"
+              }
+            ]
           },
           "default_on_silence": {
-            "$ref": "#/components/schemas/inbox.messaging.OptionLetter"
+            "$ref": "#/components/schemas/inbox.messaging.OptionLetter",
+            "examples": [
+              "A"
+            ]
           },
           "created": {
             "type": "string",
@@ -4234,7 +4274,7 @@
       },
       "inbox.messaging.PostMessage.decision-without-options.Response": {
         "additionalProperties": false,
-        "description": "Taken when `(kind == decision and not (defined(decision)))` holds of the input.",
+        "description": "A decision names no `decision`, or a `decision` with no option. Taken when `(kind == decision and (not (defined(decision)) or decision.options.count == 0))` holds of the input.",
         "properties": {
           "error": {
             "const": "inbox.messaging.ShapeMismatch",
@@ -4535,7 +4575,7 @@
       },
       "inbox.messaging.PostMessage.unknown-option.Response": {
         "additionalProperties": false,
-        "description": "Decided outside the request: `recommended_option` or `default_on_silence` names no option of the decision, or two options carry one letter.",
+        "description": "`recommended_option` or `default_on_silence` names no option of the decision (an envelope without a decision offers none), or two options carry one letter. Taken when `((defined(default_on_silence) and not (defined(decision))) or (defined(decision) and (not (distinct o in decision.options by o.letter as string) or (defined(decision.recommended_option) and not (exists o in decision.options: (o.letter == decision.recommended_option))) or (defined(default_on_silence) and not (exists o in decision.options: (o.letter == {fact: default_on_silence}))))))` holds of the input.",
         "properties": {
           "error": {
             "const": "inbox.messaging.ShapeMismatch",
@@ -4653,6 +4693,32 @@
           },
           "outcome": {
             "const": "not-recipient",
+            "description": "Which declared outcome the command took."
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error"
+        ],
+        "type": "object"
+      },
+      "inbox.messaging.Refuse.note.Response": {
+        "additionalProperties": false,
+        "description": "A note asks for nothing, so it is not refused either; it is removed by `MarkRead` or `Expire`. Taken when the existing subject's stored fields satisfy `kind == note`.",
+        "properties": {
+          "error": {
+            "const": "inbox.messaging.NotAnswerable",
+            "description": "A note takes no answer.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "note",
             "description": "Which declared outcome the command took."
           },
           "published": {

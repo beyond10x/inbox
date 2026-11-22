@@ -1,10 +1,8 @@
 type: ess-scenario/7
-covers:
-- inbox.messaging.PostMessage/outcome/request-without-shape
 domain: inbox.messaging
 scenario: envelope-must-fit-its-kind
-summary: A request without a reply shape, a decision without options or with a silence option it does
-  not offer, and an envelope that expires no later than its creation are refused and store nothing.
+summary: A request without a reply shape or with a silence option, a decision without options or with
+  a silence option it lacks, and an envelope expiring at its creation are refused; nothing is stored.
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -105,6 +103,62 @@ timeline:
   no_events:
   - inbox.messaging.MessagePosted
 - at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0EK000000000000000006
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: request
+    thread: 01JGT0EK000000000000000006
+    reply_shape:
+      shape: lines
+      value: 1
+    default_on_silence: A
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0EK000000000000000006
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: unknown-option
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:05:00Z'
+  command: inbox.messaging.PostMessage
+  actor: inbox.messaging.Client
+  caller:
+    principal: agent:ws/planner
+    inbox: agent:ws/planner
+  input:
+    message_id: 01JGT0EK000000000000000005
+    from: agent:ws/planner
+    on_behalf_of: agent:ws/planner
+    to: agent:box/worker
+    kind: decision
+    thread: 01JGT0EK000000000000000005
+    decision:
+      options: []
+    created: '2026-01-05T09:00:00Z'
+    expires: '2026-01-06T09:00:00Z'
+    dedup_key: 01JGT0EK000000000000000005
+    body: Build 512 is green.
+    signature:
+      key_id: key-1
+      value: c2lnbmF0dXJl
+  outcome: decision-without-options
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessagePosted
+- at: '2026-01-05T09:06:00Z'
   command: inbox.messaging.PostMessage
   actor: inbox.messaging.Client
   caller:

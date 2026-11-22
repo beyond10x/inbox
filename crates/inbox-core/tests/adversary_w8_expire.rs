@@ -167,8 +167,14 @@ fn expire(backend: &MemoryBackend, id: &str, now: &str) -> (String, Vec<SystemEv
 }
 
 fn expired(id: &str) -> Vec<SystemEvent> {
+    expired_to(id, PLANNER, id)
+}
+
+fn expired_to(id: &str, to: &str, thread: &str) -> Vec<SystemEvent> {
     vec![SystemEvent::MessageExpired(MessageExpired {
         message_id: MessageId(id.to_owned()),
+        to: Principal(to.to_owned()),
+        thread: ThreadId(thread.to_owned()),
     })]
 }
 
@@ -207,6 +213,33 @@ fn decision_taken_on_silence_goes_to_the_sender_not_the_principal_it_spoke_for()
     let (taken, events) = expire(&backend, ID, EXPIRES);
     assert_eq!(taken, "decided-on-silence");
     assert_eq!(events, silence(ID, PLANNER, ID));
+}
+
+#[test]
+fn message_expired_names_the_thread_of_the_message_not_its_id() {
+    let backend = world();
+    Sent {
+        thread: THREAD,
+        ..Sent::note(ID)
+    }
+    .post(&backend);
+    let (taken, events) = expire(&backend, ID, EXPIRES);
+    assert_eq!(taken, "expired");
+    assert_eq!(events, expired_to(ID, PLANNER, THREAD));
+}
+
+#[test]
+fn message_expired_goes_to_the_sender_not_the_principal_it_spoke_for_nor_the_recipient() {
+    let backend = world();
+    Sent {
+        on_behalf_of: OPERATOR,
+        authority: "delegation-7",
+        ..Sent::note(ID)
+    }
+    .post(&backend);
+    let (taken, events) = expire(&backend, ID, EXPIRES);
+    assert_eq!(taken, "expired");
+    assert_eq!(events, expired_to(ID, PLANNER, ID));
 }
 
 #[test]

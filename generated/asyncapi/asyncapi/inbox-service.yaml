@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:43e481f9e63227e5548459a03d98af38ea413fd4d467b90bad25e4c8b1b8b178
+# contract digest slice-sha256/2:c6ad3be561fb25d4e86134e4dd2013ead169a36f3d3b4650abb8fc90d51f263b
 # do not edit: regenerate with `ess generate`
 asyncapi: 3.0.0
 info:
@@ -15,7 +15,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:43e481f9e63227e5548459a03d98af38ea413fd4d467b90bad25e4c8b1b8b178
+    contract_digest: slice-sha256/2:c6ad3be561fb25d4e86134e4dd2013ead169a36f3d3b4650abb8fc90d51f263b
 defaultContentType: application/json
 channels:
   inbox.messaging.DecisionTakenOnSilence:
@@ -161,9 +161,7 @@ operations:
       $ref: '#/channels/inbox.messaging.MessageExpired'
     title: Publish MessageExpired
     summary: Publishes `inbox.messaging.MessageExpired`.
-    description: |-
-      Nothing in this specification reacts to `inbox.messaging.MessageExpired`.
-      `inbox.messaging.Expire` emits it on `expired`, which removes a `inbox.messaging.Message`.
+    description: Nothing in this specification reacts to `inbox.messaging.MessageExpired`.
     messages:
     - $ref: '#/channels/inbox.messaging.MessageExpired/messages/inbox.messaging.MessageExpired'
   send.inbox.messaging.MessageHandled:
@@ -352,8 +350,14 @@ components:
       properties:
         message_id:
           $ref: '#/components/schemas/type.inbox.messaging.MessageId'
+        to:
+          $ref: '#/components/schemas/type.inbox.messaging.Principal'
+        thread:
+          $ref: '#/components/schemas/type.inbox.messaging.ThreadId'
       required:
       - message_id
+      - to
+      - thread
       additionalProperties: false
     event.inbox.messaging.MessageHandled:
       title: MessageHandled payload

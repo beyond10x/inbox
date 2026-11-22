@@ -122,7 +122,7 @@ impl TryContext for Panics {
         Ok(None)
     }
 
-    /// The `from` of `Post::note`, so the post passes `not-sender` and reaches `unknown_option`.
+    /// The `from` of `Post::note`, so the post passes `not-sender` and reaches `signature_invalid`.
     fn try_caller_principal(&self) -> Result<Option<Principal>, UnmetObligation> {
         Ok(Some(Principal("agent:ws/planner".to_owned())))
     }
@@ -137,12 +137,8 @@ impl TryContext for Panics {
 }
 
 impl PostExternals for Panics {
-    fn unknown_option(&mut self, _input: &PostMessage) -> bool {
-        panic!("a command panics inside the section")
-    }
-
     fn signature_invalid(&mut self, _input: &PostMessage) -> bool {
-        false
+        panic!("a command panics inside the section")
     }
 
     fn authority_invalid(&mut self, _input: &PostMessage) -> bool {

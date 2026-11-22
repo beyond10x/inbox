@@ -184,10 +184,6 @@ impl TryContext for PanicsOnShape {
 }
 
 impl PostExternals for PanicsOnShape {
-    fn unknown_option(&mut self, _input: &PostMessage) -> bool {
-        false
-    }
-
     fn signature_invalid(&mut self, _input: &PostMessage) -> bool {
         false
     }
@@ -252,8 +248,8 @@ fn an_answer_that_panics_leaves_the_message_open_and_the_next_answer_settles_it(
     );
 }
 
-/// A context whose `unknown-option` question reads a view through the entry over the same store:
-/// a verifier or harness that consults the service while a post runs.
+/// A context whose `signature-invalid` question reads a view through the entry over the same
+/// store: a verifier or harness that consults the service while a post runs.
 struct AsksTheEntry {
     inner: ServiceContext<Accepting, MemoryBackend>,
     backend: MemoryBackend,
@@ -278,14 +274,10 @@ impl TryContext for AsksTheEntry {
 }
 
 impl PostExternals for AsksTheEntry {
-    fn unknown_option(&mut self, input: &PostMessage) -> bool {
+    fn signature_invalid(&mut self, input: &PostMessage) -> bool {
         let context =
             ServiceContext::new(caller("agent:ws/reader"), Accepting, self.backend.clone());
         let _ = client(&self.backend, context, "inbox.messaging.Inboxes", "{}");
-        self.inner.unknown_option(input)
-    }
-
-    fn signature_invalid(&mut self, input: &PostMessage) -> bool {
         self.inner.signature_invalid(input)
     }
 

@@ -35,10 +35,28 @@
       "$ref": "#/$defs/inbox.messaging.ReplyShape"
     },
     "decision": {
-      "$ref": "#/$defs/inbox.messaging.DecisionAsk"
+      "$ref": "#/$defs/inbox.messaging.DecisionAsk",
+      "examples": [
+        {
+          "options": [
+            {
+              "letter": "A",
+              "text": "Ship"
+            },
+            {
+              "letter": "B",
+              "text": "Hold"
+            }
+          ],
+          "recommended_option": "A"
+        }
+      ]
     },
     "default_on_silence": {
-      "$ref": "#/$defs/inbox.messaging.OptionLetter"
+      "$ref": "#/$defs/inbox.messaging.OptionLetter",
+      "examples": [
+        "A"
+      ]
     },
     "created": {
       "type": "string",
@@ -76,7 +94,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:f519037e4091590d55dcf46aaf2b0081b82ca343aa4bbde8416fca2996d5cc87",
+    "contract_digest": "slice-sha256/2:5144f9fd22e3c162700ad29937e5c869bc23f41a2e0f94628bee1f518bbc00f2",
     "regenerate": "ess generate"
   },
   "$defs": {

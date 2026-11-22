@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest b2752e02fb814efe015dd697c394e9b35780af59421c2491cff5e6943b6603b5
+// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! How the specification's primitives are spelled in this workspace.

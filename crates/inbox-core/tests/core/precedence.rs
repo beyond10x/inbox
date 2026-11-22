@@ -1,6 +1,7 @@
 //! The selection order of `PostMessage` where two of its refusals hold at once, as the ESS 0.96.0
-//! interpreter and synthesizer answer it: the input-guarded refusals first, then the 3 externals
-//! before any row is read, then the row refusals.
+//! interpreter and synthesizer answer it: the input-guarded refusals first, then `unknown-option`
+//! (an input guard since ESS 0.97.1) and the 2 externals before any row is read, then the row
+//! refusals.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};

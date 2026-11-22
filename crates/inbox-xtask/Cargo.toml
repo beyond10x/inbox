@@ -1,6 +1,6 @@
 [package]
 name = "inbox-xtask"
-description = "Repository tasks of the inbox: synthesize generated/rust from ess/ and hold it to a fresh synthesis."
+description = "Repository tasks of the inbox: synthesize generated/rust from ess/ and hold it to a fresh synthesis, check the authored scenarios and their manifest, write the landing page's animation data, and hold the end-user pages to their words."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,9 @@ publish.workspace = true
 
 [dependencies]
 clap = { workspace = true }
+regex = "1.12"
+serde_json = "1.0"
+yaml-rust2 = { version = "0.13", default-features = false }
 
 [lints]
 workspace = true

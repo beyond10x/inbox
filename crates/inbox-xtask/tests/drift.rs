@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use inbox_xtask::{Difference, GENERATED, differences, drift, generate, repository_root};
 
+mod tools;
+
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     if dir.exists() {

@@ -258,11 +258,18 @@ fn post_kind(backend: &MemoryBackend, n: u32, kind: &str, to: &str, key: &str) -
 }
 
 /// A refused message lives until its sender collects the reason, and holds its key until then.
+/// The message is a decision: a note is not refused.
 #[test]
 fn adv_w7_a_refused_message_holds_its_key_until_the_sender_collects_it() {
     let backend = world();
     assert_eq!(
-        outcome(&post(&backend, 1, WORKER, WORKER, THIRD, KEY)),
+        outcome(&post_kind(
+            &backend,
+            1,
+            "decision",
+            THIRD,
+            &format!("\"{KEY}\"")
+        )),
         "posted"
     );
     let refused = as_client(

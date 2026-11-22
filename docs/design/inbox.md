@@ -43,6 +43,15 @@ The envelope: `message_id`, `from`, `on_behalf_of`, `authority`, `to`, `kind`
 (`note`, `request`, `decision`), `thread`, `reply_shape`, `decision` (lettered options, a
 recommended one), `default_on_silence`, `created`, `expires`, `dedup_key`, `body`, `signature`.
 
+A request names a `reply_shape` (`request-without-shape`). A decision names a `decision` with at
+least one option: a decision without one, or with an empty `options` list, is refused
+`decision-without-options` (`ShapeMismatch`). The letters of the options are distinct, and
+`recommended_option` and `default_on_silence` each name one of them; an envelope without a
+decision offers no option, so a `default_on_silence` on it is refused too (`unknown-option`,
+`ShapeMismatch`). A reply to a decision names one of its options, a reply to a request names
+none, and its body fits the request's `reply_shape`; else `Answer` refuses it `shape-mismatch`
+(`ShapeMismatch`), an external outcome (see "What the specification cannot say").
+
 Nine commands: `OpenInbox`, `CloseInbox`, `PostMessage`, `MarkDelivered`, `MarkRead`, `Answer`,
 `Refuse`, `Collect`, and `Expire`, which only the service's expiry task sends.
 
@@ -60,6 +69,12 @@ When a message is removed:
 |---|---|
 | note | `MarkRead` by the owner of the inbox, or `Expire` |
 | request, decision | `Collect` by the sender after it is answered or refused, or `Expire` |
+
+A note asks for nothing: `Answer` and `Refuse` of a note are refused `note` (`NotAnswerable`)
+and leave it as it was, so a note is never collected.
+
+`Expire` that removes a message publishes `MessageExpired` with the message id, the sender (`to`)
+and the thread, as `MessageAnswered`, `MessageRefused` and `DecisionTakenOnSilence` name them.
 
 A decision that names `default_on_silence` and is not answered at `expires` is answered by
 silence with that option (`answered_by: silence`) and waits for the sender until `keep_until`.
@@ -132,12 +147,13 @@ Each can be changed; the alternative is named where there is one.
 
 Where several refusals of a post hold, the post is answered with the first of: the input-guarded
 refusals in declaration order (`not-sender`, `no-authority`, `already-expired`,
-`request-without-shape`, `decision-without-options`); then the 3 external refusals
-(`unknown-option`, `signature-invalid`, `authority-invalid`), decided before any row is read; then
+`request-without-shape`, `decision-without-options`, `unknown-option`); then the 2 external
+refusals (`signature-invalid`, `authority-invalid`), decided before any row is read; then
 the row refusals in the order measured on the ESS 0.97.1 interpreted target: `unknown-inbox`,
 `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken` (`unknown-inbox` and `inbox-closed` never
 hold together, and `id-taken` holds with every `duplicate`). The suite holds the pairs: each
-external refusal and `request-without-shape` against each of the 5 row refusals, and each pair of
+external refusal, `unknown-option` and `request-without-shape` against each of the 5 row
+refusals, and each pair of
 row refusals one post can make hold, in the authored scenarios
 `a-bad-signature-is-refused-before-any-row-is-read`,
 `an-unknown-option-is-refused-before-any-row-is-read`,
@@ -153,10 +169,10 @@ suite (story:post-order-scenarios-hold-the-input-guards, a draft). The case
 refuses a scenario that expects a row refusal where an input guard holds (`ESS-AUTHOR-041`); that
 checks the scenario and no implementation. A conformance step forces one external outcome, and
 synthesis refuses a step that expects an external refusal while an input guard holds, so 2 orders
-are held by the cases of the core and not by the suite: the order among the 3 external refusals
-(`crates/inbox-core/tests/core/precedence.rs`, `crates/inbox-core/tests/adversary_w8_order.rs`),
-and an input-guarded refusal before an external one
-(`an_input_refusal_answers_before_an_external_refusal` of `precedence.rs`). The contract text of `PostMessage` in `generated/rust/inbox/PLAN.md` (line 117)
+are held by the cases of the core and not by the suite: `unknown-option` before the 2 external
+refusals and the order between them (`crates/inbox-core/tests/core/precedence.rs`,
+`crates/inbox-core/tests/adversary_w8_order.rs`), and the other input-guarded refusals before an
+external one (`an_input_refusal_answers_before_an_external_refusal` of `precedence.rs`). The contract text of `PostMessage` in `generated/rust/inbox/PLAN.md` (line 117)
 states another order: "Selection precedence: on commands with `when_related:`, check
 `existing_instance` then `exists: false` before input-guarded refusals; … then accepting and
 external branches in declaration order", which puts `unknown-inbox` before the input-guarded
@@ -166,8 +182,22 @@ interpreter, which the suite runs against.
 ## What the specification cannot say (ESS 0.97.1)
 
 Each item is a rule of the service that stage 2 implements and tests outside the suite, or a
-limit of synthesis that an authored scenario makes up for. Only the item on `from` is filed in
-the `ess` repository (beyond10x/ess#804).
+limit of synthesis that an authored scenario makes up for. The items on `from` and on the 2
+examples of `PostMessage` are filed in the `ess` repository (beyond10x/ess#804, beyond10x/ess
+issue 809).
+
+`ess/` holds no `UNMAPPED:` marker, and `task spec` fails with the file and line of one. A rule
+the specification cannot express is an `external:` outcome that states its reason, and is listed
+here. The `external:` outcomes on ESS 0.97.1: `signature-invalid` and `authority-invalid` of
+`PostMessage` and of `Answer` (a guard cannot verify a signature or resolve a delegation of the
+key file; a delegation spelled as a provided entity loses 51 generated scenarios), and
+`shape-mismatch` of `Answer`. Its reply-shape part (at most so many lines, or a JSON text) was
+not tried as a guard. Its option part has one: a `when_subject` outcome `option-mismatch` with
+`exists` over the stored `decision.options`, which ESS 0.97.1 validates, synthesizes and
+interprets (112 scenarios, all passed). With it, `ess generate synthesize --target rust` keeps
+all of `Answer` an obligation (85 of 88 capabilities generated, 3 obligations) and drops the
+port through which the service answers the external branches of `Answer`, so the option part
+stays in the external branch until synthesis generates that guard.
 
 - **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
   answered to the owner of the inbox in `to` or to the sender in `from`.
@@ -182,16 +212,20 @@ the `ess` repository (beyond10x/ess#804).
 - **No step bounds the number of occurrences of an event.** A claim of an event holds it at
   least once. The cases of `crates/inbox-core/tests/expire_once.rs` compare the whole list of
   events `Expire` hands back, so a core that publishes one twice fails them and not the suite.
-- **A value is not testable against the elements of an input list.** "The letters name options
-  of the decision" is the external refusal `unknown-option`.
-- **`{subject: <field>}` is refused beside `deletes:`**, so `MessageExpired` carries the id alone
-  and not the sender and the thread. The refusal text names `creates:`.
 - **`instance: caller.<attribute>` is not available**, so `OpenInbox` takes the address as input
   and refuses one that is not the caller's.
 - **Synthesis arranges no caller for a guard over a stored field** that was not set from the
   caller, no second row for a row-set guard over the entity a command creates (the `dedup_key`
   rule), and only notes once an input guard depends on `kind`. 51 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
+- **Synthesis ignores a newtype's invariant in a candidate for an `Optional` of it**
+  (beyond10x/ess issue 809). Under the guard `unknown-option` it then finds no decision whose
+  letters it accepts, refuses `posted` (`ESS-SYNTH-003`), and 54 generated scenarios leave the
+  suite. The inputs `decision` and `default_on_silence` of `PostMessage` carry an `example:`
+  each until the issue is fixed. With them synthesis takes about 4 times as long (CPU time of
+  `task coverage`'s synthesis on a loaded host: 10 s on `8e9c3ab`, 43 s with this
+  specification; the clause on a `default_on_silence` without a decision adds 10 to 20 s of
+  it).
 - **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
   suite (measured on ESS 0.96.0). The input `from` of `PostMessage` carries
@@ -209,9 +243,9 @@ the `ess` repository (beyond10x/ess#804).
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 111 scenarios (38 authored) and refuses 93,
+- **`task coverage` on ESS 0.97.1**: synthesis writes 112 scenarios (38 authored) and refuses 93,
   and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 111 passed and reports `conformance_status: passed`.
+  runs on the interpreted target as 112 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 
@@ -240,7 +274,8 @@ The plan is in `.engineering/planning/`: one epic per stage 2 to 6 and draft sto
 Stage 2 starts from what ESS synthesizes. `ess generate synthesize --target rust --layout crate`
 on ESS 0.97.1 writes 86 of 88 capabilities: the model types, the behaviour of 7 commands, the
 query of 9 views, the storage and context ports, and an HTTP route table with JSON codecs. It
-leaves 2 obligations, the behaviours of `PostMessage` (the row-set guard `duplicate-key`) and
+leaves 2 obligations, the behaviours of `PostMessage` (the `distinct` over the options in the
+guard `unknown-option`, and the row-set guards `duplicate` and `duplicate-key`) and
 `Expire` (a narrowed read of `default_on_silence`). The generated storage ports (`get`, `put`,
 `delete`, `list` per entity) are the backend contract. The generated HTTP surface has no
 concurrency and no authentication by decision; the service adds both.

@@ -115,37 +115,52 @@ fn a_read_note_and_an_expired_unanswered_request_are_in_no_view() {
     let world = World::new(root(), "gone", &["--sweep-interval", "1"]);
     world.client("bob", &["open"]).ok();
 
-    // A request that expires in 1 to 2 s, read by bob and not answered.
-    let now = Instant::from_system_time(SystemTime::now());
-    let expires_at = now.plus_seconds(2).unix_seconds();
-    let expires = format_instant(Instant::from_unix(expires_at, 0));
-    let request = world
-        .client(
-            "alice",
-            &[
-                "post",
-                "--to",
-                BOB,
-                "--kind",
-                "request",
-                "--reply-shape",
-                "free",
-                "--body",
-                "Answer before it expires",
-                "--expires",
-                &expires,
-            ],
-        )
-        .ok()
-        .stdout
-        .trim()
-        .to_owned();
-    world.client("bob", &["read", &request]).ok();
-    assert_eq!(
-        views_holding(&world, &request),
-        ["Outbox", "Thread"],
-        "a request read and not answered is in its sender's Outbox and in its thread"
-    );
+    // A request with a short life, read by bob and not answered. The views are read by 4 client
+    // processes; on a loaded host they can take longer than the request lives, and a view read
+    // after `expires` no longer holds it (2026-11-22: `Thread` was read after a life of 2 s,
+    // host load about 100). So the claim is made only for views read before `expires`; a round
+    // that was too slow is repeated with a longer life.
+    let mut held = None;
+    for life in [2, 8, 30] {
+        let now = Instant::from_system_time(SystemTime::now());
+        let expires_at = now.plus_seconds(life).unix_seconds();
+        let expires = format_instant(Instant::from_unix(expires_at, 0));
+        let request = world
+            .client(
+                "alice",
+                &[
+                    "post",
+                    "--to",
+                    BOB,
+                    "--kind",
+                    "request",
+                    "--reply-shape",
+                    "free",
+                    "--body",
+                    "Answer before it expires",
+                    "--expires",
+                    &expires,
+                ],
+            )
+            .ok()
+            .stdout
+            .trim()
+            .to_owned();
+        world.client("bob", &["read", &request]).ok();
+        let views = views_holding(&world, &request);
+        let read_at = Instant::from_system_time(SystemTime::now()).unix_seconds();
+        if read_at < expires_at {
+            assert_eq!(
+                views,
+                ["Outbox", "Thread"],
+                "a request read and not answered is in its sender's Outbox and in its thread"
+            );
+            held = Some((request, expires_at, expires));
+            break;
+        }
+    }
+    let (request, expires_at, expires) =
+        held.expect("the views of a request were read within its life of 30 s");
 
     // A note, read by bob: handled, and removed.
     let note = world

@@ -40,8 +40,8 @@ covers:
 - inbox.messaging.ThreadId/invariant/at/inbox.messaging.Settled/thread
 domain: inbox.messaging
 scenario: decision-answered-by-the-operator
-summary: The operator answers a decision with option A before `expires`. Every view that holds the message
-  shows the reply, its option, and that a principal answered, not silence.
+summary: A reply naming no option, or a letter no option has, is refused. The operator answers the decision
+  with option A before `expires`; every view that holds it shows the reply, its option, who answered.
 timeline:
 - at: '2026-01-05T09:00:00Z'
   command: inbox.messaging.OpenInbox
@@ -102,6 +102,51 @@ timeline:
     inbox: human:operator
   input:
     in_reply_to: 01JGT0DC000000000000000001
+    reply_id: 01JGT0DC000000000000000004
+    from: human:operator
+    on_behalf_of: human:operator
+    created: '2026-01-05T09:09:00Z'
+    expires: '2026-01-05T10:59:00Z'
+    option: C
+    body: C. Wait.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: shape-mismatch
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:03:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    in_reply_to: 01JGT0DC000000000000000001
+    reply_id: 01JGT0DC000000000000000005
+    from: human:operator
+    on_behalf_of: human:operator
+    created: '2026-01-05T09:09:00Z'
+    expires: '2026-01-05T10:59:00Z'
+    body: No letter.
+    signature:
+      key_id: key-2
+      value: c2lnbmF0dXJl
+  outcome: shape-mismatch
+  error:
+    name: inbox.messaging.ShapeMismatch
+  no_events:
+  - inbox.messaging.MessageAnswered
+- at: '2026-01-05T09:04:00Z'
+  command: inbox.messaging.Answer
+  actor: inbox.messaging.Client
+  caller:
+    principal: human:operator
+    inbox: human:operator
+  input:
+    in_reply_to: 01JGT0DC000000000000000001
     reply_id: 01JGT0DC000000000000000002
     from: human:operator
     on_behalf_of: human:operator
@@ -120,7 +165,7 @@ timeline:
       reply_id: 01JGT0DC000000000000000002
       to: agent:ws/planner
       thread: 01JGT0DC000000000000000009
-- at: '2026-01-05T09:03:00Z'
+- at: '2026-01-05T09:05:00Z'
   command: inbox.messaging.Answer
   actor: inbox.messaging.Client
   caller:
@@ -143,7 +188,7 @@ timeline:
     name: inbox.messaging.AlreadySettled
   no_events:
   - inbox.messaging.MessageAnswered
-- at: '2026-01-05T09:04:00Z'
+- at: '2026-01-05T09:06:00Z'
   command: inbox.messaging.Refuse
   actor: inbox.messaging.Client
   caller:
