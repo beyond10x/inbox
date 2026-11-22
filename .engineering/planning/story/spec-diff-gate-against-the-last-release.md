@@ -4,7 +4,7 @@ id: story:spec-diff-gate-against-the-last-release
 kind: story
 status: draft
 title: The gate rates the specification against the last release
-revision: 1
+revision: 2
 ---
 ## Outcome
 
@@ -20,7 +20,7 @@ ESS 0.97.1 (`ess verify diff --fail-on breaking-or-unknown`):
 - a copy with one planted change: exit 4, the change named;
 - release 0.2.0 against the specification after the stories
   `no-unmapped-rule-in-the-specification` and
-  `the-specification-follows-the-design-on-notes-and-options`: 12 changes, 7 rated `unknown`
+  `the-specification-follows-the-design-on-notes-and-options`: 12 changes, 8 rated `unknown`
   (3 on `Expire/expired`, 2 outcome conditions of `PostMessage`, the added outcome
   `Refuse/note`, the 2 added fields of `MessageExpired` counted as 2), exit 4.
 
