@@ -1,6 +1,6 @@
 # Releasing the inbox
 
-A release is a bare version tag (`0.2.0`), annotated and written by the organization bot, on a
+A release is a bare version tag (`0.3.0`), annotated and written by the organization bot, on a
 `main` commit whose `task check` and 3 pushed checks are green, and a GitHub Release made from
 that tag. The tag is the workspace version, `[workspace.package] version` in `Cargo.toml`; the
 release workflow fails on a tag that differs.

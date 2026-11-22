@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
 ### Added
 
 - The landing page of the documentation site has an animated figure of one message going
@@ -66,7 +68,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   is the POSIX shell script `tools/gate-paths.sh`, with the same 12 cases; the release
   workflow reads the workspace version with `cargo metadata` and `jq`. The scenario files,
   the manifest and `website/src/generated/animation.json` are unchanged.
-- The text of the landing page states release 0.2.0 and its 2 open security findings. It said
+- The text of the landing page states the release and its 2 open security findings. It said
   that no program and no client exist.
 - The documentation site is written for a user of the tool. "What works" is now "Features":
   what is available with its command, the defaults of `inbox serve` with their flags, what is

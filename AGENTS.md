@@ -10,6 +10,9 @@ delivered, and waves 6 to 8, added after them: wave 6 delivered 2 of its 3 stori
 delivered story:dedup-key-scope and story:post-does-not-tell-a-message-id-exists on ESS 0.97.1,
 and wave 8 delivered 6 stories filed from findings of the adversary passes.
 Release 0.1.0 is the state of `main` after wave 3, release 0.2.0 the state after wave 8.
+Release 0.3.0 is the state of `main` on 2026-11-22 after the changes its `CHANGELOG.md` section
+lists: the landing figure and the 3 reference pages of the site, the test step that enforces
+its budget, a specification without an `UNMAPPED` marker, no Python, and ESS 0.97.3.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
