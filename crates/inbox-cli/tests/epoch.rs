@@ -3,7 +3,7 @@
 //! and `inbox repost` posts again only the envelopes posted to an earlier start of the service, or
 //! recorded at none. Every key is made at run time with the binary itself.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T11:59:11Z",
+  "actor": "agent:inbox",
+  "artifact": "story:test-step-enforces-its-budget",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (exit 0, 76 s; task test: 524 passed, 33 s of its bound of 120 s); a planted case that sleeps 90 s killed at 60.004 s, task test failed after 68 s"
+  }
+}

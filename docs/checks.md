@@ -7,7 +7,7 @@ none of this: they list features and limits ([features](https://beyond10x.github
 ## On `main`
 
 Numbers from 2026-11-22, ESS 0.97.1, Rust 1.99.1. Case counts are the passed cases of
-`cargo test --workspace` in one run of `task check`.
+`task test` (cargo-nextest) in one run of `task check`.
 
 | Part | What it does | Number | Proof |
 |---|---|---|---|
@@ -18,14 +18,14 @@ Numbers from 2026-11-22, ESS 0.97.1, Rust 1.99.1. Case counts are the passed cas
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
 | The HTTP listener | A library: request signatures, the read rule, the wait on `Pending`, the expiry task, the limits; loopback only | 60 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 83 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 86 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 112 scenarios: 112 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 112 scenarios: 112 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
 | The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 112 scenarios: 31 passed, 0 failed, 0 error, 81 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](../crates/inbox-conformance/unsupported.tsv), `task conform` |
 | Acceptance | 3 checks against the built binary: a signed request and its reply between 2 keys; a read note and an expired request in no view; a repost after a restart, and a second repost that posts nothing | 3 passed | [`tests/acceptance/`](../tests/acceptance), `task acceptance` |
 | The conformance runner | Reads the suite, runs it against both targets, holds each report | 79 cases, 1 ignored | [`crates/inbox-conformance/`](../crates/inbox-conformance) |
 | Declared coverage | Every refusal of the specification is claimed by an authored scenario; `task check` fails on one that is not | 93 refused generated scenarios, 93 covered; the suite reports `conformance_status: passed` on the interpreted target | `task coverage` |
-| Repository tasks | The drift check of the generated crate | 35 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
+| Repository tasks | The drift check of the generated crate | 74 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
 
 ## What wave 8 added
 

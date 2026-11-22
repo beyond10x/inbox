@@ -1,6 +1,6 @@
 //! The cases story:signature-verifier owes beside its acceptance statement.
 
-mod common;
+use crate::common;
 
 use common::{
     AGENT, HUMAN, LATER, NOW, OTHER, answer, generate, instant, key_entry, key_file_text, now,

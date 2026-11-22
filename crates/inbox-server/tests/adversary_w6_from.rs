@@ -2,7 +2,7 @@
 //! is not the caller is answered `403` `not-sender`, stores nothing, takes no id or key, and
 //! answers alike whatever the store holds. Every key is created when the test runs.
 
-mod support;
+use crate::support;
 
 use std::sync::Arc;
 

@@ -1,6 +1,6 @@
 //! Adversary, pass 2: cases against the correction of pass 1. Every key is created at run time.
 
-mod common;
+use crate::common;
 
 use common::{AGENT, LATER, generate, instant, now, ring, signed_key_entry};
 use inbox::messaging::{KeyFile, Principal};

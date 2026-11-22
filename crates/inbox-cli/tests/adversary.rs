@@ -1,7 +1,7 @@
 //! Adversary cases of story:cli-client (stage 2, wave 4, pass 1). Every key is made at run time
 //! with the binary itself; no assertion message prints a secret key file's content.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

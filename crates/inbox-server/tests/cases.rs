@@ -1,7 +1,7 @@
 //! The cases story:http-service owes beside its acceptance: authentication, the duplicate-member
 //! refusal, the read rule, the wait, the expiry task, each limit, concurrency and binding.
 
-mod support;
+use crate::support;
 
 use std::net::SocketAddr;
 use std::sync::mpsc;

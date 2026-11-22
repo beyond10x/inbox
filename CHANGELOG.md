@@ -39,6 +39,14 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ### Changed
 
+- The test step of the gate enforces its budget. `task test`, in `task check`, runs the cases
+  with cargo-nextest (0.9.143, pinned in the CI job with its SHA-256): a case that runs 60 s is
+  killed and fails, a run over 120 s is ended and fails (`tools/test-step.sh`), and the step
+  prints its 10 slowest cases. `task acceptance` runs its 3 checks with the same runner. Each
+  package has one integration-test binary (`tests/main.rs`, the case files as modules) and test
+  builds carry no debug information (`.cargo/config.toml`): 18 test binaries where there were
+  63, `target/debug/deps` 337 MB where it was 882 MB. The stand-in service of the client's
+  cases waits at most 10 s for a connection.
 - The CI job `inbox / task check` ends green without installing a tool when a pull request
   or a push changes only planning or prose files: paths under `.engineering/`, and `*.md`
   files outside `website/` and `generated/` other than `README.md`. `tools/gate-paths.sh`

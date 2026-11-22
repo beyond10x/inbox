@@ -2,12 +2,16 @@
 format: aep.planning-md/3
 id: story:test-step-enforces-its-budget
 kind: story
-status: draft
+status: implemented
 title: The test step kills a test at 60 s and fails over 120 s
 summary: 'cargo test in task check has no bound per test: a case that waits on a silent peer stood 38 minutes in a changed copy and held a build slot.'
 tags:
 - budget
-revision: 3
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T11:19:07Z", actor: "agent:inbox", revision: 4}
+- {from: "proposed", to: "active", at: "2026-11-22T11:19:07Z", actor: "agent:inbox", revision: 5}
+- {from: "active", to: "implemented", at: "2026-11-22T11:59:11Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

@@ -412,10 +412,48 @@ pub fn ids(value: &Value) -> Vec<String> {
 }
 
 /// A stand-in for the service on 127.0.0.1:0 that reads one request in full and answers it with
-/// the status `status` and the body `body`; answers its URL. The thread ends after one request.
+/// the status `status` and the body `body`; answers its URL. The thread ends after one request,
+/// or fails as [`stand_in_answers`] fails when no connection comes.
 pub fn stand_in(status: u16, body: &'static str) -> (String, std::thread::JoinHandle<()>) {
     let (url, handle) = stand_in_answers(vec![(status, None, body)]);
-    (url, std::thread::spawn(move || drop(handle.join())))
+    let handle = std::thread::spawn(move || {
+        if let Err(panic) = handle.join() {
+            std::panic::resume_unwind(panic);
+        }
+    });
+    (url, handle)
+}
+
+/// How long a stand-in waits for each connection: a case whose client never connects fails
+/// within seconds, naming the answer that was not asked for, and does not wait forever.
+const STAND_IN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The next connection on `listener`, or `None` when none comes within `wait`.
+fn accept_within(
+    listener: &std::net::TcpListener,
+    wait: std::time::Duration,
+) -> Option<std::net::TcpStream> {
+    listener
+        .set_nonblocking(true)
+        .expect("the stand-in's listener does not block");
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                stream
+                    .set_nonblocking(false)
+                    .expect("the stand-in's connection blocks");
+                return Some(stream);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if std::time::Instant::now() >= deadline {
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(error) => panic!("the stand-in's listener failed: {error}"),
+        }
+    }
 }
 
 /// Reads one request in full from `stream`: the head, then as many bytes as `Content-Length`
@@ -451,18 +489,33 @@ fn read_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
 /// A stand-in for the service on 127.0.0.1:0 that answers one request after another, one per
 /// connection, with the answers in `answers` in turn: the status, the value of an `Inbox-Epoch`
 /// header (none when `None`) and the body. Answers its URL; the thread ends after the last answer
-/// and hands back the request line of each request it read.
+/// and hands back the request line of each request it read. When no connection comes for an
+/// answer within 10 s the thread fails with a message naming that answer, so joining it fails.
 pub fn stand_in_answers(
     answers: Vec<(u16, Option<String>, &'static str)>,
+) -> (String, std::thread::JoinHandle<Vec<String>>) {
+    stand_in_answers_within(answers, STAND_IN_WAIT)
+}
+
+/// [`stand_in_answers`] with the wait for each connection given: the case that holds the bound
+/// passes 1 s, so it does not cost the gate the 10 s every other case allows.
+pub fn stand_in_answers_within(
+    answers: Vec<(u16, Option<String>, &'static str)>,
+    wait: std::time::Duration,
 ) -> (String, std::thread::JoinHandle<Vec<String>>) {
     use std::io::Write;
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
         let mut requests = Vec::new();
-        for (status, epoch, body) in answers {
-            let Ok((mut stream, _)) = listener.accept() else {
-                break;
+        let total = answers.len();
+        for (at, (status, epoch, body)) in answers.into_iter().enumerate() {
+            let Some(mut stream) = accept_within(&listener, wait) else {
+                panic!(
+                    "the stand-in received no connection for answer {} of {total} within {} s",
+                    at + 1,
+                    wait.as_secs()
+                );
             };
             let received = read_request(&mut stream);
             requests.push(

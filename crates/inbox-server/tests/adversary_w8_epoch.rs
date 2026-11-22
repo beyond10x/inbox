@@ -1,7 +1,7 @@
 //! Adversary cases of story:repost-does-not-redeliver-a-handled-note (stage 2, wave 8, pass 1):
 //! the `Inbox-Epoch` header the listener writes. No key material is written into this file.
 
-mod support;
+use crate::support;
 
 use support::World;
 

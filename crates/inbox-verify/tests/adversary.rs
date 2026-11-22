@@ -1,6 +1,6 @@
 //! Adversarial cases for story:signature-verifier. Every key is created at run time.
 
-mod common;
+use crate::common;
 
 use common::{
     AGENT, LATER, OTHER, answer, generate, key_entry, key_file_text, now, post, ring,

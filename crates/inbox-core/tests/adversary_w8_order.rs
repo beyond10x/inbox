@@ -11,11 +11,7 @@ use inbox::messaging::{Address, DelegationId, Principal};
 use inbox::server::json;
 use inbox_core::{CallerAttributes, Envelope, MemoryBackend, ServiceContext, SignatureVerifier};
 
-#[allow(dead_code)]
-#[path = "core/support.rs"]
-mod support;
-
-use support::{KeyIdVerifier, Post, World, open_worker, outcome, post};
+use crate::support::{KeyIdVerifier, Post, World, open_worker, outcome, post};
 
 const SECOND: &str = "01JGT0W8000000000000000002";
 

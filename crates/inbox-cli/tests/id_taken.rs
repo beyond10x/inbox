@@ -4,7 +4,7 @@
 //! one the generated server sends for the outcome; the client changes nothing for it. Every key is
 //! made at run time.
 
-mod support;
+use crate::support;
 
 use std::fs;
 

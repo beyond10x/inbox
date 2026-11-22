@@ -2,7 +2,7 @@
 //! Each case names the document sentence it drives the service with. Every key is created when
 //! the test runs.
 
-mod support;
+use crate::support;
 
 use inbox::messaging::{DedupKey, MessageId};
 use support::{AGENT, OTHER, THIRD, World, encoded, ulid};

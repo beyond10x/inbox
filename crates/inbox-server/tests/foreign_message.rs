@@ -4,7 +4,7 @@
 //! nothing; the sender and the recipient get what they got before. Every key is created when the
 //! test runs.
 
-mod support;
+use crate::support;
 
 use std::net::SocketAddr;
 

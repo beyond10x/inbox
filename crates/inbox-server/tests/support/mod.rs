@@ -291,10 +291,14 @@ pub fn send_raw_answer(
     headers: &[(&str, String)],
     body: &[u8],
 ) -> (String, Reply) {
-    let mut stream = TcpStream::connect(address).expect("the service accepts");
+    let mut stream = TcpStream::connect_timeout(&address, ANSWER_WAIT)
+        .unwrap_or_else(|error| panic!("the service accepted no connection: {error}"));
     stream
-        .set_read_timeout(Some(Duration::from_secs(20)))
+        .set_read_timeout(Some(ANSWER_WAIT))
         .expect("a read timeout");
+    stream
+        .set_write_timeout(Some(ANSWER_WAIT))
+        .expect("a write timeout");
     let mut head = format!(
         "{method} {target} HTTP/1.1\r\nHost: {address}\r\nContent-Length: {}\r\n",
         body.len()
@@ -323,10 +327,25 @@ pub fn header(head: &str, name: &str) -> Vec<String> {
         .collect()
 }
 
-/// Reads the whole answer: its head, and the answer as [`read_reply`] reads it.
+/// How long the client of these tests waits for a connection, for a write and for each read of
+/// an answer: a service that sends nothing fails the case within seconds, with a message.
+pub const ANSWER_WAIT: Duration = Duration::from_secs(20);
+
+/// Reads the whole answer: its head, and the answer as [`read_reply`] reads it. A stream with no
+/// read timeout of its own gets [`ANSWER_WAIT`].
 pub fn read_answer(mut stream: TcpStream) -> (String, Reply) {
+    if stream.read_timeout().ok().flatten().is_none() {
+        stream
+            .set_read_timeout(Some(ANSWER_WAIT))
+            .expect("a read timeout");
+    }
     let mut answer = Vec::new();
-    stream.read_to_end(&mut answer).expect("the answer is read");
+    stream.read_to_end(&mut answer).unwrap_or_else(|error| {
+        panic!(
+            "the service sent no whole answer within {} s of a read: {error}",
+            ANSWER_WAIT.as_secs()
+        )
+    });
     let answer = String::from_utf8(answer).expect("the answer is UTF-8");
     let (head, body) = answer.split_once("\r\n\r\n").expect("a head and a body");
     let status = head

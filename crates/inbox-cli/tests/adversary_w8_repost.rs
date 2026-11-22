@@ -2,7 +2,7 @@
 //! `inbox repost` against the epochs file beside the outbox file and the `Inbox-Epoch` header.
 //! Every key is made at run time with the binary itself.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::io::{Read, Write};

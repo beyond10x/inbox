@@ -4,7 +4,7 @@
 //! its thread is never joined and each case waits on it with a bound, so a changed client that
 //! sends fewer requests fails the case instead of hanging it.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::io::{Read, Write};

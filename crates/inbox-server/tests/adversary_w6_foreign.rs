@@ -2,7 +2,7 @@
 //! Each case is red on the tree it was written against and names what it shows. Every key is
 //! created when the test runs.
 
-mod support;
+use crate::support;
 
 use inbox::behaviour::MessageStorage;
 use inbox::messaging::{DedupKey, MessageId};

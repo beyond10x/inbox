@@ -2,7 +2,7 @@
 //! key is made at run time with the binary itself; no assertion message prints a secret key
 //! file's content.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};

@@ -2,7 +2,7 @@
 //! `inbox serve`, refusals and their exit statuses, the outbox and `repost` across a restart, the
 //! key commands, and how `inbox serve` starts, refuses to start and stops.
 
-mod support;
+use crate::support;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -718,6 +718,26 @@ fn an_answer_neither_success_nor_refusal_is_a_transport_failure() {
     served.join().expect("the stand-in ends");
     assert_eq!(pending.status, TRANSPORT, "{pending:#?}");
     assert!(pending.stderr.contains("404"), "{pending:#?}");
+}
+
+/// A stand-in whose client never connects ends with a message that says so, and does not wait
+/// for a connection forever: a case that joins it fails with that message. The wait is 1 s here
+/// and 10 s for every other case; the case holds no time of its own, the runner ends a test at
+/// 60 s.
+#[test]
+fn a_stand_in_that_receives_no_request_ends_and_says_so() {
+    let (_url, served) = support::stand_in_answers_within(
+        vec![(200, None, "{}")],
+        std::time::Duration::from_secs(1),
+    );
+    let message = match served.join() {
+        Ok(requests) => panic!("the stand-in ended with {requests:?} and no message"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(
+        message.contains("the stand-in received no connection for answer 1 of 1 within 1 s"),
+        "{message:?}"
+    );
 }
 
 #[test]

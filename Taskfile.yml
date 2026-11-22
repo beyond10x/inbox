@@ -25,8 +25,14 @@ tasks:
       - task: acceptance
       - cargo fmt --check
       - cargo clippy --workspace --all-targets --locked -- -D warnings
-      - cargo test --workspace --locked
+      - task: test
       - task: build-generated
+
+  test:
+    desc: The test step of task check. Build the test binaries of the workspace (cargo nextest run --no-run, outside the bound), then run them with cargo-nextest under tools/test-step.sh. A test that runs over 60 s is killed and fails (.config/nextest.toml); the run fails when it takes over 120 s; the 10 slowest tests are printed, pass or fail, from target/nextest/default/junit.xml.
+    cmds:
+      - cargo nextest run --workspace --locked --no-run
+      - sh tools/test-step.sh 120 '{{.ROOT_DIR}}/target/nextest/default/junit.xml' cargo nextest run --workspace --locked
 
   generate:
     desc: Rewrite generated/rust/inbox from a fresh synthesis of ess/; its Cargo.lock is kept and brought up to date.
@@ -88,13 +94,14 @@ tasks:
       - '{{.ROOT_DIR}}/target/debug/inbox-conformance gate --suite {{.SUITE}} --report {{.OUT}}/conform/serve-report.json --results {{.OUT}}/conform/serve-results.json --unsupported crates/inbox-conformance/unsupported.tsv --implementation {{.SERVE}}'
 
   acceptance:
-    desc: Build the inbox binary and run the 3 checks of tests/acceptance against it (cargo test --ignored with INBOX_BIN naming the binary); fails when a check fails or fewer than 3 passed. Log in .out/acceptance/test.log.
+    desc: Build the inbox binary and run the 3 checks of tests/acceptance against it (the ignored cases of the module checks of the test binary main, run by cargo-nextest with INBOX_BIN naming the binary, each killed at 60 s); fails when a check fails or fewer than 3 passed. Log in .out/acceptance/test.log.
     cmds:
       - mkdir -p {{.OUT}}/acceptance
       - cargo build -q --locked -p inbox-cli
-      - INBOX_BIN='{{.ROOT_DIR}}/target/debug/inbox' cargo test -q --locked -p inbox-acceptance --test checks -- --ignored 2>&1 | tee {{.OUT}}/acceptance/test.log
       - >-
-        awk '/^test result:/ {n += $4} END {print "task acceptance:", n + 0, "checks passed"; if (n < 3) {print "task acceptance: fewer than 3 checks passed"; exit 1}}' {{.OUT}}/acceptance/test.log
+        INBOX_BIN='{{.ROOT_DIR}}/target/debug/inbox' cargo nextest run --locked -p inbox-acceptance --run-ignored only -E 'test(/^checks::/)' 2>&1 | tee {{.OUT}}/acceptance/test.log
+      - >-
+        awk '$1 == "PASS" {n += 1} END {print "task acceptance:", n + 0, "checks passed"; if (n < 3) {print "task acceptance: fewer than 3 checks passed"; exit 1}}' {{.OUT}}/acceptance/test.log
 
   coverage:
     desc: Synthesize with declared coverage into .out/coverage and fail on a generated scenario no authored scenario covers. The one suite conform-interpreted and conform run; synthesized once per task invocation.

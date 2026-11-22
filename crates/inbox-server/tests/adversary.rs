@@ -1,6 +1,6 @@
 //! Adversary cases for story:http-service. Every key is created when the test runs.
 
-mod support;
+use crate::support;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};

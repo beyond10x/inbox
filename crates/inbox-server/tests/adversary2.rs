@@ -1,7 +1,7 @@
 //! Adversary cases, pass 2, for story:http-service: the request timeout, the cut at stop and the
 //! linger after a refusal. Every key is created when the test runs.
 
-mod support;
+use crate::support;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};

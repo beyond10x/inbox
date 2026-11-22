@@ -5,7 +5,7 @@
 //! The steps are the first use of `README.md`, run in its order, and the second case holds the
 //! README to them: every command line of its first use is one of these steps.
 
-mod support;
+use crate::support;
 
 use std::collections::HashMap;
 

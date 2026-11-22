@@ -2,7 +2,7 @@
 //! answered `posted` for an envelope as it was signed, one `SignatureInvalid` for the same envelope
 //! with its `body` changed after signing.
 
-mod support;
+use crate::support;
 
 use inbox::messaging::Body;
 use support::{AGENT, OTHER, World, encoded};

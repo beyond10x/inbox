@@ -1,7 +1,7 @@
 //! Adversary cases for story:dedup-key-scope (stage 2, wave 7), over HTTP against a running
 //! service. Every key is created when the test runs.
 
-mod support;
+use crate::support;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};

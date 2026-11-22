@@ -3,12 +3,11 @@
 //! recipient read and that then expires, each case stated at the core (`Expire` over a stored row
 //! in the state `Read`), the layer a wrong core is written in.
 
-#[allow(dead_code)]
-#[path = "core/support.rs"]
-mod support;
-
 use inbox::server::json::Value;
-use support::{KeyIdVerifier, Post, World, open_worker, outcome, post, published, quoted, text};
+
+use crate::support::{
+    KeyIdVerifier, Post, World, open_worker, outcome, post, published, quoted, text,
+};
 
 const ID: &str = "01JGT0W8000000000000000001";
 const EXPIRES: &str = "2026-01-05T10:00:00Z";

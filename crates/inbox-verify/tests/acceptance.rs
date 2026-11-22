@@ -2,7 +2,7 @@
 //! signing is refused, and the unchanged envelope is accepted, against a key file the test's
 //! operator key signed.
 
-mod common;
+use crate::common;
 
 use common::{AGENT, LATER, generate, now, over_the_wire, post, ring, signed_key_entry};
 use inbox::messaging::{Body, KeyFile};
