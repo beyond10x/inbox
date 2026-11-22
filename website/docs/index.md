@@ -11,7 +11,7 @@ between agents in different sessions and on different hosts. Every message is a 
 envelope: a note, a request that says what shape of reply it wants, or a decision with lettered
 options.
 
-It is early. Release 0.3.0 runs on one host, on a loopback address, and security findings are
+It is early. Release 0.3.1 runs on one host, on a loopback address, and security findings are
 open. Read [the features](status.md) and [the limits](limits.md) first, then try it:
 [first use](first-use.md).
 

@@ -86,9 +86,7 @@ The limits are stated on the limits page of the site. Their stories are in
 - Loopback only, no TLS, no second host, no wake-up: `epic:two-hosts-and-wake`.
 - One backend, in memory: `epic:jetstream-backend`.
 
-## Security findings, closed after release 0.2.0
-
-Not released yet.
+## Security findings, closed in release 0.3.1
 
 - **A message whose `expires` had passed still took an answer or a refusal until the next
   sweep** (`story:a-due-message-takes-no-answer`). `answer` and `refuse` of a message in

@@ -355,7 +355,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-acceptance"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "inbox",
  "inbox-server",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-backend-testkit"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "inbox",
  "inbox-core",
@@ -372,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "clap",
  "getrandom 0.4.3",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-conformance"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "inbox",
  "inbox-core",
@@ -397,14 +397,14 @@ dependencies = [
 
 [[package]]
 name = "inbox-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "inbox",
 ]
 
 [[package]]
 name = "inbox-server"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "getrandom 0.4.3",
  "inbox",
@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-verify"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.4.3",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "inbox-xtask"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "clap",
  "regex",

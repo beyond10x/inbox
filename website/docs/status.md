@@ -1,11 +1,11 @@
 ---
 title: Features
-description: What the inbox does in release 0.3.0, what is missing, and what is planned.
+description: What the inbox does in release 0.3.1, what is missing, and what is planned.
 ---
 
 # Features
 
-The state of release 0.3.0. The inbox runs on one host, on a loopback address, for the
+The state of release 0.3.1. The inbox runs on one host, on a loopback address, for the
 principals of one operator. Read [the limits](limits.md) before you use it.
 
 ## Available

@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-22
+
 ### Security
 
 - A message whose `expires` the service's clock has reached takes no answer and no refusal:
@@ -15,10 +17,10 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   exit status 1), change nothing and publish nothing, and the expiry task decides the
   message as before, by silence with its `default_on_silence` or by removal. The clock is
   read inside the command's section at its full precision, the precision the expiry task's
-  sweep reads it at, and is not taken from the request. In 0.2.0 a late answer that arrived
+  sweep reads it at, and is not taken from the request. In 0.3.0 a late answer that arrived
   before the sweep replaced the decision silence was due to take.
 - `post` refuses an envelope whose `expires` is at or before the service's clock: the new
-  outcome `expired-on-arrival` (502, error `AlreadyExpired`), and nothing is stored. 0.2.0
+  outcome `expired-on-arrival` (502, error `AlreadyExpired`), and nothing is stored. 0.3.0
   compared `expires` with the envelope's own `created` only.
 - `answer` refuses a reply to an open message whose own `expires` is at or before the
   service's clock with the same outcome and error, and the message stays as it was. An answer
@@ -31,13 +33,13 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `CollectedReply`: the fields of `Reply`, its body as plain text; the JSON is the row's.
   `inbox collect` sends only the `Collect`, prints that record and then drops the outbox line.
   The text is the form `outbox` prints a row in, and `--json` puts the record under `message`
-  with the member names and order 0.2.0 printed there; the values are those the service held
-  when it removed the message. In 0.2.0 it read `Outbox` first and printed that row: a reply or
+  with the member names and order 0.3.0 printed there; the values are those the service held
+  when it removed the message. In 0.3.0 it read `Outbox` first and printed that row: a reply or
   a refusal that arrived between the two requests was deleted without the sender seeing it, and
   the outbox line was dropped. The behaviour of `Collect` is now an obligation of the
   generated crate, implemented in `inbox-core` (87 of 90 capabilities generated, 3
   obligations). A success answer that is not `collected` with the settled record of the message
-  collected (no `response`, as a 0.2.0 service answers; another outcome or none; a record that
+  collected (no `response`, as a 0.3.0 service answers; another outcome or none; a record that
   does not decode as the declared response of `Collect`, is of another message or is not
   `Answered` or `Refused`; a member stated twice) makes `inbox collect` exit 3 with one line on
   standard error, and the outbox line stays. The conformance runner interprets the suite step
@@ -49,7 +51,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   and a carriage return before a line end, DEL, C1) is shown as its escape `\u{1b}`: a reply
   body, a refusal reason, a message body, an option or an address printed by `collect`,
   `pending`, `wait`, `outbox`, `thread` or `replies`, and a line on standard error that repeats
-  text of the service. In 0.2.0 they were printed as written, so a recipient could clear the
+  text of the service. In 0.3.0 they were printed as written, so a recipient could clear the
   sender's screen, set its window title or write over a line with its reply, and a sender
   could do the same to whoever lists an inbox. With `--json`, DEL and C1 are written as `\u`
   escapes as well (C0 was escaped already); a JSON reader gets the same values. Text without
@@ -59,7 +61,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   client only the rows of `Pending`, `Unanswered`, `Outbox`, `Settled`, `Thread` and
   `Replies` whose `to` is its inbox or whose `from` is its principal, whatever parameter it
   sends; the new `inbox_core::readable` is the rule, and the HTTP service calls it in place of
-  its own copy. In 0.2.0 only `inbox serve` filtered the rows: an embedding of `inbox-core`
+  its own copy. In 0.3.0 only `inbox serve` filtered the rows: an embedding of `inbox-core`
   that handed the core's answer on gave a third principal the bodies, replies and signatures
   of messages between others. `Due` and `Messages` stay whole for the expiry task, and a
   client is still refused both (story:the-core-applies-the-read-rule).
@@ -68,7 +70,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   message, from `MarkDelivered`, `MarkRead`, `Answer`, `Refuse` and `Collect`, with the answer
   of an id no message carries (`unknown-message`, error `UnknownMessage`, nothing published),
   member for member. The new `inbox_core::as_unknown` is the rename, and the HTTP service
-  calls it in place of its own copy; the bytes of every HTTP answer are unchanged. In 0.2.0
+  calls it in place of its own copy; the bytes of every HTTP answer are unchanged. In 0.3.0
   only `inbox serve` renamed the model's `foreign-message`: an embedding of `inbox-core` that
   handed the core's answer on told a third principal that a message id exists. The new entry
   `inbox_core::handle_as_specified` answers the model's `foreign-message`; the conformance run
