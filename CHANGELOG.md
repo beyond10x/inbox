@@ -17,6 +17,23 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   shipped code changes: `cargo build --release` and `cargo install` do not read the dev
   profile.
 
+### Fixed
+
+- An argument of `inbox` that a command reads as text and that is not UTF-8 (a positional
+  argument, an option value, an argument before the subcommand) ends the client with the exit
+  status 2 and one line on standard error, `inbox: usage: argument <n> is not UTF-8:
+  "<argument>"`, in printable ASCII (each byte that is not printable ASCII written `\xE9`, a
+  control character `\x1B`, a line feed, carriage return and tab `\n`, `\r` and `\t`, a
+  quote and a backslash behind a backslash), and sends no request; with `--json` the usual
+  usage document is printed as well. In every release up to and including 0.3.1 clap read
+  the arguments as `OsString`: the option that takes a
+  file name (`--out`, `--secret-key-file`, `--outbox`, `--key-file`, `--file`,
+  `--operator-secret-key-file`, `--body-file`) took a name that is not UTF-8, and still does.
+  An argument read as text made clap fail, and the client then called `std::env::args()` on
+  that error path (to look for `--json`), which panicked: the exit status 101, outside the
+  documented statuses 0 to 4, and a panic message in place of the usage line
+  (story:an-argument-that-is-not-utf-8-is-a-usage-error).
+
 ## [0.3.1] - 2026-11-22
 
 ### Security

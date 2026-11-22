@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-22T19:48:42Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-argument-that-is-not-utf-8-is-a-usage-error",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:adversary-an-argument-that-is-not-utf-8-pass-2",
+    "review": "review-result:adversary-an-argument-that-is-not-utf-8-pass-2",
+    "outcome": "fixed"
+  }
+}

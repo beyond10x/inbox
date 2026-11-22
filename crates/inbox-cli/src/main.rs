@@ -19,10 +19,12 @@ mod output;
 mod reference;
 mod serve;
 
+use std::ffi::{OsStr, OsString};
 use std::net::SocketAddr;
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 
 use crate::client::Service;
 use crate::commands::{AnswerInput, Client, PostInput};
@@ -482,8 +484,133 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
     Ok(Some(done))
 }
 
+/// Whether `command` itself (not a subcommand, not a parent) defines the option `name`
+/// (`--out`, no value) with a file name as its value (a `PathBuf`): such a value is any bytes,
+/// and clap takes a name that is not UTF-8 there.
+fn takes_file_name(command: &clap::Command, name: &[u8]) -> bool {
+    command.get_arguments().any(|argument| {
+        argument.get_value_parser().type_id() == std::any::TypeId::of::<PathBuf>()
+            && argument
+                .get_long()
+                .is_some_and(|long| name.strip_prefix(b"--") == Some(long.as_bytes()))
+    })
+}
+
+/// What a read of the command line along clap's rules found: the first argument that is not
+/// UTF-8 and that no file name explains (`named`), and the places of the arguments that are
+/// file names (`file_names`). A place is an index into the arguments; the program name is 0.
+#[derive(Debug, Default)]
+struct Scan {
+    named: Option<usize>,
+    file_names: Vec<usize>,
+}
+
+/// Reads `arguments` as clap does, to tell a file name that is not UTF-8 (a path option has
+/// taken one since 0.1.0) from an argument a command reads as text:
+/// - after a bare `--` nothing is an option;
+/// - the value of an option that takes a file name is the next argument unless it starts with
+///   `-`, or the text after `=`;
+/// - such an option counts only under the subcommand that defines it, the subcommands named so
+///   far on the line.
+fn scan(arguments: &[OsString]) -> Scan {
+    let root = Cli::command();
+    let mut command = &root;
+    let mut found = Scan::default();
+    let mut after_double_dash = false;
+    let mut value_next = false;
+    for (at, argument) in arguments.iter().enumerate().skip(1) {
+        let bytes = argument.as_bytes();
+        if after_double_dash {
+            if argument.to_str().is_none() {
+                found.named = Some(at);
+                return found;
+            }
+            continue;
+        }
+        if std::mem::take(&mut value_next) && !bytes.starts_with(b"-") {
+            found.file_names.push(at);
+            continue;
+        }
+        if bytes == b"--" {
+            after_double_dash = true;
+            continue;
+        }
+        if bytes.starts_with(b"--") {
+            let name = bytes.split(|byte| *byte == b'=').next().unwrap_or(bytes);
+            if takes_file_name(command, name) {
+                if name.len() < bytes.len() {
+                    found.file_names.push(at);
+                } else {
+                    value_next = true;
+                }
+                continue;
+            }
+        } else if !bytes.starts_with(b"-")
+            && let Some(sub) = argument
+                .to_str()
+                .and_then(|name| command.find_subcommand(name))
+        {
+            command = sub;
+            continue;
+        }
+        if argument.to_str().is_none() {
+            found.named = Some(at);
+            return found;
+        }
+    }
+    found
+}
+
+/// The place of the argument to name for the line clap refused, and the argument. clap's error
+/// does not say which argument it refused (`InvalidUtf8` for a value, an unknown argument or
+/// subcommand for a stray one), so [`scan`] decides: the first argument that is not UTF-8 and
+/// no file name explains. When it names none and clap's own kind is `InvalidUtf8`, the first
+/// argument that is not UTF-8 and that the scan did not judge a file name. A line refused for
+/// another reason with a file name that is not UTF-8 on it blames no argument. `None` when
+/// there is none (the text came from an environment variable, or the cause is another).
+fn refused_argument(
+    arguments: &[OsString],
+    kind: clap::error::ErrorKind,
+) -> Option<(usize, &OsStr)> {
+    let found = scan(arguments);
+    let at = found.named.or_else(|| {
+        (kind == clap::error::ErrorKind::InvalidUtf8)
+            .then(|| {
+                arguments.iter().enumerate().skip(1).find(|(at, argument)| {
+                    argument.to_str().is_none() && !found.file_names.contains(at)
+                })
+            })
+            .flatten()
+            .map(|(at, _)| at)
+    })?;
+    Some((at, arguments[at].as_os_str()))
+}
+
+/// The usage failure for `argument`, the `at`th: its bytes in ASCII escapes (`\xE9` for each
+/// byte that is not printable ASCII, a byte of a letter included; `\n`, `\r`, `\t`, `\"` and
+/// `\\`), so no byte that is not printable ASCII reaches the terminal.
+fn not_utf_8(at: usize, argument: &OsStr) -> Failure {
+    use std::fmt::Write as _;
+    let mut shown = String::new();
+    for &byte in argument.as_bytes() {
+        match byte {
+            b'"' => shown.push_str("\\\""),
+            b'\\' => shown.push_str("\\\\"),
+            b'\n' => shown.push_str("\\n"),
+            b'\r' => shown.push_str("\\r"),
+            b'\t' => shown.push_str("\\t"),
+            0x20..=0x7e => shown.push(char::from(byte)),
+            _ => {
+                let _ = write!(shown, "\\x{byte:02X}");
+            }
+        }
+    }
+    Failure::Usage(format!("argument {at} is not UTF-8: \"{shown}\""))
+}
+
 fn main() {
-    let cli = match Cli::try_parse() {
+    let arguments: Vec<OsString> = std::env::args_os().collect();
+    let cli = match Cli::try_parse_from(&arguments) {
         Ok(cli) => cli,
         Err(error) => {
             use clap::error::ErrorKind;
@@ -495,7 +622,16 @@ fn main() {
             ) {
                 error.exit();
             }
-            if std::env::args().any(|arg| arg == "--json") {
+            let wants_json = arguments.iter().any(|arg| arg == "--json");
+            if let Some((at, argument)) = refused_argument(&arguments, error.kind()) {
+                let failure = not_utf_8(at, argument);
+                if wants_json {
+                    output::print_document(&failure.document());
+                }
+                output::warn(&format!("inbox: {}", failure.message()));
+                std::process::exit(failure.status());
+            }
+            if wants_json {
                 output::print_document(&Failure::Usage(error.kind().to_string()).document());
             }
             let _ = error.print();

@@ -41,7 +41,7 @@ const EXIT_STATUSES: [(i32, &str); 5] = [
     (REFUSED, "The service refused; the output names the error."),
     (
         USAGE,
-        "Wrong usage, including an `INBOX_URL` that is not a loopback address.",
+        "Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address.",
     ),
     (
         TRANSPORT,

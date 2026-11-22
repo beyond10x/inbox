@@ -936,7 +936,7 @@
     },
     {
       "code": 2,
-      "meaning": "Wrong usage, including an `INBOX_URL` that is not a loopback address."
+      "meaning": "Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address."
     },
     {
       "code": 3,

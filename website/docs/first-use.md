@@ -82,7 +82,7 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 |---|---|
 | 0 | Done |
 | 1 | The service refused; the output names the error |
-| 2 | Wrong usage, including an `INBOX_URL` that is not a loopback address |
+| 2 | Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address |
 | 3 | The service could not be reached, or its answer was neither a success nor a refusal |
 | 4 | A local file could not be read or written |
 

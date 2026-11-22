@@ -18,7 +18,7 @@ Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cas
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
 | The HTTP listener | A library: request signatures, the core's read rule on each view answer and its rename of `foreign-message` on each command answer, the wait on `Pending`, the expiry task, the limits; loopback only | 78 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 117 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, the outbox file and its epochs file, exit statuses 0 to 4 | 143 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 117 scenarios: 117 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
 | The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 117 scenarios: 32 passed, 0 failed, 0 error, 85 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](../crates/inbox-conformance/unsupported.tsv), `task conform` |
@@ -155,6 +155,35 @@ The limits are stated on the limits page of the site. Their stories are in
   before a line end dropped again, the `outbox` case. The stored message, the signature check
   and the service are unchanged. The part that stays: a line end in such a value is printed
   as a line end, so a value can still start a line that looks like one of the client's own.
+- **An argument that is not UTF-8 ended the client with a panic**
+  (`story:an-argument-that-is-not-utf-8-is-a-usage-error`; adversary pass 1 of
+  `story:the-client-prints-no-control-sequence-of-another-principal`, finding F7). In every
+  release up to and including 0.3.1 clap read the arguments as `OsString`: an option that
+  takes a file name took a name that is not UTF-8, and an argument read as text made clap
+  fail. On that error path the client called `std::env::args()` (the scan for `--json`),
+  which panicked: the exit status 101, outside the documented 0 to 4. Now `src/main.rs`
+  parses `args_os()` as before and, when clap refuses the line, names the first argument that
+  is not UTF-8 and is not a file name, with the exit status 2 and one line on standard error
+  in printable ASCII (each byte that is not printable ASCII as `\xE9`, a line feed, carriage
+  return and tab as `\n`, `\r` and `\t`, a quote and a backslash behind a backslash), before
+  it reads any key or opens any connection. `scan` in `src/main.rs` reads the line as clap
+  does: the options that take a file name are those of the clap definition with the value
+  parser of type `PathBuf`, they count under the subcommand that defines them, their value
+  is the next argument unless it starts with `-` or the text after `=`, and after a bare
+  `--` nothing is an option. When it names none and clap's error is `InvalidUtf8`, the first
+  argument that is not UTF-8 and not judged a file name is named; a line clap refuses for
+  another reason with a file name that is not UTF-8 on it blames no argument. A file name
+  that is not UTF-8 keeps working. The 10 cases of
+  `crates/inbox-cli/tests/argument_not_utf_8.rs` (a positional argument, an option value, an
+  argument before the subcommand, `--option=<bytes>`, a control sequence beside an invalid
+  byte, the text beside a file name that is not UTF-8 in both spellings, a line refused for
+  another reason, the `--json` document, and a UTF-8 argument that is not ASCII), the 9 of
+  `crates/inbox-cli/tests/adversary_argument_not_utf_8.rs` (a file name that is not UTF-8 for
+  `key new --out` and for `--secret-key-file`, letters that are not ASCII, a line feed, a
+  long argument, a program name and an `INBOX_URL` that are not UTF-8) and the 7 of
+  `crates/inbox-cli/tests/adversary_argument_not_utf_8_2.rs` (after `--`, a value that
+  starts with `-`, an option of another subcommand, every byte value, every path option) hold
+  a listener that no request reaches.
 - **The core gave a client the rows of messages between others**
   (`story:the-core-applies-the-read-rule`). The read rule was in the HTTP listener only:
   `inbox_core::handle`, the entry for an embedding with another caller per request, ran
