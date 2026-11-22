@@ -2,12 +2,13 @@
 format: aep.planning-md/3
 id: story:the-specification-follows-the-design-on-notes-and-options
 kind: story
-status: active
+status: implemented
 title: A note cannot be refused and a decision has an option
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-22T04:58:01Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-22T04:58:01Z", actor: "agent:inbox", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-22T08:19:41Z", actor: "agent:inbox", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

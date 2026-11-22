@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T08:18:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-specification-follows-the-design-on-notes-and-options",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, exit 0 on the tree of 3d11f9f: 112 scenarios, interpreted 112 of 112, core 112 of 112, cargo test --workspace 515 passed, acceptance 3 of 3"
+  }
+}

@@ -2,12 +2,13 @@
 format: aep.planning-md/3
 id: story:no-unmapped-rule-in-the-specification
 kind: story
-status: active
+status: implemented
 title: The specification holds no UNMAPPED marker
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-22T04:58:01Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-22T04:58:01Z", actor: "agent:inbox", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-22T08:19:40Z", actor: "agent:inbox", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
