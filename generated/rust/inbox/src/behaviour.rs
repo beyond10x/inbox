@@ -42,10 +42,7 @@ pub trait InboxStorage {
 /// Keyed by the identity `message_id`. Generated network entries supply an ephemeral implementation; durable storage remains a port.
 pub trait MessageStorage {
     /// The instance with this identity, or `None` where none is stored.
-    fn get(
-        &self,
-        identity: &crate::messaging::MessageId,
-    ) -> Option<crate::messaging::MessageSnapshot>;
+    fn get(&self, identity: &crate::messaging::MessageId) -> Option<crate::messaging::MessageSnapshot>;
 
     /// Stores this instance under its identity, replacing what was held.
     fn put(&mut self, snapshot: crate::messaging::MessageSnapshot);
@@ -98,41 +95,22 @@ pub trait Context {
 /// Context answers that may be unavailable, without fabricated values.
 /// Existing `Context` implementations receive the blanket adapter.
 pub trait TryContext {
-    /// The caller's `inbox`, or a named unavailable answer.
-    fn try_caller_inbox(&self) -> Result<Option<crate::messaging::Address>, UnmetObligation>;
-    /// The caller's `principal`, or a named unavailable answer.
-    fn try_caller_principal(&self) -> Result<Option<crate::messaging::Principal>, UnmetObligation>;
-    /// Decides the named external branch, or names the unavailable answer.
-    fn try_external(
-        &mut self,
-        command: ExternalCommand<'_>,
-        outcome: &'static str,
-    ) -> Result<bool, UnmetObligation>;
+/// The caller's `inbox`, or a named unavailable answer.
+fn try_caller_inbox(&self) -> Result<Option<crate::messaging::Address>, UnmetObligation>;
+/// The caller's `principal`, or a named unavailable answer.
+fn try_caller_principal(&self) -> Result<Option<crate::messaging::Principal>, UnmetObligation>;
+/// Decides the named external branch, or names the unavailable answer.
+fn try_external(&mut self, command: ExternalCommand<'_>, outcome: &'static str) -> Result<bool, UnmetObligation>;
 }
 
 impl<T: Context + ?Sized> TryContext for T {
-    fn try_caller_inbox(&self) -> Result<Option<crate::messaging::Address>, UnmetObligation> {
-        Ok(Context::caller_inbox(self))
-    }
-    fn try_caller_principal(&self) -> Result<Option<crate::messaging::Principal>, UnmetObligation> {
-        Ok(Context::caller_principal(self))
-    }
-    fn try_external(
-        &mut self,
-        command: ExternalCommand<'_>,
-        outcome: &'static str,
-    ) -> Result<bool, UnmetObligation> {
-        Ok(Context::external(self, command, outcome))
-    }
+fn try_caller_inbox(&self) -> Result<Option<crate::messaging::Address>, UnmetObligation> { Ok(Context::caller_inbox(self)) }
+fn try_caller_principal(&self) -> Result<Option<crate::messaging::Principal>, UnmetObligation> { Ok(Context::caller_principal(self)) }
+fn try_external(&mut self, command: ExternalCommand<'_>, outcome: &'static str) -> Result<bool, UnmetObligation> { Ok(Context::external(self, command, outcome)) }
 }
 
 /// An unavailable runtime context answer, rather than a new planned capability.
-pub fn unmet_context(source: &'static str) -> UnmetObligation {
-    UnmetObligation {
-        capability: "context answer",
-        source,
-    }
-}
+pub fn unmet_context(source: &'static str) -> UnmetObligation { UnmetObligation { capability: "context answer", source } }
 
 /// Every generated behaviour of this workspace, over the ports `P` supplies.
 ///
@@ -156,226 +134,72 @@ impl<P> crate::messaging::obligations::AnswerBehavior for Generated<P>
 where
     P: TryContext + MessageStorage,
 {
-    fn answer(
-        &mut self,
-        input: crate::messaging::Answer,
-    ) -> Result<crate::messaging::AnswerOutcome, UnmetObligation> {
+    fn answer(&mut self, input: crate::messaging::Answer) -> Result<crate::messaging::AnswerOutcome, UnmetObligation> {
         let _ = &input;
         // `not-sender`: an input-guarded refusal, before the addressed subject is loaded.
-        if decided(
-            equal(
-                Some(&input.from)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_principal()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::NotSender {
-                error: crate::messaging::NotSender,
-            });
+        if decided(equal(Some(&input.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::NotSender { error: crate::messaging::NotSender });
         }
         // `no-authority`: an input-guarded refusal, before the addressed subject is loaded.
-        if decided(
-            all(&[
-                equal(
-                    Some(&input.on_behalf_of)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    Some(&input.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                (Some(
-                    Some(&input.authority)
-                        .and_then(|value| value.as_ref())
-                        .map(|value| &value.0)
-                        .is_some(),
-                ))
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::NoAuthority {
-                error: crate::messaging::NoAuthority,
-            });
+        if decided(all(&[equal(Some(&input.on_behalf_of).map(|value| &value.0).map(|value| value.clone()), Some(&input.from).map(|value| &value.0).map(|value| value.clone())).map(|value| !value), (Some(Some(&input.authority).and_then(|value| value.as_ref()).map(|value| &value.0).is_some())).map(|value| !value)]), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::NoAuthority { error: crate::messaging::NoAuthority });
         }
         // `already-expired`: an input-guarded refusal, before the addressed subject is loaded.
-        if decided(
-            compare_instants(
-                Some(&input.expires).map(|value| value.0.clone()),
-                Some(&input.created).map(|value| value.0.clone()),
-                core::cmp::Ordering::is_le,
-            ),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::AlreadyExpired {
-                error: crate::messaging::AlreadyExpired,
-            });
+        if decided(compare_instants(Some(&input.expires).map(|value| value.0.clone()), Some(&input.created).map(|value| value.0.clone()), core::cmp::Ordering::is_le), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::AlreadyExpired { error: crate::messaging::AlreadyExpired });
         }
         // `signature-invalid`: an external refusal answered before the row is read, where the context takes it.
-        if self.ports.try_external(
-            ExternalCommand::InboxMessagingAnswer(&input),
-            "signature-invalid",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::SignatureInvalid {
-                error: crate::messaging::SignatureInvalid,
-            });
+        if self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "signature-invalid")? {
+            return Ok(crate::messaging::AnswerOutcome::SignatureInvalid { error: crate::messaging::SignatureInvalid });
         }
         // `authority-invalid`: an external refusal answered before the row is read, where the context takes it.
-        if self.ports.try_external(
-            ExternalCommand::InboxMessagingAnswer(&input),
-            "authority-invalid",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::AuthorityInvalid {
-                error: crate::messaging::NoAuthority,
-            });
+        if self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "authority-invalid")? {
+            return Ok(crate::messaging::AnswerOutcome::AuthorityInvalid { error: crate::messaging::NoAuthority });
         }
         // The addressed row's existence, at step 2 of the one precedence rule.
         if MessageStorage::get(&self.ports, &input.in_reply_to).is_none() {
-            return Ok(crate::messaging::AnswerOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::AnswerOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = MessageStorage::get(&self.ports, &input.in_reply_to) else {
-            return Ok(crate::messaging::AnswerOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::AnswerOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         // `foreign-message`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_inbox()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_principal()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::ForeignMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
         }
         // `not-recipient`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.to)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_inbox()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::NotRecipient {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::NotRecipient { error: crate::messaging::NotRecipient });
         }
         // `note`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.kind).map(|value| {
-                    match value {
-                        crate::messaging::Kind::Note => "note",
-                        crate::messaging::Kind::Request => "request",
-                        crate::messaging::Kind::Decision => "decision",
-                    }
-                    .to_owned()
-                }),
-                Some("note".to_owned()),
-            ),
-            "inbox.messaging.Answer",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::Note {
-                error: crate::messaging::NotAnswerable,
-            });
+        if decided(equal(Some(&held.data.kind).map(|value| match value { crate::messaging::Kind::Note => "note", crate::messaging::Kind::Request => "request", crate::messaging::Kind::Decision => "decision" }.to_owned()), Some("note".to_owned())), "inbox.messaging.Answer")? {
+            return Ok(crate::messaging::AnswerOutcome::Note { error: crate::messaging::NotAnswerable });
         }
         // `shape-mismatch`: an external branch, where the context takes it.
-        if self.ports.try_external(
-            ExternalCommand::InboxMessagingAnswer(&input),
-            "shape-mismatch",
-        )? {
-            return Ok(crate::messaging::AnswerOutcome::ShapeMismatch {
-                error: crate::messaging::ShapeMismatch,
-            });
+        if self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "shape-mismatch")? {
+            return Ok(crate::messaging::AnswerOutcome::ShapeMismatch { error: crate::messaging::ShapeMismatch });
         }
         // `answered`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.in_reply_to) else {
-            return Ok(crate::messaging::AnswerOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::AnswerOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         let held_state = held.state;
         let before = held.data.clone();
         let moved = match held.refine() {
-            crate::messaging::AnyMessage::Delivered(instance) => {
-                crate::messaging::AnyMessage::Answered(instance.answer())
-            }
-            crate::messaging::AnyMessage::Read(instance) => {
-                crate::messaging::AnyMessage::Answered(instance.answer())
-            }
-            crate::messaging::AnyMessage::Sent(instance) => {
-                crate::messaging::AnyMessage::Answered(instance.answer())
-            }
-            _ => {
-                return Ok(crate::messaging::AnswerOutcome::AlreadySettled {
-                    error: crate::messaging::AlreadySettled { state: held_state },
-                })
-            }
+            crate::messaging::AnyMessage::Delivered(instance) => crate::messaging::AnyMessage::Answered(instance.answer()),
+            crate::messaging::AnyMessage::Read(instance) => crate::messaging::AnyMessage::Answered(instance.answer()),
+            crate::messaging::AnyMessage::Sent(instance) => crate::messaging::AnyMessage::Answered(instance.answer()),
+            _ => return Ok(crate::messaging::AnswerOutcome::AlreadySettled { error: crate::messaging::AlreadySettled { state: held_state } }),
         };
         let mut next = moved.snapshot();
         next.data.expires = input.expires.clone();
         next.data.answered_by = Some(crate::messaging::AnsweredBy::Principal);
         next.data.decided_option = input.option.clone();
-        next.data.reply = Some(crate::messaging::Reply {
-            reply_id: input.reply_id.clone(),
-            from: input.from.clone(),
-            on_behalf_of: input.on_behalf_of.clone(),
-            authority: input.authority.clone(),
-            created: input.created.clone(),
-            option: input.option.clone(),
-            body: input.body.clone(),
-            signature: input.signature.clone(),
-        });
-        let answer = crate::messaging::AnswerOutcome::Answered {
-            message_answered: crate::messaging::MessageAnswered {
-                message_id: input.in_reply_to.clone(),
-                reply_id: input.reply_id.clone(),
-                to: before.from.clone(),
-                thread: before.thread.clone(),
-            },
-        };
+        next.data.reply = Some(crate::messaging::Reply { reply_id: input.reply_id.clone(), from: input.from.clone(), on_behalf_of: input.on_behalf_of.clone(), authority: input.authority.clone(), created: input.created.clone(), option: input.option.clone(), body: input.body.clone(), signature: input.signature.clone() });
+        let answer = crate::messaging::AnswerOutcome::Answered { message_answered: crate::messaging::MessageAnswered { message_id: input.in_reply_to.clone(), reply_id: input.reply_id.clone(), to: before.from.clone(), thread: before.thread.clone() } };
         MessageStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -386,74 +210,39 @@ impl<P> crate::messaging::obligations::CloseInboxBehavior for Generated<P>
 where
     P: TryContext + InboxStorage,
 {
-    fn close_inbox(
-        &mut self,
-        input: crate::messaging::CloseInbox,
-    ) -> Result<crate::messaging::CloseInboxOutcome, UnmetObligation> {
+    fn close_inbox(&mut self, input: crate::messaging::CloseInbox) -> Result<crate::messaging::CloseInboxOutcome, UnmetObligation> {
         let _ = &input;
         // The addressed row's existence, at step 2 of the one precedence rule.
         if InboxStorage::get(&self.ports, &input.address).is_none() {
-            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox {
-                error: crate::messaging::UnknownInbox,
-            });
+            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox { error: crate::messaging::UnknownInbox });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = InboxStorage::get(&self.ports, &input.address) else {
-            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox {
-                error: crate::messaging::UnknownInbox,
-            });
+            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox { error: crate::messaging::UnknownInbox });
         };
         let _ = &held;
         // `not-owner`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.owner)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_principal()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.CloseInbox",
-        )? {
-            return Ok(crate::messaging::CloseInboxOutcome::NotOwner {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&held.data.owner).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.CloseInbox")? {
+            return Ok(crate::messaging::CloseInboxOutcome::NotOwner { error: crate::messaging::NotRecipient });
         }
         // `closed`: selected by the addressed row.
-        if decided(
-            Some(matches!(held.state, crate::messaging::InboxState::Open)),
-            "inbox.messaging.CloseInbox",
-        )? {
+        if decided(Some(matches!(held.state, crate::messaging::InboxState::Open)), "inbox.messaging.CloseInbox")? {
             let Some(held) = InboxStorage::get(&self.ports, &input.address) else {
-                return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox {
-                    error: crate::messaging::UnknownInbox,
-                });
+                return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox { error: crate::messaging::UnknownInbox });
             };
             let _ = &held;
             let moved = match held.refine() {
-                crate::messaging::AnyInbox::Open(instance) => {
-                    crate::messaging::AnyInbox::Closed(instance.close())
-                }
+                crate::messaging::AnyInbox::Open(instance) => crate::messaging::AnyInbox::Closed(instance.close()),
                 _ => return Err(undeclared("inbox.messaging.CloseInbox")),
             };
             let next = moved.snapshot();
-            let answer = crate::messaging::CloseInboxOutcome::Closed {
-                inbox_closed: crate::messaging::InboxClosed {
-                    address: input.address.clone(),
-                },
-            };
+            let answer = crate::messaging::CloseInboxOutcome::Closed { inbox_closed: crate::messaging::InboxClosed { address: input.address.clone() } };
             InboxStorage::put(&mut self.ports, next);
             return Ok(answer);
         }
         // `already-closed`: the default.
         let Some(held) = InboxStorage::get(&self.ports, &input.address) else {
-            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox {
-                error: crate::messaging::UnknownInbox,
-            });
+            return Ok(crate::messaging::CloseInboxOutcome::UnknownInbox { error: crate::messaging::UnknownInbox });
         };
         let _ = &held;
         let answer = crate::messaging::CloseInboxOutcome::AlreadyClosed;
@@ -466,111 +255,42 @@ impl<P> crate::messaging::obligations::CollectBehavior for Generated<P>
 where
     P: TryContext + MessageStorage,
 {
-    fn collect(
-        &mut self,
-        input: crate::messaging::Collect,
-    ) -> Result<crate::messaging::CollectOutcome, UnmetObligation> {
+    fn collect(&mut self, input: crate::messaging::Collect) -> Result<crate::messaging::CollectOutcome, UnmetObligation> {
         let _ = &input;
         // The addressed row's existence, at step 2 of the one precedence rule.
         if MessageStorage::get(&self.ports, &input.message_id).is_none() {
-            return Ok(crate::messaging::CollectOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::CollectOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         // `foreign-message`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_inbox()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_principal()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.Collect",
-        )? {
-            return Ok(crate::messaging::CollectOutcome::ForeignMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Collect")? {
+            return Ok(crate::messaging::CollectOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
         }
         // `not-sender`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.from)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_principal()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.Collect",
-        )? {
-            return Ok(crate::messaging::CollectOutcome::NotSender {
-                error: crate::messaging::NotSender,
-            });
+        if decided(equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Collect")? {
+            return Ok(crate::messaging::CollectOutcome::NotSender { error: crate::messaging::NotSender });
         }
         // `collected`: selected by the addressed row.
-        if decided(
-            Some(matches!(
-                held.state,
-                crate::messaging::MessageState::Answered | crate::messaging::MessageState::Refused
-            )),
-            "inbox.messaging.Collect",
-        )? {
+        if decided(Some(matches!(held.state, crate::messaging::MessageState::Answered | crate::messaging::MessageState::Refused)), "inbox.messaging.Collect")? {
             let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-                return Ok(crate::messaging::CollectOutcome::UnknownMessage {
-                    error: crate::messaging::UnknownMessage,
-                });
+                return Ok(crate::messaging::CollectOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
             };
             let _ = &held;
-            let answer = crate::messaging::CollectOutcome::Collected {
-                message_handled: crate::messaging::MessageHandled {
-                    message_id: input.message_id.clone(),
-                },
-            };
+            let answer = crate::messaging::CollectOutcome::Collected { message_handled: crate::messaging::MessageHandled { message_id: input.message_id.clone() } };
             MessageStorage::delete(&mut self.ports, &input.message_id);
             return Ok(answer);
         }
         // `not-settled`: the default.
-        return Ok(crate::messaging::CollectOutcome::NotSettled {
-            error: crate::messaging::NotSettled,
-        });
+        return Ok(crate::messaging::CollectOutcome::NotSettled { error: crate::messaging::NotSettled });
     }
 }
 
-impl<P: crate::messaging::obligations::ExpireBehavior> crate::messaging::obligations::ExpireBehavior
-    for Generated<P>
-{
-    fn expire(
-        &mut self,
-        input: crate::messaging::Expire,
-    ) -> Result<crate::messaging::ExpireOutcome, UnmetObligation> {
+impl<P: crate::messaging::obligations::ExpireBehavior> crate::messaging::obligations::ExpireBehavior for Generated<P> {
+    fn expire(&mut self, input: crate::messaging::Expire) -> Result<crate::messaging::ExpireOutcome, UnmetObligation> {
         crate::messaging::obligations::ExpireBehavior::expire(&mut self.ports, input)
     }
 }
@@ -580,106 +300,43 @@ impl<P> crate::messaging::obligations::MarkDeliveredBehavior for Generated<P>
 where
     P: TryContext + MessageStorage,
 {
-    fn mark_delivered(
-        &mut self,
-        input: crate::messaging::MarkDelivered,
-    ) -> Result<crate::messaging::MarkDeliveredOutcome, UnmetObligation> {
+    fn mark_delivered(&mut self, input: crate::messaging::MarkDelivered) -> Result<crate::messaging::MarkDeliveredOutcome, UnmetObligation> {
         let _ = &input;
         // The addressed row's existence, at step 2 of the one precedence rule.
         if MessageStorage::get(&self.ports, &input.message_id).is_none() {
-            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         // `foreign-message`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_inbox()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_principal()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.MarkDelivered",
-        )? {
-            return Ok(crate::messaging::MarkDeliveredOutcome::ForeignMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.MarkDelivered")? {
+            return Ok(crate::messaging::MarkDeliveredOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
         }
         // `not-recipient`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.to)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_inbox()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.MarkDelivered",
-        )? {
-            return Ok(crate::messaging::MarkDeliveredOutcome::NotRecipient {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.MarkDelivered")? {
+            return Ok(crate::messaging::MarkDeliveredOutcome::NotRecipient { error: crate::messaging::NotRecipient });
         }
         // `delivered`: selected by the addressed row.
-        if decided(
-            Some(matches!(held.state, crate::messaging::MessageState::Sent)),
-            "inbox.messaging.MarkDelivered",
-        )? {
+        if decided(Some(matches!(held.state, crate::messaging::MessageState::Sent)), "inbox.messaging.MarkDelivered")? {
             let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-                return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage {
-                    error: crate::messaging::UnknownMessage,
-                });
+                return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
             };
             let _ = &held;
             let moved = match held.refine() {
-                crate::messaging::AnyMessage::Sent(instance) => {
-                    crate::messaging::AnyMessage::Delivered(instance.deliver())
-                }
+                crate::messaging::AnyMessage::Sent(instance) => crate::messaging::AnyMessage::Delivered(instance.deliver()),
                 _ => return Err(undeclared("inbox.messaging.MarkDelivered")),
             };
             let next = moved.snapshot();
-            let answer = crate::messaging::MarkDeliveredOutcome::Delivered {
-                message_delivered: crate::messaging::MessageDelivered {
-                    message_id: input.message_id.clone(),
-                },
-            };
+            let answer = crate::messaging::MarkDeliveredOutcome::Delivered { message_delivered: crate::messaging::MessageDelivered { message_id: input.message_id.clone() } };
             MessageStorage::put(&mut self.ports, next);
             return Ok(answer);
         }
         // `already-delivered`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkDeliveredOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         let answer = crate::messaging::MarkDeliveredOutcome::AlreadyDelivered;
@@ -692,171 +349,54 @@ impl<P> crate::messaging::obligations::MarkReadBehavior for Generated<P>
 where
     P: TryContext + MessageStorage,
 {
-    fn mark_read(
-        &mut self,
-        input: crate::messaging::MarkRead,
-    ) -> Result<crate::messaging::MarkReadOutcome, UnmetObligation> {
+    fn mark_read(&mut self, input: crate::messaging::MarkRead) -> Result<crate::messaging::MarkReadOutcome, UnmetObligation> {
         let _ = &input;
         // The addressed row's existence, at step 2 of the one precedence rule.
         if MessageStorage::get(&self.ports, &input.message_id).is_none() {
-            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         // `foreign-message`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_inbox()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_principal()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.MarkRead",
-        )? {
-            return Ok(crate::messaging::MarkReadOutcome::ForeignMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.MarkRead")? {
+            return Ok(crate::messaging::MarkReadOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
         }
         // `not-recipient`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.to)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_inbox()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.MarkRead",
-        )? {
-            return Ok(crate::messaging::MarkReadOutcome::NotRecipient {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.MarkRead")? {
+            return Ok(crate::messaging::MarkReadOutcome::NotRecipient { error: crate::messaging::NotRecipient });
         }
         // `handled`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.kind).map(|value| {
-                        match value {
-                            crate::messaging::Kind::Note => "note",
-                            crate::messaging::Kind::Request => "request",
-                            crate::messaging::Kind::Decision => "decision",
-                        }
-                        .to_owned()
-                    }),
-                    Some("note".to_owned()),
-                ),
-                any(&[
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Sent".to_owned()),
-                    ),
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Delivered".to_owned()),
-                    ),
-                ]),
-            ]),
-            "inbox.messaging.MarkRead",
-        )? {
+        if decided(all(&[equal(Some(&held.data.kind).map(|value| match value { crate::messaging::Kind::Note => "note", crate::messaging::Kind::Request => "request", crate::messaging::Kind::Decision => "decision" }.to_owned()), Some("note".to_owned())), any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Sent".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Delivered".to_owned()))])]), "inbox.messaging.MarkRead")? {
             let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-                return Ok(crate::messaging::MarkReadOutcome::UnknownMessage {
-                    error: crate::messaging::UnknownMessage,
-                });
+                return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
             };
             let _ = &held;
-            let answer = crate::messaging::MarkReadOutcome::Handled {
-                message_handled: crate::messaging::MessageHandled {
-                    message_id: input.message_id.clone(),
-                },
-            };
+            let answer = crate::messaging::MarkReadOutcome::Handled { message_handled: crate::messaging::MessageHandled { message_id: input.message_id.clone() } };
             MessageStorage::delete(&mut self.ports, &input.message_id);
             return Ok(answer);
         }
         // `read`: selected by the addressed row.
-        if decided(
-            Some(matches!(
-                held.state,
-                crate::messaging::MessageState::Delivered | crate::messaging::MessageState::Sent
-            )),
-            "inbox.messaging.MarkRead",
-        )? {
+        if decided(Some(matches!(held.state, crate::messaging::MessageState::Delivered | crate::messaging::MessageState::Sent)), "inbox.messaging.MarkRead")? {
             let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-                return Ok(crate::messaging::MarkReadOutcome::UnknownMessage {
-                    error: crate::messaging::UnknownMessage,
-                });
+                return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
             };
             let _ = &held;
             let moved = match held.refine() {
-                crate::messaging::AnyMessage::Delivered(instance) => {
-                    crate::messaging::AnyMessage::Read(instance.read())
-                }
-                crate::messaging::AnyMessage::Sent(instance) => {
-                    crate::messaging::AnyMessage::Read(instance.read())
-                }
+                crate::messaging::AnyMessage::Delivered(instance) => crate::messaging::AnyMessage::Read(instance.read()),
+                crate::messaging::AnyMessage::Sent(instance) => crate::messaging::AnyMessage::Read(instance.read()),
                 _ => return Err(undeclared("inbox.messaging.MarkRead")),
             };
             let next = moved.snapshot();
-            let answer = crate::messaging::MarkReadOutcome::Read {
-                message_read: crate::messaging::MessageRead {
-                    message_id: input.message_id.clone(),
-                },
-            };
+            let answer = crate::messaging::MarkReadOutcome::Read { message_read: crate::messaging::MessageRead { message_id: input.message_id.clone() } };
             MessageStorage::put(&mut self.ports, next);
             return Ok(answer);
         }
         // `already-read`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::MarkReadOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         let answer = crate::messaging::MarkReadOutcome::AlreadyRead;
@@ -869,93 +409,46 @@ impl<P> crate::messaging::obligations::OpenInboxBehavior for Generated<P>
 where
     P: TryContext + InboxStorage,
 {
-    fn open_inbox(
-        &mut self,
-        input: crate::messaging::OpenInbox,
-    ) -> Result<crate::messaging::OpenInboxOutcome, UnmetObligation> {
+    fn open_inbox(&mut self, input: crate::messaging::OpenInbox) -> Result<crate::messaging::OpenInboxOutcome, UnmetObligation> {
         let _ = &input;
         // `not-owner`: an input-guarded refusal, before the addressed subject is loaded.
-        if decided(
-            equal(
-                Some(&input.address)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_inbox()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.OpenInbox",
-        )? {
-            return Ok(crate::messaging::OpenInboxOutcome::NotOwner {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&input.address).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.OpenInbox")? {
+            return Ok(crate::messaging::OpenInboxOutcome::NotOwner { error: crate::messaging::NotRecipient });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = InboxStorage::get(&self.ports, &input.address) else {
             let identity: crate::messaging::Address = input.address.clone();
             let data = crate::messaging::InboxData {
                 address: identity.clone(),
-                owner: self
-                    .ports
-                    .try_caller_principal()?
-                    .ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
+                owner: self.ports.try_caller_principal()?.ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
                 adapter: input.adapter.clone(),
             };
-            let answer = crate::messaging::OpenInboxOutcome::Opened {
-                inbox_opened: crate::messaging::InboxOpened {
-                    address: identity.clone(),
-                },
-            };
-            InboxStorage::put(
-                &mut self.ports,
-                crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot(),
-            );
+            let answer = crate::messaging::OpenInboxOutcome::Opened { inbox_opened: crate::messaging::InboxOpened { address: identity.clone() } };
+            InboxStorage::put(&mut self.ports, crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot());
             return Ok(answer);
         };
         let _ = &held;
         // `reopened`: selected by the addressed row.
-        if decided(
-            Some(matches!(held.state, crate::messaging::InboxState::Closed)),
-            "inbox.messaging.OpenInbox",
-        )? {
+        if decided(Some(matches!(held.state, crate::messaging::InboxState::Closed)), "inbox.messaging.OpenInbox")? {
             let Some(held) = InboxStorage::get(&self.ports, &input.address) else {
                 let identity: crate::messaging::Address = input.address.clone();
                 let data = crate::messaging::InboxData {
                     address: identity.clone(),
-                    owner: self
-                        .ports
-                        .try_caller_principal()?
-                        .ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
+                    owner: self.ports.try_caller_principal()?.ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
                     adapter: input.adapter.clone(),
                 };
-                let answer = crate::messaging::OpenInboxOutcome::Opened {
-                    inbox_opened: crate::messaging::InboxOpened {
-                        address: identity.clone(),
-                    },
-                };
-                InboxStorage::put(
-                    &mut self.ports,
-                    crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot(),
-                );
+                let answer = crate::messaging::OpenInboxOutcome::Opened { inbox_opened: crate::messaging::InboxOpened { address: identity.clone() } };
+                InboxStorage::put(&mut self.ports, crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot());
                 return Ok(answer);
             };
             let _ = &held;
             let moved = match held.refine() {
-                crate::messaging::AnyInbox::Closed(instance) => {
-                    crate::messaging::AnyInbox::Open(instance.reopen())
-                }
+                crate::messaging::AnyInbox::Closed(instance) => crate::messaging::AnyInbox::Open(instance.reopen()),
                 _ => return Err(undeclared("inbox.messaging.OpenInbox")),
             };
             let mut next = moved.snapshot();
             next.data.adapter = input.adapter.clone();
-            let answer = crate::messaging::OpenInboxOutcome::Reopened {
-                inbox_opened: crate::messaging::InboxOpened {
-                    address: input.address.clone(),
-                },
-            };
+            let answer = crate::messaging::OpenInboxOutcome::Reopened { inbox_opened: crate::messaging::InboxOpened { address: input.address.clone() } };
             InboxStorage::put(&mut self.ports, next);
             return Ok(answer);
         }
@@ -964,21 +457,11 @@ where
             let identity: crate::messaging::Address = input.address.clone();
             let data = crate::messaging::InboxData {
                 address: identity.clone(),
-                owner: self
-                    .ports
-                    .try_caller_principal()?
-                    .ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
+                owner: self.ports.try_caller_principal()?.ok_or_else(|| undeclared("inbox.messaging.OpenInbox"))?,
                 adapter: input.adapter.clone(),
             };
-            let answer = crate::messaging::OpenInboxOutcome::Opened {
-                inbox_opened: crate::messaging::InboxOpened {
-                    address: identity.clone(),
-                },
-            };
-            InboxStorage::put(
-                &mut self.ports,
-                crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot(),
-            );
+            let answer = crate::messaging::OpenInboxOutcome::Opened { inbox_opened: crate::messaging::InboxOpened { address: identity.clone() } };
+            InboxStorage::put(&mut self.ports, crate::messaging::AnyInbox::Open(crate::messaging::Inbox::new(data)).snapshot());
             return Ok(answer);
         };
         let _ = &held;
@@ -987,13 +470,8 @@ where
     }
 }
 
-impl<P: crate::messaging::obligations::PostMessageBehavior>
-    crate::messaging::obligations::PostMessageBehavior for Generated<P>
-{
-    fn post_message(
-        &mut self,
-        input: crate::messaging::PostMessage,
-    ) -> Result<crate::messaging::PostMessageOutcome, UnmetObligation> {
+impl<P: crate::messaging::obligations::PostMessageBehavior> crate::messaging::obligations::PostMessageBehavior for Generated<P> {
+    fn post_message(&mut self, input: crate::messaging::PostMessage) -> Result<crate::messaging::PostMessageOutcome, UnmetObligation> {
         crate::messaging::obligations::PostMessageBehavior::post_message(&mut self.ports, input)
     }
 }
@@ -1003,109 +481,41 @@ impl<P> crate::messaging::obligations::RefuseBehavior for Generated<P>
 where
     P: TryContext + MessageStorage,
 {
-    fn refuse(
-        &mut self,
-        input: crate::messaging::Refuse,
-    ) -> Result<crate::messaging::RefuseOutcome, UnmetObligation> {
+    fn refuse(&mut self, input: crate::messaging::Refuse) -> Result<crate::messaging::RefuseOutcome, UnmetObligation> {
         let _ = &input;
         // The addressed row's existence, at step 2 of the one precedence rule.
         if MessageStorage::get(&self.ports, &input.message_id).is_none() {
-            return Ok(crate::messaging::RefuseOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::RefuseOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         }
         // The addressed row, read before the branches that select by it.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::RefuseOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::RefuseOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         // `foreign-message`: selected by the addressed row.
-        if decided(
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_inbox()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    self.ports
-                        .try_caller_principal()?
-                        .as_ref()
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                )
-                .map(|value| !value),
-            ]),
-            "inbox.messaging.Refuse",
-        )? {
-            return Ok(crate::messaging::RefuseOutcome::ForeignMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+        if decided(all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_principal()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value)]), "inbox.messaging.Refuse")? {
+            return Ok(crate::messaging::RefuseOutcome::ForeignMessage { error: crate::messaging::UnknownMessage });
         }
         // `not-recipient`: selected by the addressed row.
-        if decided(
-            equal(
-                Some(&held.data.to)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                self.ports
-                    .try_caller_inbox()?
-                    .as_ref()
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            )
-            .map(|value| !value),
-            "inbox.messaging.Refuse",
-        )? {
-            return Ok(crate::messaging::RefuseOutcome::NotRecipient {
-                error: crate::messaging::NotRecipient,
-            });
+        if decided(equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), self.ports.try_caller_inbox()?.as_ref().map(|value| &value.0).map(|value| value.clone())).map(|value| !value), "inbox.messaging.Refuse")? {
+            return Ok(crate::messaging::RefuseOutcome::NotRecipient { error: crate::messaging::NotRecipient });
         }
         // `refused`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {
-            return Ok(crate::messaging::RefuseOutcome::UnknownMessage {
-                error: crate::messaging::UnknownMessage,
-            });
+            return Ok(crate::messaging::RefuseOutcome::UnknownMessage { error: crate::messaging::UnknownMessage });
         };
         let _ = &held;
         let held_state = held.state;
         let before = held.data.clone();
         let moved = match held.refine() {
-            crate::messaging::AnyMessage::Delivered(instance) => {
-                crate::messaging::AnyMessage::Refused(instance.refuse())
-            }
-            crate::messaging::AnyMessage::Read(instance) => {
-                crate::messaging::AnyMessage::Refused(instance.refuse())
-            }
-            crate::messaging::AnyMessage::Sent(instance) => {
-                crate::messaging::AnyMessage::Refused(instance.refuse())
-            }
-            _ => {
-                return Ok(crate::messaging::RefuseOutcome::AlreadySettled {
-                    error: crate::messaging::AlreadySettled { state: held_state },
-                })
-            }
+            crate::messaging::AnyMessage::Delivered(instance) => crate::messaging::AnyMessage::Refused(instance.refuse()),
+            crate::messaging::AnyMessage::Read(instance) => crate::messaging::AnyMessage::Refused(instance.refuse()),
+            crate::messaging::AnyMessage::Sent(instance) => crate::messaging::AnyMessage::Refused(instance.refuse()),
+            _ => return Ok(crate::messaging::RefuseOutcome::AlreadySettled { error: crate::messaging::AlreadySettled { state: held_state } }),
         };
         let mut next = moved.snapshot();
         next.data.refusal = Some(input.reason.clone());
-        let answer = crate::messaging::RefuseOutcome::Refused {
-            message_refused: crate::messaging::MessageRefused {
-                message_id: input.message_id.clone(),
-                to: before.from.clone(),
-                thread: before.thread.clone(),
-            },
-        };
+        let answer = crate::messaging::RefuseOutcome::Refused { message_refused: crate::messaging::MessageRefused { message_id: input.message_id.clone(), to: before.from.clone(), thread: before.thread.clone() } };
         MessageStorage::put(&mut self.ports, next);
         return Ok(answer);
     }
@@ -1116,19 +526,10 @@ impl<P> crate::messaging::obligations::DueQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn due(
-        &self,
-        param_0: crate::primitives::Timestamp,
-    ) -> Result<Vec<crate::messaging::Due>, UnmetObligation> {
+    fn due(&self, param_0: crate::primitives::Timestamp) -> Result<Vec<crate::messaging::Due>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            compare_instants(
-                Some(&held.data.expires).map(|value| value.0.clone()),
-                Some(&param_0).map(|value| value.0.clone()),
-                core::cmp::Ordering::is_le,
-            ) == Some(true)
-        });
+        admitted.retain(|held| compare_instants(Some(&held.data.expires).map(|value| value.0.clone()), Some(&param_0).map(|value| value.0.clone()), core::cmp::Ordering::is_le) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Due {
@@ -1216,22 +617,10 @@ impl<P> crate::messaging::obligations::OutboxQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn outbox(
-        &self,
-        param_0: crate::messaging::Principal,
-    ) -> Result<Vec<crate::messaging::Outbox>, UnmetObligation> {
+    fn outbox(&self, param_0: crate::messaging::Principal) -> Result<Vec<crate::messaging::Outbox>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            equal(
-                Some(&held.data.from)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                Some(&param_0)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            ) == Some(true)
-        });
+        admitted.retain(|held| equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Outbox {
@@ -1265,52 +654,10 @@ impl<P> crate::messaging::obligations::PendingQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn pending(
-        &self,
-        param_0: crate::messaging::Address,
-    ) -> Result<Vec<crate::messaging::Pending>, UnmetObligation> {
+    fn pending(&self, param_0: crate::messaging::Address) -> Result<Vec<crate::messaging::Pending>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    Some(&param_0)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                ),
-                any(&[
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Sent".to_owned()),
-                    ),
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Delivered".to_owned()),
-                    ),
-                ]),
-            ]) == Some(true)
-        });
+        admitted.retain(|held| all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())), any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Sent".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Delivered".to_owned()))])]) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Pending {
@@ -1340,37 +687,10 @@ impl<P> crate::messaging::obligations::RepliesQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn replies(
-        &self,
-        param_0: crate::messaging::ThreadId,
-    ) -> Result<Vec<crate::messaging::Replies>, UnmetObligation> {
+    fn replies(&self, param_0: crate::messaging::ThreadId) -> Result<Vec<crate::messaging::Replies>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            all(&[
-                equal(
-                    Some(&held.data.thread)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    Some(&param_0)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                ),
-                equal(
-                    Some(&held.state).map(|value| {
-                        match value {
-                            crate::messaging::MessageState::Answered => "Answered",
-                            crate::messaging::MessageState::Delivered => "Delivered",
-                            crate::messaging::MessageState::Read => "Read",
-                            crate::messaging::MessageState::Refused => "Refused",
-                            crate::messaging::MessageState::Sent => "Sent",
-                        }
-                        .to_owned()
-                    }),
-                    Some("Answered".to_owned()),
-                ),
-            ]) == Some(true)
-        });
+        admitted.retain(|held| all(&[equal(Some(&held.data.thread).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Answered".to_owned()))]) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Replies {
@@ -1403,52 +723,10 @@ impl<P> crate::messaging::obligations::SettledQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn settled(
-        &self,
-        param_0: crate::messaging::Principal,
-    ) -> Result<Vec<crate::messaging::Settled>, UnmetObligation> {
+    fn settled(&self, param_0: crate::messaging::Principal) -> Result<Vec<crate::messaging::Settled>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            all(&[
-                equal(
-                    Some(&held.data.from)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    Some(&param_0)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                ),
-                any(&[
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Answered".to_owned()),
-                    ),
-                    equal(
-                        Some(&held.state).map(|value| {
-                            match value {
-                                crate::messaging::MessageState::Answered => "Answered",
-                                crate::messaging::MessageState::Delivered => "Delivered",
-                                crate::messaging::MessageState::Read => "Read",
-                                crate::messaging::MessageState::Refused => "Refused",
-                                crate::messaging::MessageState::Sent => "Sent",
-                            }
-                            .to_owned()
-                        }),
-                        Some("Refused".to_owned()),
-                    ),
-                ]),
-            ]) == Some(true)
-        });
+        admitted.retain(|held| all(&[equal(Some(&held.data.from).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())), any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Answered".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Refused".to_owned()))])]) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Settled {
@@ -1482,22 +760,10 @@ impl<P> crate::messaging::obligations::ThreadQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn thread(
-        &self,
-        param_0: crate::messaging::ThreadId,
-    ) -> Result<Vec<crate::messaging::Thread>, UnmetObligation> {
+    fn thread(&self, param_0: crate::messaging::ThreadId) -> Result<Vec<crate::messaging::Thread>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            equal(
-                Some(&held.data.thread)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-                Some(&param_0)
-                    .map(|value| &value.0)
-                    .map(|value| value.clone()),
-            ) == Some(true)
-        });
+        admitted.retain(|held| equal(Some(&held.data.thread).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Thread {
@@ -1531,37 +797,10 @@ impl<P> crate::messaging::obligations::UnansweredQuery for Generated<P>
 where
     P: MessageStorage,
 {
-    fn unanswered(
-        &self,
-        param_0: crate::messaging::Address,
-    ) -> Result<Vec<crate::messaging::Unanswered>, UnmetObligation> {
+    fn unanswered(&self, param_0: crate::messaging::Address) -> Result<Vec<crate::messaging::Unanswered>, UnmetObligation> {
         let mut admitted = MessageStorage::list(&self.ports);
         // `filter:` shows a row where it holds; false or unknown hides it.
-        admitted.retain(|held| {
-            all(&[
-                equal(
-                    Some(&held.data.to)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                    Some(&param_0)
-                        .map(|value| &value.0)
-                        .map(|value| value.clone()),
-                ),
-                equal(
-                    Some(&held.state).map(|value| {
-                        match value {
-                            crate::messaging::MessageState::Answered => "Answered",
-                            crate::messaging::MessageState::Delivered => "Delivered",
-                            crate::messaging::MessageState::Read => "Read",
-                            crate::messaging::MessageState::Refused => "Refused",
-                            crate::messaging::MessageState::Sent => "Sent",
-                        }
-                        .to_owned()
-                    }),
-                    Some("Read".to_owned()),
-                ),
-            ]) == Some(true)
-        });
+        admitted.retain(|held| all(&[equal(Some(&held.data.to).map(|value| &value.0).map(|value| value.clone()), Some(&param_0).map(|value| &value.0).map(|value| value.clone())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Read".to_owned()))]) == Some(true));
         Ok(admitted
             .into_iter()
             .map(|held| crate::messaging::Unanswered {
@@ -1642,9 +881,9 @@ fn instant_of(text: &str) -> Option<(i64, u32)> {
         if slice.is_empty() || !slice.iter().all(u8::is_ascii_digit) {
             return None;
         }
-        slice.iter().try_fold(0u32, |total, digit| {
-            Some(total * 10 + u32::from(digit - b'0'))
-        })
+        slice
+            .iter()
+            .try_fold(0u32, |total, digit| Some(total * 10 + u32::from(digit - b'0')))
     };
     let at = |index: usize, expected: &[u8]| bytes.get(index).is_some_and(|b| expected.contains(b));
     if !(at(4, b"-") && at(7, b"-") && at(10, b"Tt") && at(13, b":") && at(16, b":")) {
@@ -1680,19 +919,12 @@ fn instant_of(text: &str) -> Option<(i64, u32)> {
     let offset = match bytes.get(position..)? {
         b"Z" | b"z" => 0i64,
         [sign @ (b'+' | b'-'), _, _, b':', _, _] => {
-            let (hours, minutes) = (
-                digits(position + 1, position + 3)?,
-                digits(position + 4, position + 6)?,
-            );
+            let (hours, minutes) = (digits(position + 1, position + 3)?, digits(position + 4, position + 6)?);
             if hours > 23 || minutes > 59 {
                 return None;
             }
             let magnitude = i64::from(hours * 3600 + minutes * 60);
-            if *sign == b'-' {
-                -magnitude
-            } else {
-                magnitude
-            }
+            if *sign == b'-' { -magnitude } else { magnitude }
         }
         _ => return None,
     };
@@ -1703,8 +935,5 @@ fn instant_of(text: &str) -> Option<(i64, u32)> {
     let of_year = (153 * march + 2) / 5 + i64::from(day) - 1;
     let of_cycle = of_era * 365 + of_era / 4 - of_era / 100 + of_year;
     let days = era * 146_097 + of_cycle - 719_468;
-    Some((
-        days * 86_400 + i64::from(hour * 3600 + minute * 60 + second) - offset,
-        nanos,
-    ))
+    Some((days * 86_400 + i64::from(hour * 3600 + minute * 60 + second) - offset, nanos))
 }

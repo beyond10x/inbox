@@ -19,8 +19,8 @@
 
 pub mod entry;
 pub mod http;
-pub mod inbox_service;
 pub mod json;
+pub mod wire;
+pub mod inbox_service;
 pub mod memory;
 mod static_assets;
-pub mod wire;
