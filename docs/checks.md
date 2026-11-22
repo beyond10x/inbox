@@ -25,7 +25,7 @@ Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cas
 | Acceptance | 3 checks against the built binary: a signed request and its reply between 2 keys; a read note and an expired request in no view; a repost after a restart, and a second repost that posts nothing | 3 passed | [`tests/acceptance/`](../tests/acceptance), `task acceptance` |
 | The conformance runner | Reads the suite, runs it against both targets, holds each report | 86 cases, 1 ignored | [`crates/inbox-conformance/`](../crates/inbox-conformance) |
 | Declared coverage | Every refusal of the specification is claimed by an authored scenario; `task check` fails on one that is not | 96 refused generated scenarios, 96 covered; the suite reports `conformance_status: passed` on the interpreted target | `task coverage` |
-| Repository tasks | The drift check of the generated crate, the scenario checks, the animation writer, the words of the end-user pages, the path decision of the CI job and the test step. The cases of the drift check read one synthesis of `ess/` per run of `task test`; the 2 that change `ess/` run their own | 79 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
+| Repository tasks | The drift check of the generated crate, the scenario checks, the animation writer, the words of the end-user pages, the path decision of the CI job, the test step and the build settings of `.cargo/config.toml`. The cases of the drift check read one synthesis of `ess/` per run of `task test`; the 2 that change `ess/` run their own | 80 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
 
 ## What wave 8 added
 

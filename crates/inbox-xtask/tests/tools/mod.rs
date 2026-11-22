@@ -1,8 +1,10 @@
 //! The repository's tools that are not synthesis: the scenario checks, the animation writer, the
-//! words of the end-user pages, the path decision of the CI job and the test step of the gate.
+//! words of the end-user pages, the path decision of the CI job, the test step of the gate and
+//! the build settings of `.cargo/config.toml`.
 //! Each case runs the binary (or the shell script) on a copy of the parts of the tree it reads.
 
 mod animation;
+mod cargo_config;
 mod docs_words;
 mod gate_paths;
 mod scenarios;

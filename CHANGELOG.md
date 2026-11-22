@@ -8,6 +8,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Changed
+
+- Test builds compile every dependency at `opt-level = 2` (`[profile.dev.package."*"]` in
+  `.cargo/config.toml`); the crates of the workspace stay unoptimized. The test step of the
+  gate ran 108 s of its bound of 120 s for 633 cases at a load average of 134 to 146 on 20
+  CPUs, and failed at the bound twice that day; with the setting it took 39 s at 105 to 139. No
+  shipped code changes: `cargo build --release` and `cargo install` do not read the dev
+  profile.
+
 ## [0.3.1] - 2026-11-22
 
 ### Security
