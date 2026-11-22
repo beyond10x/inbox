@@ -369,10 +369,11 @@ commands:
       summary: "Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer."
     input:
       - {name: message_id, type: inbox.messaging.MessageId}
-      # SYNTHESIS: `principal-262144` is the value ESS 0.97.1 synthesis gives the first caller's
-      # `principal`, not an address anybody holds. Without it synthesis writes no stored message
-      # under the `not-sender` guard and 49 generated scenarios leave the suite. It goes when ESS
-      # writes those scenarios without it: the fix of beyond10x/ess#804.
+      # SYNTHESIS: `principal-262144` is the value ESS 0.97.3 synthesis gives the first caller's
+      # `principal`, not an address anybody holds. Without it ESS 0.97.3 refuses 15 generated
+      # scenarios more (`ESS-SYNTH-013`: the invariant of `OptionLetter` at the `decision` and
+      # `default_on_silence` of 5 views, where no outcome leaves a row) and `task coverage`
+      # fails. It goes when ESS writes those scenarios without it: the fix of beyond10x/ess#804.
       - {name: from, type: inbox.messaging.Principal, example: principal-262144}
       - {name: on_behalf_of, type: inbox.messaging.Principal, summary: "The principal whose word this is; `from` itself when the sender speaks for nobody else."}
       - {name: authority, type: Optional<inbox.messaging.DelegationId>}
@@ -380,10 +381,11 @@ commands:
       - {name: kind, type: inbox.messaging.Kind}
       - {name: thread, type: inbox.messaging.ThreadId}
       - {name: reply_shape, type: Optional<inbox.messaging.ReplyShape>}
-      # SYNTHESIS: ESS 0.97.1 synthesis draws a candidate for an `Optional` of a newtype without
-      # the newtype's invariant, so without these 2 examples the guard `unknown-option` refuses
-      # every candidate, `posted` is refused `ESS-SYNTH-003` and 54 generated scenarios leave the
-      # suite. They go when synthesis keeps the invariant: beyond10x/ess issue 809.
+      # SYNTHESIS: without these 2 examples ESS 0.97.3 refuses `unknown-option` (`ESS-SYNTH-003`)
+      # and the same 15 scenarios of the invariant of `OptionLetter` at views (`ESS-SYNTH-013`):
+      # 16 generated scenarios leave the suite and `task coverage` fails. On ESS 0.97.1 the guard
+      # refused every candidate, `posted` was refused and 54 left. They go when synthesis keeps
+      # the invariant of a newtype in a candidate for an `Optional` of it: beyond10x/ess issue 809.
       - {name: decision, type: Optional<inbox.messaging.DecisionAsk>, example: {options: [{letter: A, text: Ship}, {letter: B, text: Hold}], recommended_option: A}}
       - {name: default_on_silence, type: Optional<inbox.messaging.OptionLetter>, example: A}
       - {name: created, type: Timestamp}
@@ -446,7 +448,7 @@ commands:
         external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
         before_row: true
         error: inbox.messaging.NoAuthority
-      # SYNTHESIS: ESS 0.97.1 answers `unknown-inbox` (`exists: false`) before this outcome and
+      # SYNTHESIS: ESS 0.97.3 answers `unknown-inbox` (`exists: false`) before this outcome and
       # before `duplicate-key`, whatever the declaration order; the outcomes with `where` and
       # `inbox-closed` follow in declaration order. A sender's repost goes to an inbox that exists.
       - name: duplicate
@@ -638,11 +640,12 @@ commands:
         when_subject:
           predicate: kind == note
         error: inbox.messaging.NotAnswerable
-      # SYNTHESIS: the option part has a guard ESS 0.97.1 validates and interprets (`exists` over
-      # the stored `decision.options`, a `when_subject` outcome before this one), but with it
-      # `ess generate synthesize --target rust` keeps all of `Answer` an obligation (85 of 88
-      # capabilities generated) and drops the external branch port the service answers through.
-      # The option part stays in this external branch until synthesis generates that guard.
+      # SYNTHESIS: the option part has a guard ESS 0.97.3 validates (`exists` over the stored
+      # `decision.options`, a `when_subject` outcome before this one), but with it
+      # `ess generate synthesize --target rust` on ESS 0.97.3 keeps all of `Answer` an obligation
+      # (85 of 88 capabilities generated) and drops the method `external` of the generated
+      # `Context`, the port the service answers the external branches through. The option part
+      # stays in this external branch until synthesis generates that guard.
       - name: shape-mismatch
         external: the reply does not fit the message's `reply_shape`, or names no option of the decision
         error: inbox.messaging.ShapeMismatch

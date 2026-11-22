@@ -107,8 +107,8 @@ fn a_manifest_out_of_its_form_is_edited() {
     for (name, from, to) in [
         (
             "scenarios-edited-requires",
+            "requires: ess 0.97.3\n",
             "requires: ess 0.97.1\n",
-            "requires: ess 0.97.0\n",
         ),
         (
             "scenarios-edited-twice",

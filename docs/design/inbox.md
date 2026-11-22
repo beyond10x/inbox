@@ -126,8 +126,8 @@ Each can be changed; the alternative is named where there is one.
    sender, and `duplicate` answers only the sender's own stored message: a post under the id of
    another sender's live message is refused `id-taken` (`MessageIdTaken`), after every other
    refusal. The row refusals of `PostMessage` are answered in this order (measured on the ESS
-   0.97.1 interpreted target): `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`,
-   `id-taken`. The model declares `duplicate` before `unknown-inbox`, and the interpreter still
+   0.97.1 and 0.97.3 interpreted targets): `unknown-inbox`, `duplicate`, `duplicate-key`,
+   `inbox-closed`, `id-taken`. The model declares `duplicate` before `unknown-inbox`, and the interpreter still
    answers `unknown-inbox` (`exists: false`) first; a sender's repost goes to the inbox its
    message is in, which exists, so it answers `duplicate`, also after the recipient closed the
    inbox. A post to an address no inbox has, or into a closed inbox, answers alike for an id
@@ -149,10 +149,10 @@ Where several refusals of a post hold, the post is answered with the first of: t
 refusals in declaration order (`not-sender`, `no-authority`, `already-expired`,
 `request-without-shape`, `decision-without-options`, `unknown-option`); then the 2 external
 refusals (`signature-invalid`, `authority-invalid`), decided before any row is read; then
-the row refusals in the order measured on the ESS 0.97.1 interpreted target: `unknown-inbox`,
-`duplicate`, `duplicate-key`, `inbox-closed`, `id-taken` (`unknown-inbox` and `inbox-closed` never
-hold together, and `id-taken` holds with every `duplicate`). The suite holds the pairs: each
-external refusal, `unknown-option` and `request-without-shape` against each of the 5 row
+the row refusals in the order measured on the ESS 0.97.1 and 0.97.3 interpreted targets:
+`unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken` (`unknown-inbox` and
+`inbox-closed` never hold together, and `id-taken` holds with every `duplicate`). The suite
+holds the pairs: each external refusal, `unknown-option` and `request-without-shape` against each of the 5 row
 refusals, and each pair of
 row refusals one post can make hold, in the authored scenarios
 `a-bad-signature-is-refused-before-any-row-is-read`,
@@ -179,7 +179,7 @@ external branches in declaration order", which puts `unknown-inbox` before the i
 refusals and the external refusals after every row refusal. The core and the service follow the
 interpreter, which the suite runs against.
 
-## What the specification cannot say (ESS 0.97.1)
+## What the specification cannot say (ESS 0.97.3)
 
 Each item is a rule of the service that stage 2 implements and tests outside the suite, or a
 limit of synthesis that an authored scenario makes up for. The items on `from` and on the 2
@@ -188,16 +188,18 @@ issue 809).
 
 `ess/` holds no `UNMAPPED:` marker, and `task spec` fails with the file and line of one. A rule
 the specification cannot express is an `external:` outcome that states its reason, and is listed
-here. The `external:` outcomes on ESS 0.97.1: `signature-invalid` and `authority-invalid` of
+here. The `external:` outcomes on ESS 0.97.3: `signature-invalid` and `authority-invalid` of
 `PostMessage` and of `Answer` (a guard cannot verify a signature or resolve a delegation of the
 key file; a delegation spelled as a provided entity loses 51 generated scenarios), and
 `shape-mismatch` of `Answer`. Its reply-shape part (at most so many lines, or a JSON text) was
 not tried as a guard. Its option part has one: a `when_subject` outcome `option-mismatch` with
-`exists` over the stored `decision.options`, which ESS 0.97.1 validates, synthesizes and
-interprets (112 scenarios, all passed). With it, `ess generate synthesize --target rust` keeps
-all of `Answer` an obligation (85 of 88 capabilities generated, 3 obligations) and drops the
-port through which the service answers the external branches of `Answer`, so the option part
-stays in the external branch until synthesis generates that guard.
+`exists` over the stored `decision.options`, which ESS 0.97.1 validated, synthesized and
+interpreted (112 scenarios, all passed). On ESS 0.97.3 it validates, and synthesis writes the
+same 112 scenarios and refuses the new outcome (`ESS-SYNTH-004`). With it,
+`ess generate synthesize --target rust` keeps all of `Answer` an obligation on ESS 0.97.3 as on
+0.97.1 (85 of 88 capabilities generated, 3 obligations) and drops the method `external` of the
+generated `Context`, through which the service answers the external branches of `Answer`, so
+the option part stays in the external branch until synthesis generates that guard.
 
 - **No per-caller filter on a view.** Who may read which rows is a rule of the service: a row is
   answered to the owner of the inbox in `to` or to the sender in `from`.
@@ -219,19 +221,23 @@ stays in the external branch until synthesis generates that guard.
   rule), and only notes once an input guard depends on `kind`. 51 generated scenarios are
   refused for these reasons and are covered by authored scenarios (`covers:`).
 - **Synthesis ignores a newtype's invariant in a candidate for an `Optional` of it**
-  (beyond10x/ess issue 809). Under the guard `unknown-option` it then finds no decision whose
-  letters it accepts, refuses `posted` (`ESS-SYNTH-003`), and 54 generated scenarios leave the
-  suite. The inputs `decision` and `default_on_silence` of `PostMessage` carry an `example:`
-  each until the issue is fixed. With them synthesis takes about 4 times as long (CPU time of
-  `task coverage`'s synthesis on a loaded host: 10 s on `8e9c3ab`, 43 s with this
-  specification; the clause on a `default_on_silence` without a decision adds 10 to 20 s of
-  it).
+  (beyond10x/ess issue 809). On ESS 0.97.1 it then found no decision whose letters it accepts
+  under the guard `unknown-option`, refused `posted` (`ESS-SYNTH-003`), and 54 generated
+  scenarios left the suite. On ESS 0.97.3, without the examples below, it refuses
+  `unknown-option` (`ESS-SYNTH-003`) and leaves no row with a decision in a view, and 16
+  generated scenarios leave the suite: `task coverage` fails. The inputs `decision` and
+  `default_on_silence` of `PostMessage` carry an `example:` each until the issue is fixed. On
+  ESS 0.97.1 they made synthesis take about 4 times as long (CPU time of `task coverage`'s
+  synthesis on a loaded host: 10 s on `8e9c3ab`, 43 s with this specification); on ESS 0.97.3
+  the synthesis takes 20 s of CPU time with them and without them.
 - **Synthesis does not find a `from` equal to the caller's `principal`** under the `not-sender`
   guard of `PostMessage`, so it would store no message and 49 generated scenarios would leave the
-  suite (measured on ESS 0.96.0). The input `from` of `PostMessage` carries
-  `example: principal-262144`, the value ESS 0.97.1 synthesis gives the first caller's
-  `principal` and not an address anybody holds; it goes when ESS writes those scenarios without
-  it, which is the fix of beyond10x/ess#804. With it, a generated scenario posts as one caller
+  suite (measured on ESS 0.96.0). On ESS 0.97.3, without the example below, synthesis refuses
+  15 generated scenarios more (`ESS-SYNTH-013`, the invariant of `OptionLetter` at the
+  `decision` and `default_on_silence` of 5 views) and `task coverage` fails. The input `from`
+  of `PostMessage` carries `example: principal-262144`, the value ESS 0.97.3 synthesis gives
+  the first caller's `principal` and not an address anybody holds; it goes when ESS writes
+  those scenarios without it, which is the fix of beyond10x/ess#804. With it, a generated scenario posts as one caller
   only: 19 of them lost the second run under a second caller they had before the guard (also
   measured on ESS 0.96.0).
 - **42 more refusals are `ESS-SYNTH-013`**: type-invariant checks at view fields for which
@@ -243,7 +249,7 @@ stays in the external branch until synthesis generates that guard.
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.1**: synthesis writes 112 scenarios (38 authored) and refuses 93,
+- **`task coverage` on ESS 0.97.3**: synthesis writes 112 scenarios (38 authored) and refuses 93,
   and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
   runs on the interpreted target as 112 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
@@ -272,7 +278,7 @@ refusals.
 The plan is in `.engineering/planning/`: one epic per stage 2 to 6 and draft stories for stage 2.
 
 Stage 2 starts from what ESS synthesizes. `ess generate synthesize --target rust --layout crate`
-on ESS 0.97.1 writes 86 of 88 capabilities: the model types, the behaviour of 7 commands, the
+on ESS 0.97.3 writes 86 of 88 capabilities: the model types, the behaviour of 7 commands, the
 query of 9 views, the storage and context ports, and an HTTP route table with JSON codecs. It
 leaves 2 obligations, the behaviours of `PostMessage` (the `distinct` over the options in the
 guard `unknown-option`, and the row-set guards `duplicate` and `duplicate-key`) and

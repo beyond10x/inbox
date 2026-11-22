@@ -77,6 +77,14 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 - `refuse` of a note is refused: the new outcome `note` (`NotAnswerable`, as `answer` of a
   note), and the note stays as it was. 0.2.0 refused the note, and its sender could then
   collect it.
+- ESS 0.97.3 is the pinned release, in place of 0.97.1: `ess/ess-inputs.yaml`, the manifest
+  head `inbox-xtask scenarios` writes, and the release archive the CI job installs with its
+  SHA-256. The generated crate, the projections and the data of the landing page's figure are
+  byte for byte as before. The suite `task coverage` writes keeps its format, its 112
+  scenarios and its coverage; 6 read-grant scenarios of `Replies`, `Settled` and `Unanswered`
+  no longer read other views, so over HTTP 1 scenario, not 7, is unsupported for a claim on
+  the stored signature (`unsupported.tsv`), and 81 stay unsupported. The synthesis of
+  `task coverage` takes 20 s of CPU time where it took 41 s.
 
 ## [0.2.0] - 2026-11-22
 

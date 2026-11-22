@@ -144,7 +144,7 @@ fn unknown_option(input: &PostMessage) -> bool {
         || !offered(input.default_on_silence.as_ref())
 }
 
-/// `inbox.messaging.PostMessage`, in the order the ESS 0.97.1 interpreter and synthesizer select
+/// `inbox.messaging.PostMessage`, in the order the ESS 0.97.3 interpreter and synthesizer select
 /// its outcomes:
 ///
 /// 1. the input-guarded refusals in declaration order: `not-sender` (`from` is not the caller's

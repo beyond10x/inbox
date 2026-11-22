@@ -6,7 +6,7 @@ none of this: they list features and limits ([features](https://beyond10x.github
 
 ## On `main`
 
-Numbers from 2026-11-22, ESS 0.97.1, Rust 1.99.1. Case counts are the passed cases of
+Numbers from 2026-11-22, ESS 0.97.3, Rust 1.99.1. Case counts are the passed cases of
 `task test` (cargo-nextest) in one run of `task check`.
 
 | Part | What it does | Number | Proof |
@@ -53,7 +53,7 @@ running service a scenario runs only where every step can be sent and witnessed 
 81 cannot: a caller whose principal and inbox differ (70 scenarios; over HTTP both
 are the principal of the caller's key), a step as the Sweeper (37; only the service's own
 expiry task is the Sweeper), a step as no actor (9; a request without a signature is
-answered `401`), a claim on the stored `signature` (7; the run signs each envelope with
+answered `401`), a claim on the stored `signature` (1; the run signs each envelope with
 its own key), one delegation id for two pairs of sender and principal (2; an id names one
 entry of the key file). A scenario can have several reasons. ESS reports a run with an
 unsupported scenario as `failed`; `task conform` fails unless the unsupported scenarios and their
@@ -123,7 +123,7 @@ without them.
   passes both (8 of the 12 changed services the adversary built). The tests of
   `crates/inbox-server` and `crates/inbox-verify` fail on each of the 8, and
   `task check` runs them.
-- Rules the specification cannot state on ESS 0.97.1 (who may read which rows, the blocking
+- Rules the specification cannot state on ESS 0.97.3 (who may read which rows, the blocking
   read, and others listed in
   [`docs/design/inbox.md`](../docs/design/inbox.md))
   are implemented by the service and tested outside the suite.
@@ -154,16 +154,21 @@ without them.
   - [beyond10x/ess#799](https://github.com/beyond10x/ess/issues/799): for a cleared optional
     member of a view row the suite claims `null`, while the generated Rust server leaves the
     member out. The runner treats an absent top-level member and `null` as one value; one
-    adversary case that needs the exact comparison is ignored until the issue is closed.
+    adversary case that needs the exact comparison is ignored until the issue is closed. On
+    ESS 0.97.3 the rule is still needed: with an exact comparison the run against the core
+    fails `PostMessage/outcome/posted` on a row of `Due`.
   - [beyond10x/ess#804](https://github.com/beyond10x/ess/issues/804): with the guard `not-sender` in the specification,
     synthesis writes no stored message under it, and 49 generated scenarios leave the suite
-    (measured on ESS 0.96.0). Until it is fixed the input `from` of `PostMessage` carries the
-    example value `principal-262144`, the value synthesis gives its first caller and not an
-    address anybody holds. It shows in the generated OpenAPI documents and the JSON Schema of
+    (measured on ESS 0.96.0); on ESS 0.97.3, without the example, 15 generated scenarios are
+    refused and `task coverage` fails. Until it is fixed the input `from` of `PostMessage`
+    carries the example value `principal-262144`, the value synthesis gives its first caller
+    and not an address anybody holds. It shows in the generated OpenAPI documents and the JSON Schema of
     `PostMessage` (3 files) and changes no decoder. With it, 19 generated scenarios lost a
     second run under a second caller (also measured on ESS 0.96.0).
   - beyond10x/ess issue 809 ([link](https://github.com/beyond10x/ess/issues/809)): synthesis
     draws a candidate for an `Optional` of a newtype without the newtype's invariant. Under the
-    guard `unknown-option` it then refuses `posted` and 54 generated scenarios leave the suite.
-    Until it is fixed the inputs `decision` and `default_on_silence` of `PostMessage` carry an
-    example each, and synthesis takes about 4 times as long as before the guard.
+    guard `unknown-option` it then refused `posted` on ESS 0.97.1 and 54 generated scenarios
+    left the suite; on ESS 0.97.3 it refuses `unknown-option` and 16 leave, and
+    `task coverage` fails. Until it is fixed the inputs `decision` and `default_on_silence` of
+    `PostMessage` carry an example each. On ESS 0.97.1 they made synthesis take about 4 times
+    as long as before the guard; on ESS 0.97.3 synthesis takes as long with them as without.

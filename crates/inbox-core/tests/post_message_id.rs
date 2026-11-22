@@ -3,7 +3,7 @@
 //! id of another sender's, after `unknown-inbox`, `duplicate-key` and `inbox-closed`. A post under
 //! another sender's id to an unknown or closed inbox is answered as one under a free id.
 //!
-//! One case per pair of the order the ESS 0.97.1 interpreted target answers: `unknown-inbox`,
+//! One case per pair of the order the ESS 0.97.3 interpreted target answers: `unknown-inbox`,
 //! `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken`, then `posted`. Each refused post
 //! is held to store and publish nothing.
 
