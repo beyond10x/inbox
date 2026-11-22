@@ -34,6 +34,25 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   documented statuses 0 to 4, and a panic message in place of the usage line
   (story:an-argument-that-is-not-utf-8-is-a-usage-error).
 
+- A message whose `expires` the service's clock has reached takes no read mark and no
+  delivery mark: `read` and `mark-delivered` of a message in `Sent`, `Delivered` or `Read`
+  answer `deadline-passed` (502, error `Expired`; `inbox read` exits 1), change nothing and
+  publish nothing, and the message stays until the expiry task removes it or decides it on
+  silence. A third principal still gets `unknown-message`. In every release up to and
+  including 0.3.1 a due note its recipient read before the sweep was removed with
+  `MessageHandled`, and the same note read after the sweep with `MessageExpired`: the event the
+  sender got depended on when the task ran; now it is `MessageExpired` in both orders.
+  `inbox pending` and `inbox wait` mark nothing and still list a due message until the sweep
+  (story:a-due-message-takes-no-mark).
+- A wait on `Pending` (`GET /messaging/views/pending?wait=N`, `inbox wait`) is not ended by a
+  row whose `expires` is at or before the service's clock, which its owner can no longer read
+  or mark: it ends with a row that is not due, at its bound, or at the stop, and then answers
+  the whole view, due rows included. Without this, a wake loop of `wait` and `read` would get
+  the due row back at once, again and again, until the sweep. `pending` without `wait` is
+  unchanged. A wait that ends at its bound or at the stop reads the view once more and answers
+  that read, so it lists no row the expiry task removed while it slept; a sweep that expired a
+  message wakes every wait, which reads its view again.
+
 ## [0.3.1] - 2026-11-22
 
 ### Security

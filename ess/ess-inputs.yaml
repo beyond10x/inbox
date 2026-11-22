@@ -7,6 +7,8 @@ specification:
 scenarios:
 - scenarios/a-bad-signature-is-refused-before-any-row-is-read.yaml
 - scenarios/a-late-answer-leaves-the-decision-to-silence.yaml
+- scenarios/a-late-delivery-mark-leaves-the-request-to-expire.yaml
+- scenarios/a-late-read-leaves-the-note-to-expire.yaml
 - scenarios/a-late-refusal-leaves-the-request-to-expire.yaml
 - scenarios/a-message-id-another-sender-holds-is-taken.yaml
 - scenarios/a-refused-delegation-is-answered-before-any-row-is-read.yaml

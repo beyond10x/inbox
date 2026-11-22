@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+// contract digest f807145c2ee167ef46048e8e80ca37f3559adea0def6d63fa0d8b3b81c9a7a9d
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -1191,6 +1191,13 @@ pub enum MarkDeliveredOutcome {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
         error: NotRecipient,
     },
+    /// `deadline-passed` — externally decided (the service's Clock port reads at or after the message's stored `expires`) when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`.
+    ///
+    /// The deadline has passed: the message stays as it is until the expiry task decides it.
+    DeadlinePassed {
+        /// Why it was refused: `inbox.messaging.Expired`.
+        error: Expired,
+    },
     /// `delivered` — when the existing subject is in Sent.
     Delivered {
         /// The `inbox.messaging.MessageDelivered` this outcome publishes.
@@ -1234,6 +1241,13 @@ pub enum MarkReadOutcome {
     NotRecipient {
         /// Why it was refused: `inbox.messaging.NotRecipient`.
         error: NotRecipient,
+    },
+    /// `deadline-passed` — externally decided (the service's Clock port reads at or after the message's stored `expires`) when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`.
+    ///
+    /// The deadline has passed: the message stays as it is until the expiry task decides it.
+    DeadlinePassed {
+        /// Why it was refused: `inbox.messaging.Expired`.
+        error: Expired,
     },
     /// `handled` — when the existing subject's stored fields satisfy `(kind == note and state in [Sent, Delivered])`.
     ///
@@ -1605,7 +1619,7 @@ pub struct Duplicate;
 
 /// The declared error `inbox.messaging.Expired`.
 ///
-/// The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.
+/// The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expired;
 

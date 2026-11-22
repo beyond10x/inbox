@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::{Run, replace, repository, tree, xtask};
 
-const SUMMARY: &str = "42 scenarios, 0 path(s) differ from ess/ess-inputs.yaml";
+const SUMMARY: &str = "44 scenarios, 0 path(s) differ from ess/ess-inputs.yaml";
 
 fn ess_tree(name: &str) -> PathBuf {
     tree(name, &["ess"])
@@ -82,7 +82,7 @@ fn a_scenario_file_the_manifest_does_not_list_is_named() {
         [
             "not in the manifest: ess/scenarios/note-expires.yaml",
             "not in the manifest: ess/scenarios/notes.txt",
-            "42 scenarios, 2 path(s) differ from ess/ess-inputs.yaml",
+            "44 scenarios, 2 path(s) differ from ess/ess-inputs.yaml",
         ]
     );
 }
@@ -97,7 +97,7 @@ fn a_manifest_line_without_its_file_is_missing() {
         run.stdout_lines(),
         [
             "missing: ess/scenarios/note-expires.yaml",
-            "41 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
+            "43 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
         ]
     );
 }
@@ -134,7 +134,7 @@ fn a_manifest_out_of_its_form_is_edited() {
             run.stdout_lines(),
             [
                 "edited: ess/ess-inputs.yaml",
-                "42 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
+                "44 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
             ],
             "{name}"
         );
@@ -151,7 +151,7 @@ fn an_absent_manifest_is_missing() {
         run.stdout_lines(),
         [
             "missing: ess/ess-inputs.yaml",
-            "42 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
+            "44 scenarios, 1 path(s) differ from ess/ess-inputs.yaml",
         ]
     );
 }
@@ -162,7 +162,7 @@ fn scenarios_rewrites_the_manifest_from_the_files() {
     replace(&manifest(&root), "- scenarios/note-expires.yaml\n", "");
     let run = xtask(&root, &["scenarios"]);
     assert_eq!(run.code, 0, "{}{}", run.stdout, run.stderr);
-    assert_eq!(run.stdout_lines(), ["42 scenarios"]);
+    assert_eq!(run.stdout_lines(), ["44 scenarios"]);
     assert_eq!(
         fs::read(manifest(&root)).unwrap(),
         fs::read(repository().join("ess/ess-inputs.yaml")).unwrap()

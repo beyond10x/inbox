@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:5d3b9ea1b2ab0d8b896128b5d81a7d975d465757a7b66740b3192786774ea7c4"
+      "contract_digest": "slice-sha256/2:59202bc61282f439bdd70963dd4f112afea0fe5a4f0b5a4b74fdeae4ea5f94b1"
     },
     "x-ess-reached-by": "network"
   },
@@ -760,6 +760,16 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "Outcome `deadline-passed`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inbox.messaging.MarkDelivered.deadline-passed.Response"
+                }
+              }
+            }
           }
         }
       }
@@ -1228,6 +1238,16 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "Outcome `deadline-passed`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/inbox.messaging.MarkRead.deadline-passed.Response"
+                }
+              }
+            }
           }
         }
       }
@@ -1646,7 +1666,7 @@
       "get": {
         "operationId": "inbox.messaging.Pending",
         "summary": "Pending",
-        "description": "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row or the wait ends.",
+        "description": "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row whose `expires` has not passed, or the wait ends; it then answers every row, those past their `expires` included.",
         "tags": [
           "messaging"
         ],
@@ -2203,7 +2223,7 @@
         "properties": {
           "error": {
             "const": "inbox.messaging.Expired",
-            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.",
+            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.",
             "type": "string"
           },
           "outcome": {
@@ -3386,6 +3406,32 @@
         ],
         "type": "object"
       },
+      "inbox.messaging.MarkDelivered.deadline-passed.Response": {
+        "additionalProperties": false,
+        "description": "The deadline has passed: the message stays as it is until the expiry task decides it. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`.",
+        "properties": {
+          "error": {
+            "const": "inbox.messaging.Expired",
+            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "deadline-passed",
+            "description": "Which declared outcome the command took."
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error"
+        ],
+        "type": "object"
+      },
       "inbox.messaging.MarkDelivered.delivered.Response": {
         "additionalProperties": false,
         "description": "Taken when the existing subject is in Sent. A `inbox.messaging.Message` has moved to `Delivered`, along `deliver`. The instance is the one `message_id` names. Emits `MessageDelivered`, published to consumers and listed under `published`.",
@@ -3538,6 +3584,32 @@
         "required": [
           "outcome",
           "published"
+        ],
+        "type": "object"
+      },
+      "inbox.messaging.MarkRead.deadline-passed.Response": {
+        "additionalProperties": false,
+        "description": "The deadline has passed: the message stays as it is until the expiry task decides it. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`.",
+        "properties": {
+          "error": {
+            "const": "inbox.messaging.Expired",
+            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.",
+            "type": "string"
+          },
+          "outcome": {
+            "const": "deadline-passed",
+            "description": "Which declared outcome the command took."
+          },
+          "published": {
+            "description": "Every event this branch published, in publication order: its qualified name and its payload.",
+            "maxItems": 0,
+            "type": "array"
+          }
+        },
+        "required": [
+          "outcome",
+          "published",
+          "error"
         ],
         "type": "object"
       },
@@ -4262,7 +4334,7 @@
       },
       "inbox.messaging.Pending.Row": {
         "title": "Pending row",
-        "description": "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row or the wait ends.",
+        "description": "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row whose `expires` has not passed, or the wait ends; it then answers every row, those past their `expires` included.",
         "x-ess-name": "inbox.messaging.Pending",
         "x-ess-kind": "view-row",
         "type": "object",
@@ -4895,7 +4967,7 @@
         "properties": {
           "error": {
             "const": "inbox.messaging.Expired",
-            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.",
+            "description": "The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.",
             "type": "string"
           },
           "outcome": {

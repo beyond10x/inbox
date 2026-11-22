@@ -15,6 +15,7 @@ mod argument_not_utf_8;
 mod cases;
 mod collect_record;
 mod control_sequences;
+mod due_mark;
 mod epoch;
 mod id_taken;
 mod support;

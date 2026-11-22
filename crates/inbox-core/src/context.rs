@@ -1,4 +1,4 @@
-//! The context port: the caller's attributes, the service's clock and the answers to the 9
+//! The context port: the caller's attributes, the service's clock and the answers to the 11
 //! `external:` branches.
 
 use inbox::behaviour::{ExternalCommand, MessageStorage, TryContext, unmet_context};
@@ -173,7 +173,12 @@ impl<K: CommandClock + ?Sized> CommandClock for std::sync::Arc<K> {
 
 /// Whether `expires` is at or before `now`, both read as instants, as the generated guards and
 /// the conformance interpreter order a `Timestamp`; `None` where either names no instant.
-fn due(expires: &Timestamp, now: &Timestamp) -> Option<bool> {
+///
+/// The one comparison of a deadline with the clock: every `deadline-passed` and
+/// `expired-on-arrival` of [`ServiceContext`] asks it, and the HTTP service's wait on `Pending`
+/// asks it of each row, so a row the marks refuse as due does not end a wait.
+#[must_use]
+pub fn due(expires: &Timestamp, now: &Timestamp) -> Option<bool> {
     invariant::compare(
         Some(Fact::text(&expires.0)),
         Op::Le,
@@ -212,8 +217,8 @@ pub trait PostExternals {
 /// service's clock, and nothing else: no outside code sets an answer on it. `shape-mismatch` is
 /// computed from the reply and the stored message; the 2 `signature-invalid` and 2
 /// `authority-invalid` branches are asked of the verifier; `expired-on-arrival` of `PostMessage`
-/// and the 2 `deadline-passed` of `Answer` and `Refuse` compare an `expires` with the clock,
-/// read when the command asks.
+/// and the 4 `deadline-passed` of `Answer`, `Refuse`, `MarkDelivered` and `MarkRead` compare an
+/// `expires` with the clock, read when the command asks.
 #[derive(Debug, Clone)]
 pub struct ServiceContext<V, B, K> {
     caller: CallerAttributes,
@@ -242,7 +247,8 @@ impl<V, B, K> ServiceContext<V, B, K> {
 impl<V, B: MessageStorage, K: CommandClock> ServiceContext<V, B, K> {
     /// `deadline-passed`: the message `id` is in `Sent`, `Delivered` or `Read`, and the clock reads
     /// at or after its stored `expires`. A message in another state is not due here: `Answer` and
-    /// `Refuse` answer it `already-settled`.
+    /// `Refuse` answer it `already-settled`, `MarkDelivered` `already-delivered` and `MarkRead`
+    /// `already-read`.
     fn deadline_passed(&self, id: &MessageId) -> Result<bool, UnmetObligation> {
         let Some(held) = self.open(id) else {
             return Ok(false);
@@ -285,8 +291,8 @@ impl<V: SignatureVerifier, B: MessageStorage, K: CommandClock> TryContext
         Ok(self.caller.principal.clone())
     }
 
-    /// The 5 external branches of `Answer` and the 1 of `Refuse`, the only ones the generated
-    /// crate asks about. An outcome name a command does not declare is answered as unavailable.
+    /// The 5 external branches of `Answer` and the 1 each of `Refuse`, `MarkDelivered` and
+    /// `MarkRead`, the only ones the generated crate asks about. An outcome name a command does not declare is answered as unavailable.
     fn try_external(
         &mut self,
         command: ExternalCommand<'_>,
@@ -311,6 +317,12 @@ impl<V: SignatureVerifier, B: MessageStorage, K: CommandClock> TryContext
             }
             (ExternalCommand::InboxMessagingRefuse(refusal), "deadline-passed") => {
                 self.deadline_passed(&refusal.message_id)
+            }
+            (ExternalCommand::InboxMessagingMarkDelivered(mark), "deadline-passed") => {
+                self.deadline_passed(&mark.message_id)
+            }
+            (ExternalCommand::InboxMessagingMarkRead(mark), "deadline-passed") => {
+                self.deadline_passed(&mark.message_id)
             }
             _ => Err(unmet_context("external branch answer")),
         }

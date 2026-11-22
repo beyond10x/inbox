@@ -9,9 +9,12 @@
 //!   system.
 //! - [`ServiceContext`]: the generated context port ([`inbox::behaviour::TryContext`]) and
 //!   [`PostExternals`], built from a caller, a [`SignatureVerifier`], the backend and the service's
-//!   [`CommandClock`]. It answers the 9 `external:` branches: 3 of `PostMessage`, 5 of `Answer`, 1
-//!   of `Refuse`. The clock is part of the context the embedding passes per request, so
-//!   [`handle`] applies the deadline of a message as the HTTP service does.
+//!   [`CommandClock`]. It answers the 11 `external:` branches: 3 of `PostMessage`, 5 of `Answer`, 1
+//!   each of `Refuse`, `MarkDelivered` and `MarkRead`. The clock is part of the context the
+//!   embedding passes per request, so [`handle`] applies the deadline of a message as the HTTP
+//!   service does.
+//! - [`due`]: the one comparison of an `expires` with a clock reading, at full precision; every
+//!   deadline of [`ServiceContext`] asks it, and so does the HTTP service's wait on `Pending`.
 //! - [`MemoryBackend`]: both generated storage ports, in memory. Its clones share one store, and it
 //!   is `Send` and `Sync`.
 //!
@@ -43,7 +46,7 @@ mod obligations;
 
 pub use backend::{Exclusive, MemoryBackend};
 pub use context::{
-    CallerAttributes, CommandClock, Envelope, PostExternals, ServiceContext, SignatureVerifier,
+    CallerAttributes, CommandClock, Envelope, PostExternals, ServiceContext, SignatureVerifier, due,
 };
 pub use obligations::Core;
 

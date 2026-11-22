@@ -326,7 +326,7 @@ errors:
     summary: "`expires` is after the clock reading sent."
     fields: []
   - name: inbox.messaging.Expired
-    summary: "The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it."
+    summary: "The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it."
     fields: []
 
 commands:
@@ -559,6 +559,14 @@ commands:
         when_subject:
           predicate: to != caller.inbox
         error: inbox.messaging.NotRecipient
+      # SYNTHESIS: external for the reason given at `deadline-passed` of `Answer`.
+      - name: deadline-passed
+        when_subject:
+          predicate:
+            state: [Sent, Delivered, Read]
+        external: the service's Clock port reads at or after the message's stored `expires`
+        error: inbox.messaging.Expired
+        summary: "The deadline has passed: the message stays as it is until the expiry task decides it."
       - name: delivered
         when_subject_state: Sent
         moves: inbox.messaging.Message.deliver
@@ -590,6 +598,14 @@ commands:
         when_subject:
           predicate: to != caller.inbox
         error: inbox.messaging.NotRecipient
+      # SYNTHESIS: external for the reason given at `deadline-passed` of `Answer`.
+      - name: deadline-passed
+        when_subject:
+          predicate:
+            state: [Sent, Delivered, Read]
+        external: the service's Clock port reads at or after the message's stored `expires`
+        error: inbox.messaging.Expired
+        summary: "The deadline has passed: the message stays as it is until the expiry task decides it."
       - name: handled
         when_subject:
           predicate:
@@ -968,7 +984,7 @@ views:
     naming:
       wire: pending
       display: Pending
-      summary: "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row or the wait ends."
+      summary: "What an inbox holds that its owner has not read: the read a wake surface makes. `inbox wait` is this read held open until it has a row whose `expires` has not passed, or the wait ends; it then answers every row, those past their `expires` included."
 
   - name: inbox.messaging.Unanswered
     source: inbox.messaging.Message

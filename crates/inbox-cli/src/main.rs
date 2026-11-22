@@ -76,7 +76,8 @@ enum Command {
         #[arg(long)]
         inbox: Option<String>,
     },
-    /// `pending`, held open by the service until it has a row or the wait ends.
+    /// `pending`, held open by the service until it has a row whose `expires` has not passed, or
+    /// the wait ends; then every row, those past their `expires` included.
     Wait {
         #[command(flatten)]
         client: ClientArgs,
@@ -88,7 +89,8 @@ enum Command {
         seconds: u64,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
-    /// answer.
+    /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
+    /// the expiry task removes it or decides it on silence.
     Read {
         #[command(flatten)]
         client: ClientArgs,
@@ -204,8 +206,9 @@ struct ServeArgs {
     answer_retention: u64,
     /// For the conformance run only, hidden from `--help` and the reference: the instant (RFC
     /// 3339) the service's clock reads at the start, from which it moves on by the system clock's
-    /// elapsed time. Without it, the system clock. The deadline of a post, an answer and a
-    /// refusal, the request window and the expiry task read this clock.
+    /// elapsed time. Without it, the system clock. The deadline of a post, an answer, a refusal,
+    /// a read mark and a delivery mark, the rows a wait holds as due, the request window and the
+    /// expiry task read this clock.
     #[arg(long, value_name = "INSTANT", hide = true)]
     clock_start: Option<String>,
 }

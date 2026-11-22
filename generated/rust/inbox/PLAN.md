@@ -1,6 +1,6 @@
 <!--
   generated from inbox v1
-  contract digest 487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+  contract digest f807145c2ee167ef46048e8e80ca37f3559adea0def6d63fa0d8b3b81c9a7a9d
   do not edit: regenerate with `ess synthesize --layout crate`
 -->
 # Synthesis plan — inbox v1

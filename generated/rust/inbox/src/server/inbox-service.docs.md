@@ -1,6 +1,6 @@
 <!--
 generated from inbox v1
-contract digest slice-sha256/2:487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd
+contract digest slice-sha256/2:f807145c2ee167ef46048e8e80ca37f3559adea0def6d63fa0d8b3b81c9a7a9d
 do not edit: regenerate with `ess generate`
 -->
 
@@ -694,13 +694,15 @@ It takes:
 
 - `message_id` — `inbox.messaging.MessageId`
 
-It has five outcomes.
+It has six outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
 **`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
+
+**`deadline-passed`** — The deadline has passed: the message stays as it is until the expiry task decides it. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`. No entity in this specification changes. It reports `inbox.messaging.Expired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`delivered`** — Taken when the existing subject is in Sent. It moves a `inbox.messaging.Message` from `Sent` to `Delivered`, along the declared move `deliver`. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.MessageDelivered`. A test establishes the declared subject state and constructs input selecting this branch in that state.
 
@@ -714,13 +716,15 @@ It takes:
 
 - `message_id` — `inbox.messaging.MessageId`
 
-It has six outcomes.
+It has seven outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
 **`foreign-message`** — The caller is neither the recipient nor the sender of the message. The service answers it as `unknown-message`, so from this command a third principal cannot tell a message between others from no message. Taken when the existing subject's stored fields satisfy `(to != caller.inbox and from != caller.principal)`. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
+
+**`deadline-passed`** — The deadline has passed: the message stays as it is until the expiry task decides it. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`. No entity in this specification changes. It reports `inbox.messaging.Expired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`handled`** — The note is read, so it is handled and gone. Taken when the existing subject's stored fields satisfy `(kind == note and state in [Sent, Delivered])`. It removes the `inbox.messaging.Message` its input names; no view shows it afterwards. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.MessageHandled`. A test establishes and independently observes the subject enum fact before selecting this branch.
 
@@ -997,11 +1001,15 @@ Reported by `inbox.messaging.PostMessage` on its `duplicate` and `duplicate-key`
 
 ### `Expired`
 
-The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.
+The message's `expires` is at or before the service's clock reading: it takes no answer, no refusal, no read mark and no delivery mark, and the expiry task decides it.
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
 Reported by `inbox.messaging.Answer` on its `deadline-passed` outcome.
+
+Reported by `inbox.messaging.MarkDelivered` on its `deadline-passed` outcome.
+
+Reported by `inbox.messaging.MarkRead` on its `deadline-passed` outcome.
 
 Reported by `inbox.messaging.Refuse` on its `deadline-passed` outcome.
 
@@ -1157,4 +1165,4 @@ It may read [`Due`](#due) and [`Messages`](#messages), which an actor whose gran
 
 ---
 
-Generated from inbox v1 · contract digest `slice-sha256/2:487010925de8309edc5a6e4bf3e7e4b0565662ee7cf404223ab9c9069e876afd`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from inbox v1 · contract digest `slice-sha256/2:f807145c2ee167ef46048e8e80ca37f3559adea0def6d63fa0d8b3b81c9a7a9d`. Do not edit this file; change the specification and regenerate it with `ess generate`.
