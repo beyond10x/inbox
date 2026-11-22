@@ -313,10 +313,23 @@ fn every_member_a_service_sets_reaches_the_terminal_escaped() {
 
 /// A stand-in that reads one request head and answers it with the raw bytes `answer`.
 fn raw_stand_in(answer: &'static [u8]) -> (String, std::thread::JoinHandle<()>) {
+    raw_stand_in_within(answer, support::STAND_IN_WAIT)
+}
+
+/// [`raw_stand_in`] with the wait for the request given: the case that holds the bound passes 1 s.
+fn raw_stand_in_within(
+    answer: &'static [u8],
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("one connection");
+        let mut stream = support::accept_or_panic(
+            &listener,
+            wait,
+            "the raw stand-in of adversary_control_sequences.rs",
+            "the request of `pending`",
+        );
         let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
         let mut received = Vec::new();
         let mut buffer = [0_u8; 4096];
@@ -329,6 +342,29 @@ fn raw_stand_in(answer: &'static [u8]) -> (String, std::thread::JoinHandle<()>) 
         let _ = stream.write_all(answer);
     });
     (url, handle)
+}
+
+/// A raw stand-in whose client never connects ends with a message that names it and the missing
+/// request, and does not wait for it forever: the case that joins it fails with that message. The
+/// wait is 1 s here and 10 s for every other case.
+#[test]
+fn a_raw_stand_in_whose_client_never_connects_ends_and_names_the_request() {
+    let (_url, served) = raw_stand_in_within(b"", Duration::from_secs(1));
+    let started = Instant::now();
+    let message = match served.join() {
+        Ok(()) => panic!("the raw stand-in ended and said nothing"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert_eq!(
+        message,
+        "the raw stand-in of adversary_control_sequences.rs received no connection for the \
+         request of `pending` within 1 s"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        started.elapsed()
+    );
 }
 
 /// Answers that are not UTF-8, not JSON (a lone surrogate escape), or carry control characters in

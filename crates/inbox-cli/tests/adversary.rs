@@ -64,10 +64,24 @@ fn member<'a>(value: &'a Value, name: &str) -> &'a Value {
 /// A service stand-in on 127.0.0.1:0 that answers one request with `answer` and reports whether
 /// the outbox file at `outbox` held the posted message id at the moment the request arrived.
 fn stand_in(answer: &'static str, outbox: PathBuf) -> (String, std::thread::JoinHandle<bool>) {
+    stand_in_within(answer, outbox, support::STAND_IN_WAIT)
+}
+
+/// [`stand_in`] with the wait for the request given: the case that holds the bound passes 1 s.
+fn stand_in_within(
+    answer: &'static str,
+    outbox: PathBuf,
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<bool>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("one connection");
+        let mut stream = support::accept_or_panic(
+            &listener,
+            wait,
+            "the stand-in of adversary.rs",
+            "the request of `post`",
+        );
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("a read timeout");
@@ -836,5 +850,23 @@ fn json_without_a_subcommand_prints_one_document() {
         "exit {}, stdout {:?}",
         usage.status,
         usage.stdout
+    );
+}
+
+/// A stand-in whose client never connects ends with a message that names the missing request,
+/// and does not wait for it forever: the case that joins it fails with that message. The wait is
+/// 1 s here and 10 s for every other case.
+#[test]
+fn a_stand_in_whose_client_never_connects_ends_and_names_the_request() {
+    let dir = Dir::new("adv-no-request");
+    let (_url, seen) = stand_in_within("", dir.join("alice.outbox"), Duration::from_secs(1));
+    let message = match seen.join() {
+        Ok(kept) => panic!("the stand-in ended with {kept:?} and no message"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(
+        message
+            .contains("the stand-in of adversary.rs received no connection for the request of `post` within 1 s"),
+        "{message:?}"
     );
 }

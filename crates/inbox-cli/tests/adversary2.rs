@@ -184,10 +184,25 @@ fn stalling_relay(
     target: SocketAddr,
     stall: Duration,
 ) -> (String, std::thread::JoinHandle<String>) {
+    stalling_relay_within(target, stall, support::STAND_IN_WAIT)
+}
+
+/// [`stalling_relay`] with the wait for the request given: the case that holds the bound passes
+/// 1 s.
+fn stalling_relay_within(
+    target: SocketAddr,
+    stall: Duration,
+    wait: Duration,
+) -> (String, std::thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the relay binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let handle = std::thread::spawn(move || {
-        let (mut client, _) = listener.accept().expect("one connection");
+        let mut client = support::accept_or_panic(
+            &listener,
+            wait,
+            "the relay of adversary2.rs",
+            "the request of `post`",
+        );
         client
             .set_read_timeout(Some(Duration::from_secs(10)))
             .expect("a read timeout");
@@ -405,5 +420,25 @@ fn sigterm_ends_serve_when_its_standard_error_is_a_full_pipe() {
         status.is_some_and(|status| status.code() == Some(0)),
         "inbox serve after SIGTERM with a full standard error pipe: {status:?} (None: still \
          running 10 s later)"
+    );
+}
+
+/// A relay whose client never connects ends with a message that names the missing request, and
+/// does not wait for it forever: the case that joins it fails with that message. The wait is 1 s
+/// here and 10 s for every other case.
+#[test]
+fn a_relay_whose_client_never_connects_ends_and_names_the_request() {
+    let target: SocketAddr = "127.0.0.1:9".parse().expect("an address");
+    let (_relay, relayed) =
+        stalling_relay_within(target, Duration::from_millis(1), Duration::from_secs(1));
+    let message = match relayed.join() {
+        Ok(id) => panic!("the relay ended with {id:?} and no message"),
+        Err(panic) => panic.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(
+        message.contains(
+            "the relay of adversary2.rs received no connection for the request of `post` within 1 s"
+        ),
+        "{message:?}"
     );
 }

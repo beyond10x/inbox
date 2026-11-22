@@ -426,10 +426,14 @@ pub fn stand_in(status: u16, body: &'static str) -> (String, std::thread::JoinHa
 
 /// How long a stand-in waits for each connection: a case whose client never connects fails
 /// within seconds, naming the answer that was not asked for, and does not wait forever.
-const STAND_IN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+pub const STAND_IN_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The bound of the acceptance: a stand-in whose client never connects ends within 15 s. A longer
+/// `STAND_IN_WAIT` does not compile.
+const _: () = assert!(STAND_IN_WAIT.as_secs() <= 15);
 
 /// The next connection on `listener`, or `None` when none comes within `wait`.
-fn accept_within(
+pub fn accept_within(
     listener: &std::net::TcpListener,
     wait: std::time::Duration,
 ) -> Option<std::net::TcpStream> {
@@ -454,6 +458,22 @@ fn accept_within(
             Err(error) => panic!("the stand-in's listener failed: {error}"),
         }
     }
+}
+
+/// The next connection on `listener`; a stand-in that is joined by its case panics with a message
+/// that names itself (`who`) and what did not arrive (`what`) when none comes within `wait`.
+pub fn accept_or_panic(
+    listener: &std::net::TcpListener,
+    wait: std::time::Duration,
+    who: &str,
+    what: &str,
+) -> std::net::TcpStream {
+    accept_within(listener, wait).unwrap_or_else(|| {
+        panic!(
+            "{who} received no connection for {what} within {} s",
+            wait.as_secs()
+        )
+    })
 }
 
 /// Reads one request in full from `stream`: the head, then as many bytes as `Content-Length`

@@ -84,8 +84,20 @@ fn read_request(stream: &mut TcpStream) -> Vec<u8> {
 
 /// A proxy on 127.0.0.1:0 in front of the service at `service`: one connection after another,
 /// each handled by the next of `steps`. The request line of each is sent on the channel once
-/// the step is done (for `Forward`, once the answer was handed back).
+/// the step is done (for `Forward`, once the answer was handed back). The thread is never joined;
+/// it ends when no connection comes within 10 s.
 fn proxy(service: &str, steps: Vec<Step>) -> (String, mpsc::Receiver<String>) {
+    let (url, receiver, _thread) = proxy_within(service, steps, support::STAND_IN_WAIT);
+    (url, receiver)
+}
+
+/// [`proxy`] with the wait for each connection given, and the handle of its thread: the case that
+/// holds the bound passes 1 s and checks that the thread ends.
+fn proxy_within(
+    service: &str,
+    steps: Vec<Step>,
+    wait: Duration,
+) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
     let upstream = service
         .trim_end_matches('/')
         .strip_prefix("http://")
@@ -94,9 +106,9 @@ fn proxy(service: &str, steps: Vec<Step>) -> (String, mpsc::Receiver<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the proxy binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let (sender, receiver) = mpsc::channel();
-    std::thread::spawn(move || {
+    let thread = std::thread::spawn(move || {
         for step in steps {
-            let Ok((mut stream, _)) = listener.accept() else {
+            let Some(mut stream) = support::accept_within(&listener, wait) else {
                 return;
             };
             let request = read_request(&mut stream);
@@ -129,16 +141,26 @@ fn proxy(service: &str, steps: Vec<Step>) -> (String, mpsc::Receiver<String>) {
             }
         }
     });
-    (url, receiver)
+    (url, receiver, thread)
 }
 
-/// Up to `count` request lines from the proxy, waiting up to 15 s for each.
+/// `count` request lines from the proxy, waiting up to 10 s for each; the case fails, naming the
+/// missing request, when one does not come.
 fn requests(receiver: &mpsc::Receiver<String>, count: usize) -> Vec<String> {
+    requests_within(receiver, count, support::STAND_IN_WAIT)
+}
+
+/// [`requests`] with the wait for each line given.
+fn requests_within(receiver: &mpsc::Receiver<String>, count: usize, wait: Duration) -> Vec<String> {
     let mut lines = Vec::new();
     while lines.len() < count {
-        match receiver.recv_timeout(Duration::from_secs(15)) {
+        match receiver.recv_timeout(wait) {
             Ok(line) => lines.push(line),
-            Err(_) => break,
+            Err(_) => panic!(
+                "the proxy received no connection for request {} of {count} within {} s; read {lines:?}",
+                lines.len() + 1,
+                wait.as_secs()
+            ),
         }
     }
     lines
@@ -301,4 +323,26 @@ fn a_repost_that_cannot_write_the_epochs_file_reports_every_post_and_exits_4_ove
     let mut expected = vec![first, second];
     expected.sort();
     assert_eq!(held, expected);
+}
+
+/// A proxy whose client never connects ends its thread within its wait plus 2 s, and fails the
+/// case that reads its requests with a message that names the missing request. The wait is 1 s
+/// here and 10 s for every other case.
+#[test]
+#[should_panic(expected = "the proxy received no connection for request 1 of 1")]
+fn a_proxy_whose_client_never_connects_ends_its_thread_and_fails_the_case() {
+    let (_url, served, thread) = proxy_within(
+        "http://127.0.0.1:9",
+        vec![Step::Close],
+        Duration::from_secs(1),
+    );
+    let started = std::time::Instant::now();
+    while !thread.is_finished() && started.elapsed() < Duration::from_secs(3) {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        thread.is_finished(),
+        "the proxy's thread still waited for a connection 3 s after its wait of 1 s"
+    );
+    let _ = requests_within(&served, 1, Duration::from_secs(1));
 }

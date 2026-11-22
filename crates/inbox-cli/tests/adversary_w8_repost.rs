@@ -74,16 +74,28 @@ fn request_line(stream: &mut TcpStream) -> String {
 /// A stand-in on 127.0.0.1:0 that answers one request per connection with `answers` in turn:
 /// `None` closes the connection after reading the request, without an answer; `Some((status,
 /// epoch, body))` answers it. Each request line is sent on the channel as it is read. The thread
-/// is never joined, so a client that sends fewer requests than scripted does not hang the case.
+/// is never joined, so a client that sends fewer requests than scripted does not hang the case;
+/// it ends when no connection comes within 10 s, and [`requests`] fails the case, naming the
+/// missing request, when fewer arrive than the case expects.
 fn stand_in(
     answers: Vec<Option<(u16, Option<&'static str>, &'static str)>>,
 ) -> (String, mpsc::Receiver<String>) {
+    let (url, receiver, _thread) = stand_in_within(answers, support::STAND_IN_WAIT);
+    (url, receiver)
+}
+
+/// [`stand_in`] with the wait for each connection given, and the handle of its thread: the case
+/// that holds the bound passes 1 s and checks that the thread ends.
+fn stand_in_within(
+    answers: Vec<Option<(u16, Option<&'static str>, &'static str)>>,
+    wait: Duration,
+) -> (String, mpsc::Receiver<String>, std::thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("the stand-in binds");
     let url = format!("http://{}", listener.local_addr().expect("an address"));
     let (sender, receiver) = mpsc::channel();
-    std::thread::spawn(move || {
+    let thread = std::thread::spawn(move || {
         for answer in answers {
-            let Ok((mut stream, _)) = listener.accept() else {
+            let Some(mut stream) = support::accept_within(&listener, wait) else {
                 return;
             };
             let line = request_line(&mut stream);
@@ -99,15 +111,21 @@ fn stand_in(
             }
         }
     });
-    (url, receiver)
+    (url, receiver, thread)
 }
 
-/// Every request line the stand-in read, waiting up to 2 s after the client ended for each.
-fn requests(receiver: &mpsc::Receiver<String>) -> Vec<String> {
+/// Every request line the stand-in read, waiting up to 2 s after the client ended for each; the
+/// case fails, naming the missing request, when fewer than `count` arrive.
+fn requests(receiver: &mpsc::Receiver<String>, count: usize) -> Vec<String> {
     let mut lines = Vec::new();
     while let Ok(line) = receiver.recv_timeout(Duration::from_secs(2)) {
         lines.push(line);
     }
+    assert!(
+        lines.len() >= count,
+        "the stand-in received no connection for request {} of {count} within 2 s of the client's end; read {lines:?}",
+        lines.len() + 1
+    );
     lines
 }
 
@@ -248,7 +266,7 @@ fn an_answer_without_the_epoch_header_posts_the_kept_lines_without_an_epoch_too(
             ("INBOX_OUTBOX", outbox_text.as_str()),
         ],
     );
-    let lines = requests(&served);
+    let lines = requests(&served, 3);
     let run = run.ok();
     assert_eq!(reposted(&run.json()).len(), 2, "{run:#?}");
     assert_eq!(lines.len(), 3, "{lines:?}");
@@ -283,7 +301,7 @@ fn a_transport_failure_of_the_epoch_question_ends_repost_with_exit_3_and_posts_n
             ("INBOX_OUTBOX", outbox_text.as_str()),
         ],
     );
-    let lines = requests(&served);
+    let lines = requests(&served, 1);
     assert_eq!(run.status, TRANSPORT, "{run:#?}");
     assert_eq!(lines.len(), 1, "only the question: {lines:?}");
     assert!(lines[0].starts_with("GET "), "{lines:?}");
@@ -344,4 +362,25 @@ fn an_epochs_file_of_20000_lines_is_read_within_2_seconds() {
         fastest < Duration::from_secs(2),
         "`inbox outbox` over an epochs file of 20 001 lines took {fastest:?} in the fastest of 5 runs"
     );
+}
+
+/// A stand-in whose client never connects ends its thread within its wait plus 2 s, and fails the
+/// case that reads its requests with a message that names the missing request. The wait is 1 s
+/// here and 10 s for every other case.
+#[test]
+#[should_panic(expected = "the stand-in received no connection for request 1 of 1")]
+fn a_stand_in_whose_client_never_connects_ends_its_thread_and_fails_the_case() {
+    let (_url, served, thread) = stand_in_within(
+        vec![Some((200, None, r#"{"rows":[]}"#))],
+        Duration::from_secs(1),
+    );
+    let started = Instant::now();
+    while !thread.is_finished() && started.elapsed() < Duration::from_secs(3) {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        thread.is_finished(),
+        "the stand-in's thread still waited for a connection 3 s after its wait of 1 s"
+    );
+    let _ = requests(&served, 1);
 }
