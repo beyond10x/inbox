@@ -17,7 +17,7 @@
   ],
   "counts": {
     "commands": 9,
-    "errors": 14,
+    "errors": 15,
     "views": 9
   },
   "errors": [
@@ -26,13 +26,14 @@
     "Duplicate",
     "UnknownMessage",
     "AlreadySettled",
-    "ShapeMismatch",
-    "NotSettled",
-    "SignatureInvalid",
-    "MessageIdTaken",
     "NotAnswerable",
+    "NotSettled",
+    "ShapeMismatch",
+    "MessageIdTaken",
+    "Expired",
     "NotSender",
     "AlreadyExpired",
+    "SignatureInvalid",
     "NotDue",
     "UnknownInbox"
   ],
@@ -231,11 +232,11 @@
     {
       "actor": "recipient",
       "command": "Answer",
-      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with ShapeMismatch: The envelope does not fit its kind, or the reply does not fit what the message asked for.",
+      "description": "Client, the recipient, sends Answer. Answer a request or a decision. The input is the reply envelope: its kind is reply and its to is the sender of the message it answers. The service checks it as it checks a post. State: Answered. It carries its reply and waits for the sender to collect it. Visible in Outbox, Replies, Settled, Thread. Answer can be refused with NotAnswerable: A note takes no answer.",
       "end": 0,
       "entity": "Message",
       "journey": 1,
-      "refusal": "ShapeMismatch",
+      "refusal": "NotAnswerable",
       "removed": false,
       "state": "Answered",
       "step": 4,
@@ -258,7 +259,7 @@
         "Replies",
         "Settled",
         "Thread",
-        "ShapeMismatch"
+        "NotAnswerable"
       ],
       "words": 12
     },
@@ -298,11 +299,11 @@
     {
       "actor": "sender",
       "command": "PostMessage",
-      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with SignatureInvalid: The SignatureVerifier port refused the signature: the key is unknown or lapsed, or the signature does not verify.",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with ShapeMismatch: The envelope does not fit its kind, or the reply does not fit what the message asked for.",
       "end": null,
       "entity": "Message",
       "journey": 2,
-      "refusal": "SignatureInvalid",
+      "refusal": "ShapeMismatch",
       "removed": false,
       "state": "Sent",
       "step": 6,
@@ -323,7 +324,7 @@
         "Outbox",
         "Pending",
         "Thread",
-        "SignatureInvalid"
+        "ShapeMismatch"
       ],
       "words": 11
     },
@@ -362,11 +363,11 @@
     {
       "actor": "recipient",
       "command": "Refuse",
-      "description": "Client, the recipient, sends Refuse. The owner of the inbox refuses the message and says why. The sender collects the reason. State: Refused. The owner of the inbox refused it; it waits for the sender to collect the reason. Visible in Outbox, Settled, Thread. Refuse can be refused with NotAnswerable: A note takes no answer.",
+      "description": "Client, the recipient, sends Refuse. The owner of the inbox refuses the message and says why. The sender collects the reason. State: Refused. The owner of the inbox refused it; it waits for the sender to collect the reason. Visible in Outbox, Settled, Thread. Refuse can be refused with Expired: The message's expires is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.",
       "end": 1,
       "entity": "Message",
       "journey": 2,
-      "refusal": "NotAnswerable",
+      "refusal": "Expired",
       "removed": false,
       "state": "Refused",
       "step": 7,
@@ -387,7 +388,7 @@
         "Outbox",
         "Settled",
         "Thread",
-        "NotAnswerable"
+        "Expired"
       ],
       "words": 11
     },
@@ -425,7 +426,7 @@
     {
       "actor": "sender",
       "command": "PostMessage",
-      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with AlreadyExpired: expires is not after created.",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with AlreadyExpired: expires is not after created, or the expires of a post or of a reply is not after the service's clock reading.",
       "end": null,
       "entity": "Message",
       "journey": 3,
@@ -451,6 +452,38 @@
         "Pending",
         "Thread",
         "AlreadyExpired"
+      ],
+      "words": 11
+    },
+    {
+      "actor": "sender",
+      "command": "PostMessage",
+      "description": "Client, the sender, sends PostMessage. Post one signed envelope to one inbox. The input is the envelope. The service checks the signature and the authority before it stores anything; a refused post stores nothing and the refusal is the sender's answer. State: Sent. The service stored the message. Visible in Outbox, Pending, Thread. PostMessage can be refused with SignatureInvalid: The SignatureVerifier port refused the signature: the key is unknown or lapsed, or the signature does not verify.",
+      "end": null,
+      "entity": "Message",
+      "journey": 3,
+      "refusal": "SignatureInvalid",
+      "removed": false,
+      "state": "Sent",
+      "step": 9,
+      "token": "inbox",
+      "views": [
+        "Outbox",
+        "Pending",
+        "Thread"
+      ],
+      "visible": [
+        "host",
+        "host",
+        "process",
+        "inbox",
+        "planned",
+        "PostMessage",
+        "Sent",
+        "Outbox",
+        "Pending",
+        "Thread",
+        "SignatureInvalid"
       ],
       "words": 11
     },

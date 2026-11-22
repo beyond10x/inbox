@@ -1,13 +1,16 @@
 //! The clock the service reads, as a parameter, and instants written as RFC 3339 text.
 
 use std::fmt;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::SystemTime;
 
+use inbox::primitives::Timestamp;
+use inbox_core::CommandClock;
 use inbox_verify::Instant;
 
 /// Where the service reads the time: the request window of every authentication, the instant
-/// every envelope and delegation is checked at, and every sweep of the expiry task.
+/// every envelope and delegation is checked at, every sweep of the expiry task, and the deadline
+/// of a message a post, an answer or a refusal meets ([`CommandReading`]).
 ///
 /// A parameter of the library, so a test moves time without sleeping ([`ManualClock`]).
 pub trait Clock: Send + Sync + fmt::Debug {
@@ -56,10 +59,84 @@ impl Clock for ManualClock {
     }
 }
 
+/// A clock that reads `start` when it is made and then `start` plus the system clock's distance
+/// from the instant it was made, to the nanosecond: the conformance run's service, whose
+/// envelopes carry fixed instants (`inbox serve --clock-start`, hidden). The system clock, not
+/// the monotonic one, so a suspend of the host moves it on as it moves [`SystemClock`]. It
+/// follows every step of the system clock: one back that lands after the instant it was made
+/// moves the reading back by the step, and one back before that instant holds it at `start`.
+#[derive(Debug)]
+pub struct StartedClock {
+    start: Instant,
+    began: SystemTime,
+}
+
+impl StartedClock {
+    /// A clock that reads `start` now.
+    #[must_use]
+    pub fn new(start: Instant) -> Self {
+        Self {
+            start,
+            began: SystemTime::now(),
+        }
+    }
+}
+
+impl Clock for StartedClock {
+    fn now(&self) -> Instant {
+        let elapsed = SystemTime::now()
+            .duration_since(self.began)
+            .unwrap_or_default();
+        let nanos = u64::from(self.start.subsec_nanos()) + u64::from(elapsed.subsec_nanos());
+        let seconds = i64::try_from(elapsed.as_secs())
+            .unwrap_or(i64::MAX)
+            .saturating_add(i64::try_from(nanos / 1_000_000_000).unwrap_or(0));
+        Instant::from_unix(
+            self.start.unix_seconds().saturating_add(seconds),
+            u32::try_from(nanos % 1_000_000_000).unwrap_or(0),
+        )
+    }
+}
+
+/// The service's [`Clock`] as the core's [`CommandClock`]: a command that asks for the time reads
+/// the clock then, inside the backend's section where it runs, written as [`format_reading`]
+/// writes it, the text the expiry task sends as `Expire`'s `now`. So a late answer and the sweep
+/// compare one `expires` with readings of one clock at its full precision, and decide alike.
+#[derive(Debug, Clone)]
+pub(crate) struct CommandReading(pub(crate) Arc<dyn Clock>);
+
+impl CommandClock for CommandReading {
+    fn now(&self) -> Timestamp {
+        Timestamp(format_reading(self.0.now()))
+    }
+}
+
+/// `at` as RFC 3339 text in UTC with its fraction of a second, the digits it needs:
+/// `2026-11-21T12:00:00.7Z`, and `2026-11-21T12:00:00Z` where the fraction is 0.
+///
+/// The clock reading a deadline is compared with: the reading `Answer`, `Refuse` and
+/// `PostMessage` compare `expires` with, and `Due`'s and `Expire`'s `now` and `keep_until` of
+/// the expiry task. An instant outside the years RFC 3339 writes is written as
+/// [`format_instant`] holds it, without a fraction.
+#[must_use]
+pub fn format_reading(at: Instant) -> String {
+    let whole = format_instant(at);
+    let nanos = at.subsec_nanos();
+    if nanos == 0 || !(FIRST_SECOND..LAST_SECOND).contains(&at.unix_seconds()) {
+        return whole;
+    }
+    let fraction = format!("{nanos:09}");
+    format!(
+        "{}.{}Z",
+        whole.trim_end_matches('Z'),
+        fraction.trim_end_matches('0')
+    )
+}
+
 /// `at` as RFC 3339 text in UTC, truncated to the second: `2026-11-21T12:00:00Z`.
 ///
-/// The text the service writes into `Due`'s `now` and `Expire`'s `now` and `keep_until`, and the
-/// text a client may send as its request timestamp. RFC 3339 writes the years 0000 to 9999 only:
+/// The text a client may send as its request timestamp; the reading a deadline is compared with
+/// is [`format_reading`]'s, which writes the second as this does. RFC 3339 writes the years 0000 to 9999 only:
 /// an instant after the last second of 9999 is written as that second, one before 0000 as the
 /// first, so a `keep_until` far away is still an instant `Expire` reads.
 #[must_use]
@@ -118,6 +195,19 @@ mod tests {
         ] {
             assert_eq!(format_instant(Instant::parse(text).unwrap()), text);
         }
+    }
+
+    #[test]
+    fn a_started_clock_reads_its_start_when_made() {
+        let start = Instant::parse("2019-12-30T00:00:00Z").unwrap();
+        let clock = super::StartedClock::new(start);
+        let first = super::Clock::now(&clock);
+        assert!(
+            first.unix_seconds() - start.unix_seconds() <= 1,
+            "{first:?}"
+        );
+        // Within the case the host clock does not step back, so a later reading is not earlier.
+        assert!(super::Clock::now(&clock) >= first);
     }
 
     #[test]

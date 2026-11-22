@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
+// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! What the specification fully determines, generated: the behaviour of every command the plan
@@ -62,6 +62,8 @@ pub trait MessageStorage {
 pub enum ExternalCommand<'a> {
     /// The executing `inbox.messaging.Answer` input.
     InboxMessagingAnswer(&'a crate::messaging::Answer),
+    /// The executing `inbox.messaging.Refuse` input.
+    InboxMessagingRefuse(&'a crate::messaging::Refuse),
 }
 
 impl ExternalCommand<'_> {
@@ -69,6 +71,7 @@ impl ExternalCommand<'_> {
     pub fn name(&self) -> &'static str {
         match self {
             Self::InboxMessagingAnswer(_) => "inbox.messaging.Answer",
+            Self::InboxMessagingRefuse(_) => "inbox.messaging.Refuse",
         }
     }
 }
@@ -176,6 +179,14 @@ where
         // `note`: selected by the addressed row.
         if decided(equal(Some(&held.data.kind).map(|value| match value { crate::messaging::Kind::Note => "note", crate::messaging::Kind::Request => "request", crate::messaging::Kind::Decision => "decision" }.to_owned()), Some("note".to_owned())), "inbox.messaging.Answer")? {
             return Ok(crate::messaging::AnswerOutcome::Note { error: crate::messaging::NotAnswerable });
+        }
+        // `deadline-passed`: an external branch on a row its subject guard selects, where the context takes it.
+        if decided(any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Sent".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Delivered".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Read".to_owned()))]), "inbox.messaging.Answer")? && self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "deadline-passed")? {
+            return Ok(crate::messaging::AnswerOutcome::DeadlinePassed { error: crate::messaging::Expired });
+        }
+        // `expired-on-arrival`: an external branch on a row its subject guard selects, where the context takes it.
+        if decided(any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Sent".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Delivered".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Read".to_owned()))]), "inbox.messaging.Answer")? && self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "expired-on-arrival")? {
+            return Ok(crate::messaging::AnswerOutcome::ExpiredOnArrival { error: crate::messaging::AlreadyExpired });
         }
         // `shape-mismatch`: an external branch, where the context takes it.
         if self.ports.try_external(ExternalCommand::InboxMessagingAnswer(&input), "shape-mismatch")? {
@@ -503,6 +514,10 @@ where
         // `note`: selected by the addressed row.
         if decided(equal(Some(&held.data.kind).map(|value| match value { crate::messaging::Kind::Note => "note", crate::messaging::Kind::Request => "request", crate::messaging::Kind::Decision => "decision" }.to_owned()), Some("note".to_owned())), "inbox.messaging.Refuse")? {
             return Ok(crate::messaging::RefuseOutcome::Note { error: crate::messaging::NotAnswerable });
+        }
+        // `deadline-passed`: an external branch on a row its subject guard selects, where the context takes it.
+        if decided(any(&[equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Sent".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Delivered".to_owned())), equal(Some(&held.state).map(|value| match value { crate::messaging::MessageState::Answered => "Answered", crate::messaging::MessageState::Delivered => "Delivered", crate::messaging::MessageState::Read => "Read", crate::messaging::MessageState::Refused => "Refused", crate::messaging::MessageState::Sent => "Sent" }.to_owned()), Some("Read".to_owned()))]), "inbox.messaging.Refuse")? && self.ports.try_external(ExternalCommand::InboxMessagingRefuse(&input), "deadline-passed")? {
+            return Ok(crate::messaging::RefuseOutcome::DeadlinePassed { error: crate::messaging::Expired });
         }
         // `refused`: the default.
         let Some(held) = MessageStorage::get(&self.ports, &input.message_id) else {

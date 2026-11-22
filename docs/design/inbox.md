@@ -92,7 +92,20 @@ Each can be changed; the alternative is named where there is one.
    stored member.
 3. **The clock is an input.** `Expire` carries the clock reading (`now`, `keep_until`) and the
    view `Due` takes it as a parameter, so a scenario decides what time it is. `AlreadyExpired` on
-   a post is `expires <= created`.
+   a post is `expires <= created`, or `expires` at or before the service's clock
+   (`expired-on-arrival`). A message in `Sent`, `Delivered` or `Read` whose `expires` is at or
+   before the service's clock takes no answer and no refusal: `Answer` and `Refuse` refuse it
+   `deadline-passed` (`Expired`), change nothing, and the expiry task decides it as before, by
+   silence with `default_on_silence` or by removal. A reply whose own `expires` is at or before
+   the service's clock is refused `expired-on-arrival` (`AlreadyExpired`) as a post is, and the
+   message stays as it was: stored, the answer would carry that past `expires` and the next
+   sweep would remove it before its sender could collect it. Like `deadline-passed` it holds only
+   for a message in `Sent`, `Delivered` or `Read` (a `when_subject` beside the `external:`): an
+   answer to an answered or refused message is `already-settled` whatever its own `expires`. So
+   a late answer and the sweep, in either order, leave the same message. These 4 outcomes read the service's Clock port inside
+   the serialized section that runs the command, at the full precision of the clock, which is
+   also the precision of `Due`'s and `Expire`'s `now`; no member a client sends replaces that
+   reading. They are external outcomes (see "What the specification cannot say").
 4. **Keys and delegations are not entities of this domain.** They sit behind the
    `SignatureVerifier` port; the specification names its refusals (`signature-invalid`,
    `authority-invalid`) as external outcomes. Version 1 ships a small verifier that reads a key
@@ -147,9 +160,9 @@ Each can be changed; the alternative is named where there is one.
 
 Where several refusals of a post hold, the post is answered with the first of: the input-guarded
 refusals in declaration order (`not-sender`, `no-authority`, `already-expired`,
-`request-without-shape`, `decision-without-options`, `unknown-option`); then the 2 external
-refusals (`signature-invalid`, `authority-invalid`), decided before any row is read; then
-the row refusals in the order measured on the ESS 0.97.1 and 0.97.3 interpreted targets:
+`request-without-shape`, `decision-without-options`, `unknown-option`); then the 3 external
+refusals (`expired-on-arrival`, `signature-invalid`, `authority-invalid`), decided before any
+row is read; then the row refusals in the order measured on the ESS 0.97.1 and 0.97.3 interpreted targets:
 `unknown-inbox`, `duplicate`, `duplicate-key`, `inbox-closed`, `id-taken` (`unknown-inbox` and
 `inbox-closed` never hold together, and `id-taken` holds with every `duplicate`). The suite
 holds the pairs: each external refusal, `unknown-option` and `request-without-shape` against each of the 5 row
@@ -191,7 +204,30 @@ the specification cannot express is an `external:` outcome that states its reaso
 here. The `external:` outcomes on ESS 0.97.3: `signature-invalid` and `authority-invalid` of
 `PostMessage` and of `Answer` (a guard cannot verify a signature or resolve a delegation of the
 key file; a delegation spelled as a provided entity loses 51 generated scenarios), and
-`shape-mismatch` of `Answer`. Its reply-shape part (at most so many lines, or a JSON text) was
+`shape-mismatch` of `Answer`; `expired-on-arrival` of `PostMessage` and of `Answer` and
+`deadline-passed` of `Answer` and `Refuse`, the 4 that read the service's clock (decision 3).
+The clock part was measured as a guard on ESS 0.97.1 and again on 0.97.3, with the same
+result. A `when_subject` outcome `deadline-passed` over `now` validates and generates (87 of 89
+capabilities on 0.97.3), but synthesis decides it at the run's wall clock: it turns the
+`expires` of the generated post into an offset from that clock while `created` stays a literal,
+so the generated `already-expired` scenario fails on the interpreted target; the authored
+scenarios whose literal `expires` lies before the wall clock fail too (10 on 0.97.3, 12 on
+0.97.1); 8 refusals stay uncovered on 0.97.3; and an authored scenario cannot write an instant
+relative to the clock (`ESS-AUTHOR-015` on both), so none could cover the guard. With
+`expires <= now` in `already-expired` of `PostMessage` as well, synthesis refuses every
+authored post (`ESS-AUTHOR-041`, 224 refusals on 0.97.3). As external outcomes the suite forces
+them like the other external branches, the authored scenarios
+`a-late-answer-leaves-the-decision-to-silence`, `a-late-refusal-leaves-the-request-to-expire`
+and `an-expired-reply-leaves-the-request-open` cover the 3 of `Answer` and `Refuse`, and the
+cases of `deadline.rs`, `adversary_deadline.rs` and `adversary_deadline_2.rs` of
+`crates/inbox-core/tests` and `crates/inbox-server/tests` drive the clock. A suite step that
+expects a refusal finds no external branch taken, so the suite cannot tell whether an external
+branch is asked before the state is: `a-second-expired-reply-to-an-answered-request-is-already-settled`
+holds that order over HTTP only, where the service's own clock (started before the suite's
+instants) has passed the second reply's `expires`, and the `when_subject` on the 3 branches
+makes the generated crate check the state before it asks the port. The service answers each of the 4
+with status 502, the status the generated contract gives an external outcome. Its reply-shape
+part (at most so many lines, or a JSON text) was
 not tried as a guard. Its option part has one: a `when_subject` outcome `option-mismatch` with
 `exists` over the stored `decision.options`, which ESS 0.97.1 validated, synthesized and
 interpreted (112 scenarios, all passed). On ESS 0.97.3 it validates, and synthesis writes the
@@ -249,9 +285,9 @@ the option part stays in the external branch until synthesis generates that guar
   commands leaves a row with either field set. Those 2 fields, and `answered_by` and `refusal`,
   which are as absent there and caused no refusal, left those 2 views, and `refusal` left
   `Replies`, in one change of their wire rows against 0.1.0.
-- **`task coverage` on ESS 0.97.3**: synthesis writes 112 scenarios (38 authored) and refuses 93,
-  and authored scenarios cover all 93, so it exits 0; `task check` runs it. The suite it writes
-  runs on the interpreted target as 112 passed and reports `conformance_status: passed`.
+- **`task coverage` on ESS 0.97.3**: synthesis writes 117 scenarios (42 authored) and refuses 96,
+  and authored scenarios cover all 96, so it exits 0; `task check` runs it. The suite it writes
+  runs on the interpreted target as 117 passed and reports `conformance_status: passed`.
   Since wave 5 of stage 2 `task conform` runs that suite, and its report against the core
   says `passed`.
 
@@ -278,7 +314,7 @@ refusals.
 The plan is in `.engineering/planning/`: one epic per stage 2 to 6 and draft stories for stage 2.
 
 Stage 2 starts from what ESS synthesizes. `ess generate synthesize --target rust --layout crate`
-on ESS 0.97.3 writes 86 of 88 capabilities: the model types, the behaviour of 7 commands, the
+on ESS 0.97.3 writes 87 of 89 capabilities: the model types, the behaviour of 7 commands, the
 query of 9 views, the storage and context ports, and an HTTP route table with JSON codecs. It
 leaves 2 obligations, the behaviours of `PostMessage` (the `distinct` over the options in the
 guard `unknown-option`, and the row-set guards `duplicate` and `duplicate-key`) and

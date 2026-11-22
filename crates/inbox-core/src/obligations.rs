@@ -152,8 +152,8 @@ fn unknown_option(input: &PostMessage) -> bool {
 ///    `already-expired`, `request-without-shape`, `decision-without-options` (no `decision`, or
 ///    one with no option), `unknown-option` (`unknown_option` above);
 /// 2. the external branches in declaration order, each asked of [`PostExternals`] before any row
-///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `signature-invalid`,
-///    `authority-invalid`;
+///    is read (`before_row: true` in `ess/domains/messaging.yaml`): `expired-on-arrival` (the
+///    service's clock reads at or after `expires`), `signature-invalid`, `authority-invalid`;
 /// 3. the row refusals: `unknown-inbox` (`exists: false`), `duplicate` (a stored message with the
 ///    post's `message_id` and the post's `from`, read by `get`), `duplicate-key` (over `list`: a
 ///    stored message with the post's `dedup_key` and the post's `from`; the key of one sender
@@ -213,6 +213,11 @@ impl<B: InboxStorage + MessageStorage, C: TryContext + PostExternals> PostMessag
             });
         }
 
+        if self.context.expired_on_arrival(&input)? {
+            return Ok(PostMessageOutcome::ExpiredOnArrival {
+                error: AlreadyExpired,
+            });
+        }
         if self.context.signature_invalid(&input) {
             return Ok(PostMessageOutcome::SignatureInvalid {
                 error: SignatureInvalid,

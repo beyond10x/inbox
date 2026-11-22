@@ -41,7 +41,7 @@ where
         Some(who) => CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned())),
         None => CallerAttributes::none(),
     };
-    let context = ServiceContext::new(caller, Accepting, backend.clone());
+    let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
     inbox_core::handle(
         backend,
         context,

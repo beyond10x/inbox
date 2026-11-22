@@ -7,8 +7,10 @@
 //! - [`Core`]: the behaviours of `PostMessage` and `Expire` (the obligations), over a backend `B`
 //!   and a context `C`. Handed to [`inbox::behaviour::Generated`], it completes the system.
 //! - [`ServiceContext`]: the generated context port ([`inbox::behaviour::TryContext`]) and
-//!   [`PostExternals`], built from a caller, a [`SignatureVerifier`] and the backend. It answers the
-//!   6 `external:` branches: 3 of `PostMessage`, 3 of `Answer`.
+//!   [`PostExternals`], built from a caller, a [`SignatureVerifier`], the backend and the service's
+//!   [`CommandClock`]. It answers the 9 `external:` branches: 3 of `PostMessage`, 5 of `Answer`, 1
+//!   of `Refuse`. The clock is part of the context the embedding passes per request, so
+//!   [`handle`] applies the deadline of a message as the HTTP service does.
 //! - [`MemoryBackend`]: both generated storage ports, in memory. Its clones share one store, and it
 //!   is `Send` and `Sync`.
 //!
@@ -24,7 +26,9 @@ mod context;
 mod obligations;
 
 pub use backend::{Exclusive, MemoryBackend};
-pub use context::{CallerAttributes, Envelope, PostExternals, ServiceContext, SignatureVerifier};
+pub use context::{
+    CallerAttributes, CommandClock, Envelope, PostExternals, ServiceContext, SignatureVerifier,
+};
 pub use obligations::Core;
 
 use inbox::actor::Caller;
@@ -61,8 +65,8 @@ pub fn system<B, C>(backend: B, context: C) -> Service<B, C> {
 /// The section is taken before the system is assembled over a clone of `backend` and `context`,
 /// and released after the generated `handle` answered, so no other request reads or writes the
 /// store in between. `caller` is the actor the request was authenticated as, `context` the
-/// request's own (a [`ServiceContext`] over the request's caller, the verifier and a clone of the
-/// backend). A refusal releases the section like an answer does; a panic inside the command
+/// request's own (a [`ServiceContext`] over the request's caller, the verifier, a clone of the
+/// backend and the service's clock, which a command reads inside the section). A refusal releases the section like an answer does; a panic inside the command
 /// unwinds through it and the backend's section does not stay locked ([`Exclusive`] says what
 /// the store holds then).
 ///

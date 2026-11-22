@@ -35,7 +35,7 @@ impl SignatureVerifier for Accepting {
 
 fn as_client(backend: &MemoryBackend, who: &str, name: &str, input: &str) -> Value {
     let caller = CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned()));
-    let context = ServiceContext::new(caller, Accepting, backend.clone());
+    let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
     inbox_core::handle(
         backend,
         context,
@@ -204,7 +204,7 @@ fn try_run(
     name: &str,
     input: &str,
 ) -> Result<Value, String> {
-    let context = ServiceContext::new(caller, Accepting, backend.clone());
+    let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
     inbox_core::handle(
         backend,
         context,

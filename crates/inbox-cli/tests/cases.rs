@@ -579,6 +579,17 @@ fn serve_refuses_a_non_loopback_address_an_unreadable_key_file_and_another_backe
         nats.stderr.contains("INBOX_BACKEND") && nats.stderr.contains("nats"),
         "{nats:#?}"
     );
+
+    let mut args = vec!["--listen", "127.0.0.1:0", "--clock-start", "tomorrow"];
+    args.extend(base);
+    let clock = serve_refused(&dir.path, &args, &[]);
+    assert_eq!(clock.status, USAGE, "{clock:#?}");
+    assert!(clock.stderr.contains("--clock-start"), "{clock:#?}");
+
+    // The flag is the conformance run's: `--help` does not name it.
+    let help = run(&dir.path, &["serve", "--help"], &[]);
+    assert_eq!(help.status, 0, "{help:#?}");
+    assert!(!help.stdout.contains("clock-start"), "{help:#?}");
 }
 
 #[test]
@@ -613,6 +624,35 @@ fn sigterm_stops_serve_with_status_0_and_the_first_line_names_the_address() {
         text(&line, "url")
     );
     assert_eq!(json.terminate().code(), Some(0));
+
+    // The conformance run's clock is named on standard error, never on standard output.
+    let started = support::Service::start(
+        &dir.path,
+        &[
+            "--listen",
+            "127.0.0.1:0",
+            "--key-file",
+            "keys.json",
+            "--operator-public-key",
+            &operator,
+            "--clock-start",
+            "2019-12-30T00:00:00Z",
+        ],
+        &[],
+    );
+    assert!(
+        started.first_line.starts_with("http://127.0.0.1:"),
+        "{:?}",
+        started.first_line
+    );
+    assert!(
+        started.stderr().contains(
+            "the service's clock starts at 2019-12-30T00:00:00Z, not at the system clock"
+        ),
+        "{}",
+        started.stderr()
+    );
+    assert_eq!(started.terminate().code(), Some(0));
 }
 
 #[test]

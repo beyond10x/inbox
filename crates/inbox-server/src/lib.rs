@@ -33,7 +33,7 @@ mod service;
 mod signals;
 
 pub use auth::{KEY_ID_HEADER, RingVerifier, SIGNATURE_HEADER, TIMESTAMP_HEADER, request_headers};
-pub use clock::{Clock, ManualClock, SystemClock, format_instant};
+pub use clock::{Clock, ManualClock, StartedClock, SystemClock, format_instant, format_reading};
 pub use config::Config;
 pub use expiry::sweep;
 pub use listener::{EPOCH_HEADER, Running, Server, Stopper};

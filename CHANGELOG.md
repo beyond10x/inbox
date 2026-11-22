@@ -8,6 +8,23 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Security
+
+- A message whose `expires` the service's clock has reached takes no answer and no refusal:
+  `answer` and `refuse` answer the new outcome `deadline-passed` (502, error `Expired`, CLI
+  exit status 1), change nothing and publish nothing, and the expiry task decides the
+  message as before, by silence with its `default_on_silence` or by removal. The clock is
+  read inside the command's section at its full precision, the precision the expiry task's
+  sweep reads it at, and is not taken from the request. In 0.2.0 a late answer that arrived
+  before the sweep replaced the decision silence was due to take.
+- `post` refuses an envelope whose `expires` is at or before the service's clock: the new
+  outcome `expired-on-arrival` (502, error `AlreadyExpired`), and nothing is stored. 0.2.0
+  compared `expires` with the envelope's own `created` only.
+- `answer` refuses a reply to an open message whose own `expires` is at or before the
+  service's clock with the same outcome and error, and the message stays as it was. An answer
+  to a message already answered or refused stays `already-settled`, whatever its `expires`. Stored, such an answer would be
+  removed by the next sweep before its sender could collect it.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

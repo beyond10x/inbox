@@ -3,9 +3,16 @@
 
 use inbox::actor::{Actor, Caller};
 use inbox::messaging::{Address, DelegationId, Principal};
+use inbox::primitives::Timestamp;
 use inbox::server::entry::Refused;
 use inbox::server::json::{self, Value};
 use inbox_core::{CallerAttributes, Envelope, MemoryBackend, ServiceContext, SignatureVerifier};
+
+/// The service's clock of the cases: before every `expires` they post, so no deadline has passed
+/// unless a case reads another clock (`deadline.rs`).
+pub fn clock() -> Timestamp {
+    Timestamp("2026-01-05T09:00:00Z".to_owned())
+}
 
 /// A verifier double: it accepts every signature except one made with a refused key id, and every
 /// delegation except a refused one.
@@ -63,7 +70,12 @@ impl World {
         name: &str,
         input: &str,
     ) -> Result<Value, Refused> {
-        let context = ServiceContext::new(caller, self.verifier.clone(), self.backend.clone());
+        let context = ServiceContext::new(
+            caller,
+            self.verifier.clone(),
+            self.backend.clone(),
+            crate::support::clock(),
+        );
         let input = json::parse(input).expect("the case writes JSON");
         inbox_core::handle(&self.backend, context, Some(&Caller { actor }), name, input)
     }

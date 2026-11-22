@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:e5bc16a653c531c53bff2e6bac1ce76abf9f7860ee1f3e4313d03cad90e7778f
+# contract digest slice-sha256/2:012fe8a3f3661b0e741d5c5aecd9f41b6163c73c59fd59336ef2ea379e37e19a
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:e5bc16a653c531c53bff2e6bac1ce76abf9f7860ee1f3e4313d03cad90e7778f
+    contract_digest: slice-sha256/2:012fe8a3f3661b0e741d5c5aecd9f41b6163c73c59fd59336ef2ea379e37e19a
   x-ess-reached-by: network
 tags:
 - name: messaging
@@ -131,19 +131,23 @@ paths:
                 - committed
                 type: object
         '502':
-          description: 'Outcomes `signature-invalid`, `authority-invalid` and `shape-mismatch`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.'
+          description: 'Outcomes `signature-invalid`, `authority-invalid`, `deadline-passed`, `expired-on-arrival` and `shape-mismatch`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.'
           content:
             application/json:
               schema:
                 discriminator:
                   mapping:
                     authority-invalid: '#/components/schemas/inbox.messaging.Answer.authority-invalid.Response'
+                    deadline-passed: '#/components/schemas/inbox.messaging.Answer.deadline-passed.Response'
+                    expired-on-arrival: '#/components/schemas/inbox.messaging.Answer.expired-on-arrival.Response'
                     shape-mismatch: '#/components/schemas/inbox.messaging.Answer.shape-mismatch.Response'
                     signature-invalid: '#/components/schemas/inbox.messaging.Answer.signature-invalid.Response'
                   propertyName: outcome
                 oneOf:
                 - $ref: '#/components/schemas/inbox.messaging.Answer.signature-invalid.Response'
                 - $ref: '#/components/schemas/inbox.messaging.Answer.authority-invalid.Response'
+                - $ref: '#/components/schemas/inbox.messaging.Answer.deadline-passed.Response'
+                - $ref: '#/components/schemas/inbox.messaging.Answer.expired-on-arrival.Response'
                 - $ref: '#/components/schemas/inbox.messaging.Answer.shape-mismatch.Response'
   /messaging/commands/close-inbox:
     post:
@@ -653,16 +657,18 @@ paths:
                 - committed
                 type: object
         '502':
-          description: 'Outcomes `signature-invalid` and `authority-invalid`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.'
+          description: 'Outcomes `expired-on-arrival`, `signature-invalid` and `authority-invalid`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.'
           content:
             application/json:
               schema:
                 discriminator:
                   mapping:
                     authority-invalid: '#/components/schemas/inbox.messaging.PostMessage.authority-invalid.Response'
+                    expired-on-arrival: '#/components/schemas/inbox.messaging.PostMessage.expired-on-arrival.Response'
                     signature-invalid: '#/components/schemas/inbox.messaging.PostMessage.signature-invalid.Response'
                   propertyName: outcome
                 oneOf:
+                - $ref: '#/components/schemas/inbox.messaging.PostMessage.expired-on-arrival.Response'
                 - $ref: '#/components/schemas/inbox.messaging.PostMessage.signature-invalid.Response'
                 - $ref: '#/components/schemas/inbox.messaging.PostMessage.authority-invalid.Response'
   /messaging/commands/read:
@@ -845,6 +851,12 @@ paths:
                 - refused
                 - committed
                 type: object
+        '502':
+          description: 'Outcome `deadline-passed`: something outside the request refused. The input was acceptable, so the caller has nothing to correct and a retry is meaningful.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inbox.messaging.Refuse.deadline-passed.Response'
   /messaging/views/due:
     get:
       operationId: inbox.messaging.Due
@@ -1312,7 +1324,7 @@ components:
       properties:
         error:
           const: inbox.messaging.AlreadyExpired
-          description: '`expires` is not after `created`.'
+          description: '`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service''s clock reading.'
           type: string
         outcome:
           const: already-expired
@@ -1388,6 +1400,46 @@ components:
           type: string
         outcome:
           const: authority-invalid
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.Answer.deadline-passed.Response:
+      additionalProperties: false
+      description: 'The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal. Eligible when the existing subject''s stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service''s Clock port reads at or after the message''s stored `expires`.'
+      properties:
+        error:
+          const: inbox.messaging.Expired
+          description: 'The message''s `expires` is at or before the service''s clock reading: it takes no answer and no refusal, and the expiry task decides it.'
+          type: string
+        outcome:
+          const: deadline-passed
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.Answer.expired-on-arrival.Response:
+      additionalProperties: false
+      description: 'The reply''s own `expires` has passed by the service''s clock: stored, it would be removed before its sender could collect it. The message stays as it was. Eligible when the existing subject''s stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service''s Clock port reads at or after the reply''s own `expires`.'
+      properties:
+        error:
+          const: inbox.messaging.AlreadyExpired
+          description: '`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service''s clock reading.'
+          type: string
+        outcome:
+          const: expired-on-arrival
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -2926,7 +2978,7 @@ components:
       properties:
         error:
           const: inbox.messaging.AlreadyExpired
-          description: '`expires` is not after `created`.'
+          description: '`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service''s clock reading.'
           type: string
         outcome:
           const: already-expired
@@ -3010,6 +3062,26 @@ components:
           type: string
         outcome:
           const: duplicate
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
+      type: object
+    inbox.messaging.PostMessage.expired-on-arrival.Response:
+      additionalProperties: false
+      description: 'Decided outside the request: the service''s Clock port reads at or after the post''s `expires`.'
+      properties:
+        error:
+          const: inbox.messaging.AlreadyExpired
+          description: '`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service''s clock reading.'
+          type: string
+        outcome:
+          const: expired-on-arrival
           description: Which declared outcome the command took.
         published:
           description: 'Every event this branch published, in publication order: its qualified name and its payload.'
@@ -3252,6 +3324,26 @@ components:
       - published
       - error
       - payload
+      type: object
+    inbox.messaging.Refuse.deadline-passed.Response:
+      additionalProperties: false
+      description: 'The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal. Eligible when the existing subject''s stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service''s Clock port reads at or after the message''s stored `expires`.'
+      properties:
+        error:
+          const: inbox.messaging.Expired
+          description: 'The message''s `expires` is at or before the service''s clock reading: it takes no answer and no refusal, and the expiry task decides it.'
+          type: string
+        outcome:
+          const: deadline-passed
+          description: Which declared outcome the command took.
+        published:
+          description: 'Every event this branch published, in publication order: its qualified name and its payload.'
+          maxItems: 0
+          type: array
+      required:
+      - outcome
+      - published
+      - error
       type: object
     inbox.messaging.Refuse.foreign-message.Response:
       additionalProperties: false

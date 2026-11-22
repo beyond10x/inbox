@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
+// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
 // do not edit: regenerate with `ess synthesize --layout crate`
 //! Every generated declaration, as JSON, in the renderings the published wire contracts fix.
 //!
@@ -1038,6 +1038,12 @@ pub fn encode_error_inbox_messaging_duplicate(_value: &crate::messaging::Duplica
     out.push('}');
 }
 
+/// Writes the declared error `inbox.messaging.Expired` as JSON.
+pub fn encode_error_inbox_messaging_expired(_value: &crate::messaging::Expired, out: &mut String) {
+    out.push('{');
+    out.push('}');
+}
+
 /// Writes the declared error `inbox.messaging.MessageIdTaken` as JSON.
 pub fn encode_error_inbox_messaging_message_id_taken(_value: &crate::messaging::MessageIdTaken, out: &mut String) {
     out.push('{');
@@ -1923,6 +1929,34 @@ pub fn encode_outcome_inbox_messaging_answer(value: &crate::messaging::AnswerOut
             encode_error_inbox_messaging_not_answerable(error, out);
             out.push('}');
         }
+        crate::messaging::AnswerOutcome::DeadlinePassed { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "deadline-passed");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.Expired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_expired(error, out);
+            out.push('}');
+        }
+        crate::messaging::AnswerOutcome::ExpiredOnArrival { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "expired-on-arrival");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.AlreadyExpired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_already_expired(error, out);
+            out.push('}');
+        }
         crate::messaging::AnswerOutcome::ShapeMismatch { error } => {
             json::member(out, "outcome");
             json::push_text(out, "shape-mismatch");
@@ -2755,6 +2789,20 @@ pub fn encode_outcome_inbox_messaging_post_message(value: &crate::messaging::Pos
             encode_error_inbox_messaging_shape_mismatch(error, out);
             out.push('}');
         }
+        crate::messaging::PostMessageOutcome::ExpiredOnArrival { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "expired-on-arrival");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.AlreadyExpired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_already_expired(error, out);
+            out.push('}');
+        }
         crate::messaging::PostMessageOutcome::SignatureInvalid { error } => {
             json::member(out, "outcome");
             json::push_text(out, "signature-invalid");
@@ -2960,6 +3008,20 @@ pub fn encode_outcome_inbox_messaging_refuse(value: &crate::messaging::RefuseOut
             json::push_text(out, "inbox.messaging.NotAnswerable");
             json::member(out, "payload");
             encode_error_inbox_messaging_not_answerable(error, out);
+            out.push('}');
+        }
+        crate::messaging::RefuseOutcome::DeadlinePassed { error } => {
+            json::member(out, "outcome");
+            json::push_text(out, "deadline-passed");
+            json::member(out, "published");
+            out.push('[');
+            out.push(']');
+            json::member(out, "refusal");
+            out.push('{');
+            json::member(out, "error");
+            json::push_text(out, "inbox.messaging.Expired");
+            json::member(out, "payload");
+            encode_error_inbox_messaging_expired(error, out);
             out.push('}');
         }
         crate::messaging::RefuseOutcome::Refused { message_refused } => {

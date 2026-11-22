@@ -149,7 +149,12 @@ fn run_realistic(envelope: &Post) -> (String, Vec<&'static str>) {
         Principal("agent:box/worker".to_owned()),
         Address("agent:box/worker".to_owned()),
     );
-    let context = ServiceContext::new(owner, verifier.clone(), backend.clone());
+    let context = ServiceContext::new(
+        owner,
+        verifier.clone(),
+        backend.clone(),
+        crate::support::clock(),
+    );
     let opened = inbox_core::handle(
         &backend,
         context,
@@ -166,7 +171,7 @@ fn run_realistic(envelope: &Post) -> (String, Vec<&'static str>) {
         Principal(envelope.from.clone()),
         Address(envelope.from.clone()),
     );
-    let context = ServiceContext::new(sender, verifier, backend.clone());
+    let context = ServiceContext::new(sender, verifier, backend.clone(), crate::support::clock());
     let answered = inbox_core::handle(
         &backend,
         context,

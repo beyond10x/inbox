@@ -12,6 +12,7 @@ use inbox_core::{CallerAttributes, Exclusive, ServiceContext};
 use inbox_verify::{Instant, duplicate_member};
 
 use crate::auth::{RingVerifier, authenticate};
+use crate::clock::CommandReading;
 use crate::config::Config;
 use crate::signals::Signals;
 
@@ -129,7 +130,12 @@ fn once<B: Backend>(
     let backend = &shared.backend;
     let config = &shared.config;
     let verifier = RingVerifier::new(Arc::clone(&config.keys), at);
-    let context = ServiceContext::new(caller.clone(), verifier, backend.clone());
+    let context = ServiceContext::new(
+        caller.clone(),
+        verifier,
+        backend.clone(),
+        CommandReading(Arc::clone(&config.clock)),
+    );
     let answered = backend.exclusive(|| {
         if request.method == "POST"
             && request.path == POST

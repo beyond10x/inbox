@@ -1,6 +1,6 @@
 <!--
 generated from inbox v1
-contract digest slice-sha256/2:a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
+contract digest slice-sha256/2:9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
 do not edit: regenerate with `ess generate`
 -->
 
@@ -585,7 +585,7 @@ It takes:
 - `body` — `inbox.messaging.Body`
 - `signature` — `inbox.messaging.Signature`
 
-It has 12 outcomes.
+It has 14 outcomes.
 
 **`not-sender`** — Taken when `from != caller.principal` holds of the input. No entity in this specification changes. It reports `inbox.messaging.NotSender`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
@@ -606,6 +606,10 @@ It has 12 outcomes.
 **`already-settled`** — Taken when the subject is resting in a state none of this command's moves start from — a `inbox.messaging.Message` in `Answered` and `Refused`, which is what is left of the lifecycle once this command's own moves are taken away. The document lists none of it. No entity in this specification changes. It reports `inbox.messaging.AlreadySettled`, carrying `state`. It emits nothing. A test reaches it by driving an instance into one of those states and then issuing the command, because no input selects this branch.
 
 **`note`** — Taken when the existing subject's stored fields satisfy `kind == note`. No entity in this specification changes. It reports `inbox.messaging.NotAnswerable`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
+
+**`deadline-passed`** — The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`. No entity in this specification changes. It reports `inbox.messaging.Expired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
+
+**`expired-on-arrival`** — The reply's own `expires` has passed by the service's clock: stored, it would be removed before its sender could collect it. The message stays as it was. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the reply's own `expires`. No entity in this specification changes. It reports `inbox.messaging.AlreadyExpired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`shape-mismatch`** — Decided outside the input: the reply does not fit the message's `reply_shape`, or names no option of the decision. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
@@ -752,7 +756,7 @@ It takes:
 - `body` — `inbox.messaging.Body`
 - `signature` — `inbox.messaging.Signature`
 
-It has 14 outcomes.
+It has 15 outcomes.
 
 **`not-sender`** — Taken when `from != caller.principal` holds of the input. No entity in this specification changes. It reports `inbox.messaging.NotSender`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
@@ -765,6 +769,8 @@ It has 14 outcomes.
 **`decision-without-options`** — A decision names no `decision`, or a `decision` with no option. Taken when `(kind == decision and (not (defined(decision)) or decision.options.count == 0))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
 
 **`unknown-option`** — `recommended_option` or `default_on_silence` names no option of the decision (an envelope without a decision offers none), or two options carry one letter. Taken when `((defined(default_on_silence) and not (defined(decision))) or (defined(decision) and (not (distinct o in decision.options by o.letter as string) or (defined(decision.recommended_option) and not (exists o in decision.options: (o.letter == decision.recommended_option))) or (defined(default_on_silence) and not (exists o in decision.options: (o.letter == {fact: default_on_silence}))))))` holds of the input. No entity in this specification changes. It reports `inbox.messaging.ShapeMismatch`. It emits nothing. A test reaches it by constructing an input that satisfies that condition.
+
+**`expired-on-arrival`** — Decided outside the input: the service's Clock port reads at or after the post's `expires`. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.AlreadyExpired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`signature-invalid`** — Decided outside the input: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify. No predicate over the input reaches this branch, and saying `when: false` instead would have claimed it is unreachable, which is a different and false statement. It is decided before the addressed row is read, among the input-guarded refusals: before existence and the held state. No entity in this specification changes. It reports `inbox.messaging.SignatureInvalid`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
@@ -791,7 +797,7 @@ It takes:
 - `message_id` — `inbox.messaging.MessageId`
 - `reason` — `String`
 
-It has six outcomes.
+It has seven outcomes.
 
 **`unknown-message`** — Taken when the identity the command names is one no record carries, before any other answer for it. No entity in this specification changes. It reports `inbox.messaging.UnknownMessage`. It emits nothing. A test reaches it by sending an identity no record carries, arranging nothing.
 
@@ -800,6 +806,8 @@ It has six outcomes.
 **`not-recipient`** — Taken when the existing subject's stored fields satisfy `to != caller.inbox`. No entity in this specification changes. It reports `inbox.messaging.NotRecipient`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
 
 **`note`** — A note asks for nothing, so it is not refused either; it is removed by `MarkRead` or `Expire`. Taken when the existing subject's stored fields satisfy `kind == note`. No entity in this specification changes. It reports `inbox.messaging.NotAnswerable`. It emits nothing. A test establishes and independently observes the subject enum fact before selecting this branch.
+
+**`deadline-passed`** — The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal. Eligible when the existing subject's stored fields satisfy `state in [Sent, Delivered, Read]`; externally decided: the service's Clock port reads at or after the message's stored `expires`. No entity in this specification changes. It reports `inbox.messaging.Expired`. It emits nothing. A test reaches it by injecting the declared fault, because no input can.
 
 **`refused`** — The default branch, taken when no other outcome's condition matched. It moves a `inbox.messaging.Message` from `Delivered`, `Read` and `Sent` to `Refused`, along the declared move `refuse`. The instance is the one named by the input field `message_id`. It emits `inbox.messaging.MessageRefused`. It sets `refusal` from `input.reason`. A test reaches it by constructing an input that satisfies no other outcome's condition.
 
@@ -946,13 +954,13 @@ Nothing in this system reacts to it.
 
 ### `AlreadyExpired`
 
-`expires` is not after `created`.
+`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service's clock reading.
 
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
-Reported by `inbox.messaging.Answer` on its `already-expired` outcome.
+Reported by `inbox.messaging.Answer` on its `already-expired` and `expired-on-arrival` outcomes.
 
-Reported by `inbox.messaging.PostMessage` on its `already-expired` outcome.
+Reported by `inbox.messaging.PostMessage` on its `already-expired` and `expired-on-arrival` outcomes.
 
 ### `AlreadySettled`
 
@@ -973,6 +981,16 @@ A live message of this sender already carries this id or this dedup key; nothing
 It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
 
 Reported by `inbox.messaging.PostMessage` on its `duplicate` and `duplicate-key` outcomes.
+
+### `Expired`
+
+The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.
+
+It carries nothing beyond its name, so a caller can tell what went wrong and not which value caused it.
+
+Reported by `inbox.messaging.Answer` on its `deadline-passed` outcome.
+
+Reported by `inbox.messaging.Refuse` on its `deadline-passed` outcome.
 
 ### `MessageIdTaken`
 
@@ -1126,4 +1144,4 @@ It may read [`Due`](#due) and [`Messages`](#messages), which an actor whose gran
 
 ---
 
-Generated from inbox v1 · contract digest `slice-sha256/2:a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373`. Do not edit this file; change the specification and regenerate it with `ess generate`.
+Generated from inbox v1 · contract digest `slice-sha256/2:9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19`. Do not edit this file; change the specification and regenerate it with `ess generate`.

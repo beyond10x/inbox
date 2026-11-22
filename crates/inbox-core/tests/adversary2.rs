@@ -53,7 +53,12 @@ where
 }
 
 fn as_client(backend: &MemoryBackend, who: &str, name: &str, input: &str) -> String {
-    let context = ServiceContext::new(caller(who), Accepting, backend.clone());
+    let context = ServiceContext::new(
+        caller(who),
+        Accepting,
+        backend.clone(),
+        crate::support::clock(),
+    );
     let answer = client(backend, context, name, input)
         .unwrap_or_else(|refused| panic!("{name} as {who} refused: {refused}"));
     outcome(&answer)
@@ -184,6 +189,10 @@ impl TryContext for PanicsOnShape {
 }
 
 impl PostExternals for PanicsOnShape {
+    fn expired_on_arrival(&mut self, _input: &PostMessage) -> Result<bool, UnmetObligation> {
+        Ok(false)
+    }
+
     fn signature_invalid(&mut self, _input: &PostMessage) -> bool {
         false
     }
@@ -251,7 +260,7 @@ fn an_answer_that_panics_leaves_the_message_open_and_the_next_answer_settles_it(
 /// A context whose `signature-invalid` question reads a view through the entry over the same
 /// store: a verifier or harness that consults the service while a post runs.
 struct AsksTheEntry {
-    inner: ServiceContext<Accepting, MemoryBackend>,
+    inner: ServiceContext<Accepting, MemoryBackend, inbox::primitives::Timestamp>,
     backend: MemoryBackend,
 }
 
@@ -274,9 +283,17 @@ impl TryContext for AsksTheEntry {
 }
 
 impl PostExternals for AsksTheEntry {
+    fn expired_on_arrival(&mut self, input: &PostMessage) -> Result<bool, UnmetObligation> {
+        self.inner.expired_on_arrival(input)
+    }
+
     fn signature_invalid(&mut self, input: &PostMessage) -> bool {
-        let context =
-            ServiceContext::new(caller("agent:ws/reader"), Accepting, self.backend.clone());
+        let context = ServiceContext::new(
+            caller("agent:ws/reader"),
+            Accepting,
+            self.backend.clone(),
+            crate::support::clock(),
+        );
         let _ = client(&self.backend, context, "inbox.messaging.Inboxes", "{}");
         self.inner.signature_invalid(input)
     }
@@ -306,7 +323,12 @@ fn a_context_that_calls_the_entry_again_fails_at_once_and_frees_the_section() {
     let (sent, answered) = mpsc::channel();
     let thread = std::thread::spawn(move || {
         let context = AsksTheEntry {
-            inner: ServiceContext::new(caller("agent:ws/planner"), Accepting, inner.clone()),
+            inner: ServiceContext::new(
+                caller("agent:ws/planner"),
+                Accepting,
+                inner.clone(),
+                crate::support::clock(),
+            ),
             backend: inner.clone(),
         };
         let answer = client(

@@ -200,6 +200,12 @@ struct ServeArgs {
     /// Seconds an answer taken on silence waits for its sender.
     #[arg(long, default_value_t = inbox_server::Config::ANSWER_RETENTION.as_secs())]
     answer_retention: u64,
+    /// For the conformance run only, hidden from `--help` and the reference: the instant (RFC
+    /// 3339) the service's clock reads at the start, from which it moves on by the system clock's
+    /// elapsed time. Without it, the system clock. The deadline of a post, an answer and a
+    /// refusal, the request window and the expiry task read this clock.
+    #[arg(long, value_name = "INSTANT", hide = true)]
+    clock_start: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -369,6 +375,7 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
                 max_wait: args.max_wait,
                 sweep_interval: args.sweep_interval,
                 answer_retention: args.answer_retention,
+                clock_start: args.clock_start.as_deref(),
             };
             let backend = std::env::var("INBOX_BACKEND").ok();
             serve::serve(&settings, backend.as_deref(), json)?;

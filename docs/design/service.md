@@ -26,6 +26,7 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | 5. A post: the message count, inside the backend's section | the store holds `max_messages` messages or more | `503` | `{"refused": "message limit", "limit": <max_messages>}` |
 | 6. The generated `dispatch`, inside the backend's section | everything the generated surface answers: `404`, `405`, `400`, `403` (not granted), the declared outcomes, `501` | as generated | as generated |
 | 6a. A command answer of the outcome `foreign-message` | the caller is neither party to the message (the model's guard) | `404` | the generated body with `outcome` `unknown-message` |
+| 6b. `PostMessage`, `Answer`, `Refuse`: the deadline, at the clock reading inside the same section | a post whose `expires` is at or before the reading (`expired-on-arrival`, error `AlreadyExpired`); an answer or refusal of a message in `Sent`, `Delivered` or `Read` whose stored `expires` is at or before the reading (`deadline-passed`, error `Expired`); a reply to such a message whose own `expires` is at or before the reading (`expired-on-arrival` of `Answer`, error `AlreadyExpired`) | `502`, the status the generated contract gives an external outcome | the generated body |
 | 7. A view answer: the read rule | rows the caller may not see are removed | `200` | the generated body without them |
 
 So an unauthenticated request never reaches the duplicate check's answer, the message limit or a
@@ -150,6 +151,29 @@ step 3 authenticated the request at: `verifies` is `KeyRing::verify_envelope`, `
 `KeyRing::check_delegation`. An envelope's own signature that does not verify is the
 specification's `signature-invalid` (`502`, from `PostMessage` and `Answer`); it is not a `401`.
 
+## The deadline
+
+The context of each command (`inbox_core::ServiceContext`) carries the service's clock as an
+`inbox_core::CommandClock`. `PostMessage`, `Answer` and `Refuse` read it inside the backend's
+section, after the checks of the caller and the party, so a principal that is no party to a
+message still gets `unknown-message`, and no other command runs between the reading and the
+change. The reading is written as the expiry task writes `Due`'s and `Expire`'s `now`
+(`format_reading`: RFC 3339, UTC, with the fraction of a second the clock holds), and every
+comparison is of instants at full precision, so a message is due at its `expires` exactly, as
+for `Expire`: a message due at `…:00.500Z` is due at a reading of `…:00.700Z`. So a late answer
+and a sweep, in either order and at any reading, leave the message the same, decided on silence
+with its `default_on_silence` or removed. A refused answer or refusal changes nothing and
+publishes nothing. No member of a request replaces the reading.
+
+A reply to a message in `Sent`, `Delivered` or `Read` is checked against the clock as a post is: a
+reply whose own `expires` is at or before the reading is refused `expired-on-arrival`
+(`AlreadyExpired`) and the message stays as it was. An answer to a message already answered or
+refused is `already-settled` whatever its own `expires`, so a client that sends its answer again
+learns that the first was taken.
+Stored, its `expires` would be the message's, and the next sweep at that reading would remove
+the answer before its sender could collect it, and with it the option a decision's silence takes.
+`Refuse` carries no `expires` of its own: a refused message keeps the message's.
+
 ## The read rule
 
 A row of a message view (every row that carries `to` or `from`) is answered only to the owner of
@@ -181,9 +205,19 @@ A thread reads the clock every `sweep_interval`, reads `Due` at that reading as 
 and `keep_until` to the reading plus `answer_retention`. Each view and each `Expire` goes through
 `inbox_core::handle`, which runs it inside the backend's section; the core decides what `Expire`
 does (removed, decided on silence, or not due any more). The clock is a parameter of the library
-(`Clock`), so a test moves time without sleeping; an instant is written as RFC 3339 in UTC,
-truncated to the second, and held to the years 0000 to 9999 that RFC 3339 writes: a reading plus
-an `answer_retention` past 9999 is written as `9999-12-31T23:59:59Z`.
+(`Clock`), so a test moves time without sleeping; the reading and `keep_until` are written as
+RFC 3339 in UTC with the fraction of a second the clock holds (`format_reading`), and held to the
+years 0000 to 9999 that RFC 3339 writes: a reading plus an `answer_retention` past 9999 is written
+as `9999-12-31T23:59:59Z`. A request timestamp is written to the second (`format_instant`).
+
+`inbox serve --clock-start <instant>` is the conformance run's flag, hidden from `--help` and
+from the command-line reference: the clock starts at that instant and moves on by the system
+clock's elapsed time since the start (`StartedClock`), so a suspend of the host moves it on as
+it moves the system clock, and a step of the system clock moves it by the step (back to `start` at
+the most); without it, the system clock. The run uses it to serve before the
+fixed instants of the suite's envelopes. When it is set, `inbox serve` writes one line on
+standard error at the start: `inbox serve: the service's clock starts at <instant>, not at the
+system clock`.
 
 ## The limits
 

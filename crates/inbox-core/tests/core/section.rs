@@ -137,6 +137,10 @@ impl TryContext for Panics {
 }
 
 impl PostExternals for Panics {
+    fn expired_on_arrival(&mut self, _input: &PostMessage) -> Result<bool, UnmetObligation> {
+        Ok(false)
+    }
+
     fn signature_invalid(&mut self, _input: &PostMessage) -> bool {
         panic!("a command panics inside the section")
     }
@@ -184,6 +188,7 @@ fn the_entry_releases_the_section_after_a_refusal_and_after_a_panic() {
         inbox_core::CallerAttributes::none(),
         KeyIdVerifier::accepting(),
         world.backend.clone(),
+        crate::support::clock(),
     );
     let refused = inbox_core::handle(
         &world.backend,

@@ -1,12 +1,14 @@
-//! The context port: the caller's attributes and the answers to the 5 `external:` branches.
+//! The context port: the caller's attributes, the service's clock and the answers to the 9
+//! `external:` branches.
 
 use inbox::behaviour::{ExternalCommand, MessageStorage, TryContext, unmet_context};
 use inbox::messaging::{
-    Address, Answer, DecisionAsk, DelegationId, Kind, MessageData, OptionLetter, PostMessage,
-    Principal, ReplyShape, Signature,
+    Address, Answer, DecisionAsk, DelegationId, Kind, MessageData, MessageId, MessageSnapshot,
+    MessageState, OptionLetter, PostMessage, Principal, ReplyShape, Signature,
 };
 use inbox::obligation::UnmetObligation;
 use inbox::primitives::Timestamp;
+use inbox::primitives::invariant::{self, Fact, Op};
 use inbox::server::json;
 
 /// The attributes of the authenticated caller, as the embedding code hands them in.
@@ -129,12 +131,68 @@ impl<V: SignatureVerifier + ?Sized> SignatureVerifier for std::sync::Arc<V> {
     }
 }
 
-/// The 2 `external:` branches of `PostMessage`, which the generated crate does not ask its
+/// The service's clock, as a command reads it: the instant the transition is decided at.
+///
+/// [`ServiceContext`] reads it once per question, when the command asks, which is inside the
+/// backend's [`crate::Exclusive`] section where [`crate::handle`] runs the command. The reading is
+/// the service's own: no member a client sends takes its place. A fixed [`Timestamp`] is a clock
+/// that always reads that instant (for a test, or an embedding that decided the instant itself).
+/// Object-safe.
+pub trait CommandClock {
+    /// The current instant, as RFC 3339 text.
+    fn now(&self) -> Timestamp;
+}
+
+impl CommandClock for Timestamp {
+    fn now(&self) -> Timestamp {
+        self.clone()
+    }
+}
+
+impl<K: CommandClock + ?Sized> CommandClock for &K {
+    fn now(&self) -> Timestamp {
+        (**self).now()
+    }
+}
+
+impl<K: CommandClock + ?Sized> CommandClock for Box<K> {
+    fn now(&self) -> Timestamp {
+        (**self).now()
+    }
+}
+
+impl<K: CommandClock + ?Sized> CommandClock for std::sync::Arc<K> {
+    fn now(&self) -> Timestamp {
+        (**self).now()
+    }
+}
+
+/// Whether `expires` is at or before `now`, both read as instants, as the generated guards and
+/// the conformance interpreter order a `Timestamp`; `None` where either names no instant.
+fn due(expires: &Timestamp, now: &Timestamp) -> Option<bool> {
+    invariant::compare(
+        Some(Fact::text(&expires.0)),
+        Op::Le,
+        Some(Fact::text(&now.0)),
+        true,
+        false,
+    )
+}
+
+/// The 3 `external:` branches of `PostMessage`, which the generated crate does not ask its
 /// context port about: the obligation in [`crate::Core`] asks this, one question per branch, in
 /// declaration order, after the input-guarded refusals and before any row is read. `true` takes
 /// the branch. Object-safe. `unknown-option` is a declared guard, which the core decides from the
 /// envelope.
 pub trait PostExternals {
+    /// `expired-on-arrival`: the service's Clock port reads at or after the post's `expires`.
+    ///
+    /// # Errors
+    ///
+    /// The clock reading or the post's `expires` names no instant: the post is refused as an
+    /// unmet obligation, never stored.
+    fn expired_on_arrival(&mut self, input: &PostMessage) -> Result<bool, UnmetObligation>;
+
     /// `signature-invalid`: the SignatureVerifier port does not know the key, finds it lapsed, or
     /// finds that the signature does not verify.
     fn signature_invalid(&mut self, input: &PostMessage) -> bool;
@@ -146,24 +204,28 @@ pub trait PostExternals {
 
 /// The service's context: the generated context port and [`PostExternals`] in one.
 ///
-/// Built from the caller, a verifier and the backend it reads the answered message from, and
-/// nothing else: no outside code sets an answer on it. `shape-mismatch` is computed from the reply
-/// and the stored message, and the 2
-/// `signature-invalid` and 2 `authority-invalid` branches are asked of the verifier.
+/// Built from the caller, a verifier, the backend it reads the addressed message from and the
+/// service's clock, and nothing else: no outside code sets an answer on it. `shape-mismatch` is
+/// computed from the reply and the stored message; the 2 `signature-invalid` and 2
+/// `authority-invalid` branches are asked of the verifier; `expired-on-arrival` of `PostMessage`
+/// and the 2 `deadline-passed` of `Answer` and `Refuse` compare an `expires` with the clock,
+/// read when the command asks.
 #[derive(Debug, Clone)]
-pub struct ServiceContext<V, B> {
+pub struct ServiceContext<V, B, K> {
     caller: CallerAttributes,
     verifier: V,
     backend: B,
+    clock: K,
 }
 
-impl<V, B> ServiceContext<V, B> {
-    /// The context of one caller.
-    pub fn new(caller: CallerAttributes, verifier: V, backend: B) -> Self {
+impl<V, B, K> ServiceContext<V, B, K> {
+    /// The context of one caller, deciding at `clock`'s readings.
+    pub fn new(caller: CallerAttributes, verifier: V, backend: B, clock: K) -> Self {
         Self {
             caller,
             verifier,
             backend,
+            clock,
         }
     }
 
@@ -173,7 +235,44 @@ impl<V, B> ServiceContext<V, B> {
     }
 }
 
-impl<V: SignatureVerifier, B: MessageStorage> TryContext for ServiceContext<V, B> {
+impl<V, B: MessageStorage, K: CommandClock> ServiceContext<V, B, K> {
+    /// `deadline-passed`: the message `id` is in `Sent`, `Delivered` or `Read`, and the clock reads
+    /// at or after its stored `expires`. A message in another state is not due here: `Answer` and
+    /// `Refuse` answer it `already-settled`.
+    fn deadline_passed(&self, id: &MessageId) -> Result<bool, UnmetObligation> {
+        let Some(held) = self.open(id) else {
+            return Ok(false);
+        };
+        due(&held.data.expires, &self.clock.now())
+            .ok_or_else(|| unmet_context("the Clock port's reading against the stored expires"))
+    }
+
+    /// `expired-on-arrival` of `Answer`: the message the reply answers is in `Sent`, `Delivered`
+    /// or `Read`, as for `deadline-passed`, and the clock reads at or after the reply's own
+    /// `expires`. A message in another state is answered `already-settled`, whatever the reply's
+    /// `expires`: an answer sent again learns that the first was taken.
+    fn reply_expired(&self, reply: &Answer) -> Result<bool, UnmetObligation> {
+        if self.open(&reply.in_reply_to).is_none() {
+            return Ok(false);
+        }
+        due(&reply.expires, &self.clock.now())
+            .ok_or_else(|| unmet_context("the Clock port's reading against the reply's expires"))
+    }
+
+    /// The message `id` where it is open: in `Sent`, `Delivered` or `Read`.
+    fn open(&self, id: &MessageId) -> Option<MessageSnapshot> {
+        MessageStorage::get(&self.backend, id).filter(|held| {
+            matches!(
+                held.state,
+                MessageState::Sent | MessageState::Delivered | MessageState::Read
+            )
+        })
+    }
+}
+
+impl<V: SignatureVerifier, B: MessageStorage, K: CommandClock> TryContext
+    for ServiceContext<V, B, K>
+{
     fn try_caller_inbox(&self) -> Result<Option<Address>, UnmetObligation> {
         Ok(self.caller.inbox.clone())
     }
@@ -182,25 +281,44 @@ impl<V: SignatureVerifier, B: MessageStorage> TryContext for ServiceContext<V, B
         Ok(self.caller.principal.clone())
     }
 
-    /// The 3 external branches of `Answer`, the only ones the generated crate asks about. An
-    /// outcome name it does not declare is answered as unavailable.
+    /// The 5 external branches of `Answer` and the 1 of `Refuse`, the only ones the generated
+    /// crate asks about. An outcome name a command does not declare is answered as unavailable.
     fn try_external(
         &mut self,
         command: ExternalCommand<'_>,
         outcome: &'static str,
     ) -> Result<bool, UnmetObligation> {
-        let ExternalCommand::InboxMessagingAnswer(reply) = command;
-        match outcome {
-            "signature-invalid" => Ok(!self.verifier.verifies(Envelope::Answer(reply))),
-            "authority-invalid" => Ok(refuses_authority(&self.verifier, Envelope::Answer(reply))),
-            "shape-mismatch" => Ok(MessageStorage::get(&self.backend, &reply.in_reply_to)
-                .is_some_and(|held| !fits(reply, &held.data))),
+        match (command, outcome) {
+            (ExternalCommand::InboxMessagingAnswer(reply), "signature-invalid") => {
+                Ok(!self.verifier.verifies(Envelope::Answer(reply)))
+            }
+            (ExternalCommand::InboxMessagingAnswer(reply), "authority-invalid") => {
+                Ok(refuses_authority(&self.verifier, Envelope::Answer(reply)))
+            }
+            (ExternalCommand::InboxMessagingAnswer(reply), "deadline-passed") => {
+                self.deadline_passed(&reply.in_reply_to)
+            }
+            (ExternalCommand::InboxMessagingAnswer(reply), "expired-on-arrival") => {
+                self.reply_expired(reply)
+            }
+            (ExternalCommand::InboxMessagingAnswer(reply), "shape-mismatch") => {
+                Ok(MessageStorage::get(&self.backend, &reply.in_reply_to)
+                    .is_some_and(|held| !fits(reply, &held.data)))
+            }
+            (ExternalCommand::InboxMessagingRefuse(refusal), "deadline-passed") => {
+                self.deadline_passed(&refusal.message_id)
+            }
             _ => Err(unmet_context("external branch answer")),
         }
     }
 }
 
-impl<V: SignatureVerifier, B> PostExternals for ServiceContext<V, B> {
+impl<V: SignatureVerifier, B, K: CommandClock> PostExternals for ServiceContext<V, B, K> {
+    fn expired_on_arrival(&mut self, input: &PostMessage) -> Result<bool, UnmetObligation> {
+        due(&input.expires, &self.clock.now())
+            .ok_or_else(|| unmet_context("the Clock port's reading against the post's expires"))
+    }
+
     fn signature_invalid(&mut self, input: &PostMessage) -> bool {
         !self.verifier.verifies(Envelope::Post(input))
     }

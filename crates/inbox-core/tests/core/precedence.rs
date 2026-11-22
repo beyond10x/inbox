@@ -415,7 +415,7 @@ impl MessageStorage for Counting {
 /// Runs one `Client` command over `backend` and answers its outcome.
 fn run(backend: &Counting, who: &str, name: &str, input: &str) -> String {
     let caller = CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned()));
-    let context = ServiceContext::new(caller, verifier(), backend.clone());
+    let context = ServiceContext::new(caller, verifier(), backend.clone(), crate::support::clock());
     let input = json::parse(input).expect("the case writes JSON");
     let answer = inbox_core::handle(
         backend,

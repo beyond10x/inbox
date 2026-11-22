@@ -4,12 +4,13 @@
 use std::io::{ErrorKind, Write};
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use inbox::server::{http, json};
 use inbox_core::MemoryBackend;
-use inbox_server::{Config, Server};
-use inbox_verify::{KeyRing, PublicKey};
+use inbox_server::{Config, Server, StartedClock};
+use inbox_verify::{Instant, KeyRing, PublicKey};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
@@ -42,6 +43,8 @@ pub struct Settings<'a> {
     pub sweep_interval: u64,
     /// `--answer-retention`, seconds.
     pub answer_retention: u64,
+    /// `--clock-start`, RFC 3339; the system clock where absent.
+    pub clock_start: Option<&'a str>,
 }
 
 /// Serves until SIGINT or SIGTERM. The first line on standard output is the URL the service
@@ -51,7 +54,8 @@ pub struct Settings<'a> {
 /// # Errors
 ///
 /// [`Failure::Usage`] for an `INBOX_BACKEND` other than `memory`, an operator public key that is
-/// not one, a body limit over the generated reader's, or an address that is not loopback;
+/// not one, a body limit over the generated reader's, a `--clock-start` that is no RFC 3339
+/// instant, or an address that is not loopback;
 /// [`Failure::Local`] for a key file that cannot be read or does not read as one, and an address
 /// that cannot be bound.
 pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Result<(), Failure> {
@@ -88,6 +92,15 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
     config.max_wait = Duration::from_secs(settings.max_wait);
     config.sweep_interval = Duration::from_secs(settings.sweep_interval);
     config.answer_retention = Duration::from_secs(settings.answer_retention);
+    if let Some(start) = settings.clock_start {
+        let start = Instant::parse(start)
+            .map_err(|error| Failure::Usage(format!("--clock-start: {error}")))?;
+        config.clock = Arc::new(StartedClock::new(start));
+        warn(&format!(
+            "inbox serve: the service's clock starts at {}, not at the system clock",
+            inbox_server::format_reading(start)
+        ));
+    }
     let server =
         Server::bind(config, MemoryBackend::new()).map_err(|error| match error.kind() {
             ErrorKind::InvalidInput => Failure::Usage(format!("--listen: {error}")),

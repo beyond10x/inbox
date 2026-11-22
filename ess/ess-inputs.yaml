@@ -6,12 +6,16 @@ specification:
 - domains/messaging.yaml
 scenarios:
 - scenarios/a-bad-signature-is-refused-before-any-row-is-read.yaml
+- scenarios/a-late-answer-leaves-the-decision-to-silence.yaml
+- scenarios/a-late-refusal-leaves-the-request-to-expire.yaml
 - scenarios/a-message-id-another-sender-holds-is-taken.yaml
 - scenarios/a-refused-delegation-is-answered-before-any-row-is-read.yaml
 - scenarios/a-relayed-message-id-is-its-senders.yaml
 - scenarios/a-request-without-shape-is-refused-before-any-row-is-read.yaml
+- scenarios/a-second-expired-reply-to-an-answered-request-is-already-settled.yaml
 - scenarios/a-third-principal-cannot-tell-a-message-id-by-post.yaml
 - scenarios/a-third-principal-finds-no-message.yaml
+- scenarios/an-expired-reply-leaves-the-request-open.yaml
 - scenarios/an-unknown-option-is-refused-before-any-row-is-read.yaml
 - scenarios/answer-from-another-principal-refused.yaml
 - scenarios/answered-decision-expires-uncollected.yaml

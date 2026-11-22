@@ -42,7 +42,7 @@ fn run(
     name: &str,
     input: &str,
 ) -> Value {
-    let context = ServiceContext::new(caller, Accepting, backend.clone());
+    let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
     inbox_core::handle(
         backend,
         context,

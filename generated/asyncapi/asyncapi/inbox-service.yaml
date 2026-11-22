@@ -1,5 +1,5 @@
 # generated from inbox v1
-# contract digest slice-sha256/2:c6ad3be561fb25d4e86134e4dd2013ead169a36f3d3b4650abb8fc90d51f263b
+# contract digest slice-sha256/2:4f1632e1126f6b30a84a7d895850dafee57412987d46a9950cae8642c5f1e5bc
 # do not edit: regenerate with `ess generate`
 asyncapi: 3.0.0
 info:
@@ -15,7 +15,7 @@ info:
   x-ess-provenance:
     system: inbox
     specification_version: v1
-    contract_digest: slice-sha256/2:c6ad3be561fb25d4e86134e4dd2013ead169a36f3d3b4650abb8fc90d51f263b
+    contract_digest: slice-sha256/2:4f1632e1126f6b30a84a7d895850dafee57412987d46a9950cae8642c5f1e5bc
 defaultContentType: application/json
 channels:
   inbox.messaging.DecisionTakenOnSilence:

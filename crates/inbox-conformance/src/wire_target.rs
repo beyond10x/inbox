@@ -15,8 +15,8 @@ use inbox::primitives::Timestamp;
 use inbox::server::inbox_service::{OPENAPI, ROUTES};
 use inbox::server::json::{self, Value};
 use inbox::server::wire;
-use inbox_server::{Clock, SystemClock, format_instant, request_headers};
-use inbox_verify::{SecretKey, sign_delegation_entry, sign_envelope, sign_key_entry};
+use inbox_server::{Clock, StartedClock, SystemClock, format_instant, request_headers};
+use inbox_verify::{Instant, SecretKey, sign_delegation_entry, sign_envelope, sign_key_entry};
 
 use crate::runner::{Answer, Command, Event, Executed, Read, Reader, Target, expected_outcome};
 use crate::suite::{Expectation, Ref, Step};
@@ -32,6 +32,13 @@ const VALID_UNTIL: &str = "9999-12-31T23:59:59Z";
 /// of the suite at once (their `expires` lie in 2020 and earlier), never sweeps during one. A
 /// deadline beyond what the clock can add is no deadline (`docs/design/service.md`, the limits).
 const SWEEP_INTERVAL: &str = "4294967296";
+/// `--clock-start`: the service's clock starts here, before every instant the suite's envelopes
+/// carry (the earliest is a `created` of 2019-12-31T00:00:00Z, the earliest `expires`
+/// 2020-01-01T00:00:00Z), so no post is due on arrival and no message is due when it is answered
+/// or refused. The target signs each request at the same clock's reading.
+pub const CLOCK_START: &str = "2019-12-30T00:00:00Z";
+/// The outcomes the service takes by its own clock, which the target cannot move to a deadline.
+const CLOCK_OUTCOMES: [&str; 2] = ["expired-on-arrival", "deadline-passed"];
 /// How long a started service may take to print its address.
 const START_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long a request may take to connect, and to be answered.
@@ -49,6 +56,8 @@ pub mod reason {
     pub const SPLIT_CALLER: &str = "a caller's principal and inbox differ: over HTTP both are the principal of the caller's key (docs/design/service.md, the caller)";
     /// A row claim on the stored signature.
     pub const SIGNATURE: &str = "a view claim on the stored `signature`: the wire target replaces each envelope's placeholder signature with a real one";
+    /// A step that expects an outcome the service's clock decides.
+    pub const CLOCK: &str = "a step expects `expired-on-arrival` or `deadline-passed`, which the service takes by its own clock: the wire target starts that clock before every instant of the suite (--clock-start) and cannot move it past a deadline";
 }
 
 /// One key the target made for a principal of the scenario.
@@ -77,6 +86,8 @@ enum Launch {
 struct Service {
     child: Child,
     address: SocketAddr,
+    /// The service's clock as the target reads it: started with the service, at [`CLOCK_START`].
+    clock: StartedClock,
     _stdout: BufReader<ChildStdout>,
 }
 
@@ -105,7 +116,7 @@ impl Drop for Starting {
 /// witness them ([`reason`]) or makes the keys they need; [`Target::reset`] stops the previous
 /// service, writes the key file into the work directory and starts `<binary> serve --listen
 /// 127.0.0.1:0 --key-file <work>/keys.json --operator-public-key <key> --sweep-interval <a
-/// century>`, reading its URL from the first line of its standard output.
+/// century> --clock-start 2019-12-30T00:00:00Z`, reading its URL from the first line of its standard output.
 ///
 /// - **Keys.** The target makes an operator key once, and for each scenario one key per
 ///   principal the scenario names: each caller's `principal` and each envelope's `from`, in the
@@ -135,16 +146,17 @@ impl Drop for Starting {
 ///   message row only to its sender and its recipient (`docs/design/service.md`, the read rule),
 ///   and every stored message has a `from` that holds a key here (a post is stored only once its
 ///   signature verifies under the key of its `from`), so the union holds every row of the view.
-/// - **The clock.** The suite's envelopes carry fixed readings (2019 and 2020), the service reads
-///   the real clock. The service compares an envelope's own readings only with each other
-///   (`already-expired`); it reads the clock for the request window (the target signs each
-///   request at the clock's reading), for the lapse of a key entry or delegation (every entry is
-///   live until 9999) and in the expiry task, which the sweep interval keeps from running.
+/// - **The clock.** The suite's envelopes carry fixed readings (2019 and 2020), and the service
+///   runs on a clock that starts before all of them ([`CLOCK_START`]) and moves on with the
+///   system's, a few seconds per scenario. It reads that clock for the request window (the target
+///   signs each request at the same reading), for the lapse of a key entry or delegation (every
+///   entry is live until 9999), for the deadline of a post, an answer and a refusal (none is due
+///   at that reading) and in the expiry task, which the sweep interval keeps from running.
 ///
 /// What the target cannot witness makes the scenario unsupported, before anything is sent: a step
 /// as the `Sweeper` or as no actor, a caller whose `principal` and `inbox` differ, a row claim on
 /// `signature`, an envelope whose `from` or `authority` is not a literal, one delegation id for
-/// two pairs.
+/// two pairs, a step that expects an outcome of the service's clock ([`reason::CLOCK`]).
 pub struct WireTarget {
     launch: Launch,
     work: PathBuf,
@@ -194,6 +206,15 @@ impl WireTarget {
     /// The process id of the service the target runs now, if one runs.
     pub fn service_pid(&self) -> Option<u32> {
         self.service.as_ref().map(|service| service.child.id())
+    }
+
+    /// The clock reading a request is signed at: the started service's clock, or the system's
+    /// for a service someone else runs.
+    fn reading(&self) -> Instant {
+        match &self.service {
+            Some(service) => service.clock.now(),
+            None => SystemClock.now(),
+        }
     }
 
     fn address(&self) -> Result<SocketAddr, String> {
@@ -272,6 +293,8 @@ impl WireTarget {
             .arg(self.operator.public_key().to_base64())
             .arg("--sweep-interval")
             .arg(SWEEP_INTERVAL)
+            .arg("--clock-start")
+            .arg(CLOCK_START)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(stderr);
@@ -280,6 +303,9 @@ impl WireTarget {
                 command.env_remove(name);
             }
         }
+        let clock = StartedClock::new(
+            Instant::parse(CLOCK_START).map_err(|error| format!("--clock-start: {error}"))?,
+        );
         let mut child = command
             .spawn()
             .map_err(|error| format!("{}: {error}", binary.display()))?;
@@ -323,6 +349,7 @@ impl WireTarget {
         Ok(Service {
             child,
             address,
+            clock,
             _stdout: reader,
         })
     }
@@ -337,7 +364,7 @@ impl WireTarget {
         body: &[u8],
     ) -> Result<(u16, Result<Value, String>), String> {
         let address = self.address()?;
-        let timestamp = format_instant(SystemClock.now());
+        let timestamp = format_instant(self.reading());
         let headers = request_headers(
             method,
             target,
@@ -705,6 +732,11 @@ impl Plan {
                     plan.actor(actor.as_deref());
                     if actor.as_deref() == Some(CLIENT) {
                         plan.caller(caller);
+                    }
+                    if expected_outcome(steps, at, command)
+                        .is_some_and(|outcome| CLOCK_OUTCOMES.contains(&outcome))
+                    {
+                        plan.refuse(reason::CLOCK);
                     }
                     if matches!(
                         command.as_str(),

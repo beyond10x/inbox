@@ -4,12 +4,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use inbox::actor::{Actor, Caller};
+use inbox::primitives::Timestamp;
 use inbox::server::json::Value;
 use inbox_core::{CallerAttributes, ServiceContext};
 use inbox_verify::{Instant, KeyRing};
 
 use crate::auth::RingVerifier;
-use crate::clock::format_instant;
+use crate::clock::format_reading;
 use crate::service::Backend;
 
 /// The expiry task is the specification's `inbox.messaging.Sweeper`.
@@ -27,8 +28,9 @@ fn object(members: &[(&str, &str)]) -> Value {
 }
 
 /// One sweep at the reading `now`: reads `Due` at `now` as the sweeper and sends `Expire` for each
-/// due message, with `now` and `keep_until` = `now` + `retention` (to the second), each through
-/// [`inbox_core::handle`] inside the backend's section. Answers the count of `Expire` commands
+/// due message, with `now` and `keep_until` = `now` + `retention` (its whole seconds), both written
+/// to the nanosecond as [`format_reading`] writes them, each through [`inbox_core::handle`] inside
+/// the backend's section. Answers the count of `Expire` commands
 /// sent; what each did (removed, decided on silence, not due any more) is the core's to decide.
 pub fn sweep<B: Backend>(
     backend: &B,
@@ -36,14 +38,15 @@ pub fn sweep<B: Backend>(
     now: Instant,
     retention: Duration,
 ) -> usize {
-    let reading = format_instant(now);
+    let reading = format_reading(now);
     let keep_until =
-        format_instant(now.plus_seconds(i64::try_from(retention.as_secs()).unwrap_or(i64::MAX)));
+        format_reading(now.plus_seconds(i64::try_from(retention.as_secs()).unwrap_or(i64::MAX)));
     let context = || {
         ServiceContext::new(
             CallerAttributes::none(),
             RingVerifier::new(Arc::clone(keys), now),
             backend.clone(),
+            Timestamp(reading.clone()),
         )
     };
     let due = inbox_core::handle(

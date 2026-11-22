@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Expired payload",
+  "description": "The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it.",
+  "x-ess-name": "inbox.messaging.Expired",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "inbox",
+    "specification_version": "v1",
+    "contract_digest": "slice-sha256/2:c453d1886412e823a9db4e835168906d594e0dfd735a11f921ead1b47241c014",
+    "regenerate": "ess generate"
+  }
+}

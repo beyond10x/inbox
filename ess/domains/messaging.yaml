@@ -292,7 +292,7 @@ errors:
     summary: The envelope does not fit its kind, or the reply does not fit what the message asked for.
     fields: []
   - name: inbox.messaging.AlreadyExpired
-    summary: "`expires` is not after `created`."
+    summary: "`expires` is not after `created`, or the `expires` of a post or of a reply is not after the service's clock reading."
     fields: []
   - name: inbox.messaging.NotAnswerable
     summary: A note takes no answer.
@@ -306,6 +306,9 @@ errors:
     fields: []
   - name: inbox.messaging.NotDue
     summary: "`expires` is after the clock reading sent."
+    fields: []
+  - name: inbox.messaging.Expired
+    summary: "The message's `expires` is at or before the service's clock reading: it takes no answer and no refusal, and the expiry task decides it."
     fields: []
 
 commands:
@@ -440,6 +443,16 @@ commands:
                         - not: {exists: {in: decision.options, as: o, that: o.letter == default_on_silence}}
         error: inbox.messaging.ShapeMismatch
         summary: "`recommended_option` or `default_on_silence` names no option of the decision (an envelope without a decision offers none), or two options carry one letter."
+      # SYNTHESIS: `expires <= now` in `already-expired` validates on ESS 0.97.3 as on 0.97.1,
+      # but synthesis then decides every authored post at its own wall clock and refuses each
+      # whose literal `expires` lies before it (ESS-AUTHOR-041, 224 refusals on 0.97.3), and an
+      # authored scenario cannot state an instant relative to the target's clock (ESS-AUTHOR-015
+      # on 0.97.3). The clock part is this external branch, answered by the service's Clock port
+      # (docs/design/inbox.md, what the specification cannot say).
+      - name: expired-on-arrival
+        external: the service's Clock port reads at or after the post's `expires`
+        before_row: true
+        error: inbox.messaging.AlreadyExpired
       - name: signature-invalid
         external: the SignatureVerifier port does not know the key, finds it lapsed, or finds that the signature does not verify
         before_row: true
@@ -640,6 +653,34 @@ commands:
         when_subject:
           predicate: kind == note
         error: inbox.messaging.NotAnswerable
+      # SYNTHESIS: a `when_subject` guard `expires <= now` over the open states validates and
+      # generates on ESS 0.97.3 as on 0.97.1 (87 of 89 capabilities), but synthesis decides it at
+      # the target's wall clock: on 0.97.3 10 authored scenarios, whose instants are literals, then
+      # fail on the interpreted target where their `expires` lies before that clock, the generated
+      # `already-expired` of `PostMessage` gets an `expires` relative to the clock and a literal
+      # `created` and fails too, 8 refusals stay uncovered, and no authored scenario can arrange
+      # a due message (ESS-AUTHOR-015). It is this external branch, answered by the service's
+      # Clock port inside the transition.
+      - name: deadline-passed
+        when_subject:
+          predicate:
+            state: [Sent, Delivered, Read]
+        external: the service's Clock port reads at or after the message's stored `expires`
+        error: inbox.messaging.Expired
+        summary: "The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal."
+      # SYNTHESIS: external for the reason given at `expired-on-arrival` of `PostMessage`: the
+      # reply's own `expires` against the service's clock. Like `deadline-passed` it holds only
+      # for an open message: a second answer to an answered or refused one is `already-settled`,
+      # whatever the reply's `expires`. ESS 0.97.3 takes the state as a `when_subject` beside
+      # `external` and checks it before it asks the port; the 2 at one step of the precedence
+      # order keep their declaration order (with the state on this one only: ESS-COMMAND-004).
+      - name: expired-on-arrival
+        when_subject:
+          predicate:
+            state: [Sent, Delivered, Read]
+        external: the service's Clock port reads at or after the reply's own `expires`
+        error: inbox.messaging.AlreadyExpired
+        summary: "The reply's own `expires` has passed by the service's clock: stored, it would be removed before its sender could collect it. The message stays as it was."
       # SYNTHESIS: the option part has a guard ESS 0.97.3 validates (`exists` over the stored
       # `decision.options`, a `when_subject` outcome before this one), but with it
       # `ess generate synthesize --target rust` on ESS 0.97.3 keeps all of `Answer` an obligation
@@ -699,6 +740,14 @@ commands:
           predicate: kind == note
         error: inbox.messaging.NotAnswerable
         summary: A note asks for nothing, so it is not refused either; it is removed by `MarkRead` or `Expire`.
+      # SYNTHESIS: external for the reason given at `deadline-passed` of `Answer`.
+      - name: deadline-passed
+        when_subject:
+          predicate:
+            state: [Sent, Delivered, Read]
+        external: the service's Clock port reads at or after the message's stored `expires`
+        error: inbox.messaging.Expired
+        summary: "The deadline has passed: the expiry task decides the message, by silence with its `default_on_silence` or by removal."
       - name: refused
         moves: inbox.messaging.Message.refuse
         instance: message_id

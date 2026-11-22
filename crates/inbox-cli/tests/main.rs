@@ -3,6 +3,7 @@
 mod acceptance;
 mod adversary;
 mod adversary2;
+mod adversary_deadline;
 mod adversary_w8_repost;
 mod adversary_w8_repost2;
 mod cases;

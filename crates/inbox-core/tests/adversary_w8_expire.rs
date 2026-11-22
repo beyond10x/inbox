@@ -51,7 +51,7 @@ fn run(
         Actor::Sweeper => CallerAttributes::none(),
         _ => CallerAttributes::new(Principal(who.to_owned()), Address(who.to_owned())),
     };
-    let context = ServiceContext::new(caller, Accepting, backend.clone());
+    let context = ServiceContext::new(caller, Accepting, backend.clone(), crate::support::clock());
     let (answer, events) = inbox_core::handle_with_events(
         backend,
         context,

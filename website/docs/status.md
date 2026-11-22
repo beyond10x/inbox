@@ -24,7 +24,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | Answer a request or a decision, or refuse it and say why; a note takes neither | `inbox answer`, `inbox refuse` |
 | List the live messages a sender posted, and take the answer or the refusal of one | `inbox outbox`, `inbox collect` |
 | Follow a thread: its live messages and its answered ones | `inbox thread`, `inbox replies` |
-| Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires` | `inbox post --expires` |
+| Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires`. From `expires` on, by the service's clock, a message takes no answer and no refusal (`Expired`), and a post or a reply whose own `expires` has passed is refused (`AlreadyExpired`) | `inbox post --expires` |
 | A message arrives once: a second post with the message id or the dedup key of a stored message of the same sender stores nothing | `inbox post --dedup-key` |
 | Post again after a restart of the service, from the sender's outbox file | `inbox repost` |
 

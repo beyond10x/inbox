@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest a07be6c10394398db00443c7f14d6b2b93014d8a5f9ab6f7516db37c386cf373
+// contract digest 9447d0d3fd8d202100ab11dab84fc004c77f28cae8e3e28a0e0222ae7f780f19
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! inbox-service — the `inbox-service` component of `inbox` v1.
@@ -89,6 +89,8 @@ where
             crate::messaging::AnswerOutcome::NotRecipient { .. } => {}
             crate::messaging::AnswerOutcome::AlreadySettled { .. } => {}
             crate::messaging::AnswerOutcome::Note { .. } => {}
+            crate::messaging::AnswerOutcome::DeadlinePassed { .. } => {}
+            crate::messaging::AnswerOutcome::ExpiredOnArrival { .. } => {}
             crate::messaging::AnswerOutcome::ShapeMismatch { .. } => {}
             crate::messaging::AnswerOutcome::Answered { message_answered, .. } => {
                 self.outbox.push(PublishedEvent::MessageAnswered(message_answered.clone()));
@@ -229,6 +231,7 @@ where
             crate::messaging::PostMessageOutcome::RequestWithoutShape { .. } => {}
             crate::messaging::PostMessageOutcome::DecisionWithoutOptions { .. } => {}
             crate::messaging::PostMessageOutcome::UnknownOption { .. } => {}
+            crate::messaging::PostMessageOutcome::ExpiredOnArrival { .. } => {}
             crate::messaging::PostMessageOutcome::SignatureInvalid { .. } => {}
             crate::messaging::PostMessageOutcome::AuthorityInvalid { .. } => {}
             crate::messaging::PostMessageOutcome::Duplicate { .. } => {}
@@ -255,6 +258,7 @@ where
             crate::messaging::RefuseOutcome::ForeignMessage { .. } => {}
             crate::messaging::RefuseOutcome::NotRecipient { .. } => {}
             crate::messaging::RefuseOutcome::Note { .. } => {}
+            crate::messaging::RefuseOutcome::DeadlinePassed { .. } => {}
             crate::messaging::RefuseOutcome::Refused { message_refused, .. } => {
                 self.outbox.push(PublishedEvent::MessageRefused(message_refused.clone()));
             }
