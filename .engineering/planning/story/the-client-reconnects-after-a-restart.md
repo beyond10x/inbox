@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-client-reconnects-after-a-restart
 kind: story
-status: draft
+status: active
 title: A client that meets a new start of the service opens its inbox again and reposts by itself
 summary: On the first answer from a new start the client sends OpenInbox with its last adapter and reposts its kept envelopes, with no typed open or repost.
 relations:
@@ -35,7 +35,10 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 5
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:14Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:14Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

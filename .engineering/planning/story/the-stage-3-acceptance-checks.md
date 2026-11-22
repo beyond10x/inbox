@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-stage-3-acceptance-checks
 kind: story
-status: draft
+status: active
 title: 'The acceptance checks of stage 3: two separated clients, a wake and a repost after a restart, over TLS'
 summary: task acceptance holds the stage 3 statement against one inbox serve with a certificate and two clients that share no file.
 relations:
@@ -22,7 +22,10 @@ scope:
   path: tests/acceptance/src/lib.rs
 - confidence: cited
   path: tests/acceptance/tests/checks.rs
-revision: 3
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:16Z", actor: "agent:inbox", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:16Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

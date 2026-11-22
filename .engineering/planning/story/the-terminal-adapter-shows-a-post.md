@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-terminal-adapter-shows-a-post
 kind: story
-status: draft
+status: active
 title: The terminal adapter shows each post in its owner terminal and marks it delivered
 summary: An inbox opened with the terminal adapter, the default of inbox open, shows each post in a terminal without a typed pending; whom it serves in stage 3 is open.
 relations:
@@ -31,7 +31,10 @@ scope:
   path: website/docs/first-use.md
 - confidence: cited
   path: website/docs/status.md
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:16Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:17Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 

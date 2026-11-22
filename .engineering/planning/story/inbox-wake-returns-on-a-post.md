@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:inbox-wake-returns-on-a-post
 kind: story
-status: draft
+status: active
 title: inbox wake holds the wait open until a message arrives and marks it delivered
 summary: 'A client command every wake adapter runs: it waits again past the end of a wait and past a restart, and exits on a message after MarkDelivered.'
 relations:
@@ -42,7 +42,10 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 7
+revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:15Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:15Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

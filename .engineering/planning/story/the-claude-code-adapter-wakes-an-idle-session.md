@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-claude-code-adapter-wakes-an-idle-session
 kind: story
-status: draft
+status: active
 title: The claude_code adapter wakes an idle Claude Code session on a post
 summary: The adapter keeps inbox wake running as a background task of the session; its exit on a post resumes the session, which handles the message and starts the wake again.
 relations:
@@ -23,7 +23,10 @@ scope:
   path: tools/gate-paths.sh
 - confidence: cited
   path: website/docs/first-use.md
-revision: 8
+revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:15Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:16Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 

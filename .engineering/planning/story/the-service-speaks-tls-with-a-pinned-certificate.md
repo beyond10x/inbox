@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-service-speaks-tls-with-a-pinned-certificate
 kind: story
-status: draft
+status: active
 title: The service answers over TLS and the client checks the certificate against its pin
 summary: inbox serve takes a certificate and answers over TLS on loopback; the client talks https and refuses a certificate that does not match its pin.
 relations:
@@ -50,7 +50,10 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 4
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T22:02:14Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-22T22:02:14Z", actor: "agent:inbox", revision: 6, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 ## Outcome
 
