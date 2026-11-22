@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T02:46:32Z",
+  "actor": "agent:inbox",
+  "artifact": "story:planning-only-changes-skip-the-gate",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, plain and with the CI variables: exit 0 twice (216 s, 137 s); task gate-paths: 12 cases; the workflow step in a throwaway clone: 8 of 8 change lists answer as expected"
+  }
+}

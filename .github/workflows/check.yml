@@ -23,8 +23,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 2
+
+      - name: Planning or prose only
+        id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          decision=run
+          : > "$RUNNER_TEMP/changed.txt"
+          if [ "$EVENT" = pull_request ]; then
+            from=HEAD^1
+          else
+            from=$(printf '%s' "$BEFORE" | grep -Ex '[0-9a-f]{40}' || true)
+            if [ -n "$from" ]; then
+              git fetch --quiet --depth=1 origin "$from" 2> /dev/null || true
+            fi
+          fi
+          if [ -n "$from" ] && git diff --name-only "$from" HEAD > "$RUNNER_TEMP/changed.txt" 2> /dev/null; then
+            decision=$(python3 tools/gate_paths.py "$RUNNER_TEMP/changed.txt")
+          fi
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "$decision: $(wc -l < "$RUNNER_TEMP/changed.txt") changed file(s)"
+          cat "$RUNNER_TEMP/changed.txt"
 
       - name: Install go-task
+        if: steps.paths.outputs.decision == 'run'
         env:
           TASK_VERSION: "3.54.0"
           TASK_SHA256: 680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb
@@ -38,6 +64,7 @@ jobs:
           echo "$RUNNER_TEMP/task-bin" >> "$GITHUB_PATH"
 
       - name: Install ess
+        if: steps.paths.outputs.decision == 'run'
         env:
           ESS_VERSION: "0.97.1"
           ESS_SHA256: fdfffe4d82f288378fee35df5ffb46adc9cb2ae22486e9dbf612eec26cc00c84
@@ -54,6 +81,7 @@ jobs:
           echo "$RUNNER_TEMP/ess-$ESS_VERSION-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
 
       - name: Install Rust
+        if: steps.paths.outputs.decision == 'run'
         env:
           RUST_VERSION: "1.99.1"
           RUST_DIST: "2026-10-15"
@@ -84,4 +112,5 @@ jobs:
           "$prefix/bin/rustc" --version | grep -F "rustc $RUST_VERSION "
 
       - name: task check
+        if: steps.paths.outputs.decision == 'run'
         run: task check

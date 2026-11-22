@@ -2,12 +2,16 @@
 format: aep.planning-md/3
 id: story:planning-only-changes-skip-the-gate
 kind: story
-status: draft
+status: implemented
 title: A pull request that changes only planning or prose files passes without build or test
 summary: Every pull request runs the whole gate, also when it changes only the planning store or documents; one path list in the workflow, with a test.
 tags:
 - budget
-revision: 1
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-22T02:04:08Z", actor: "agent:inbox", revision: 2}
+- {from: "proposed", to: "active", at: "2026-11-22T02:04:09Z", actor: "agent:inbox", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-22T02:46:47Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
@@ -16,15 +20,15 @@ without building or testing. The job `inbox / task check` of `.github/workflows/
 still runs and reports, so the required check has a result; it finds only such paths and exits
 0 before it installs a tool.
 
-One path list, in the workflow: `.engineering/`, and `*.md` outside `website/` and outside
-`generated/`. A change under `website/` still runs the job `Build documentation` of
-`.github/workflows/pages.yml` and skips `task check` when nothing else changed. A change to
-any other path runs everything, as today.
+One path list, in `tools/gate_paths.py`, which the workflow calls: `.engineering/`, and `*.md`
+outside `website/` and outside `generated/`, except `README.md`. A change to any other path
+runs everything, as today. The job `Build documentation` of `.github/workflows/pages.yml` is
+not changed.
 
 ## Acceptance
 
-A test in the repository runs the path decision on 2 lists of changed files and fails when
-either answer changes: a list with only `.engineering/planning/story/x.md` and `docs/plan/
+`task gate-paths`, a step of `task check`, runs the path decision on 12 lists of changed files
+and fails when an answer changes. Among them: a list with only `.engineering/planning/story/x.md` and `docs/plan/
 stage-2.md` answers "skip"; the same list plus `crates/inbox-core/src/lib.rs` answers "run".
 The workflow calls the same decision the test calls.
 
@@ -38,13 +42,22 @@ Today every push to `main` and every pull request starts 4 runs, among them `tas
 (15 minutes bound, ESS and `task` downloaded and verified). The commits that open and close a
 wave change `.engineering/` and documents and `AGENTS.md`, `README.md`, `CHANGELOG.md`.
 
-To settle in the unit: `AGENTS.md`, `README.md` and `CHANGELOG.md` are prose, but `task check`
-reads none of them; `docs/releasing.md` and `CHANGELOG.md` are read by `release.yml` only for
-a tag. Whether the decision applies to a push to `main` as well as to a pull request (the rule
-names pull requests).
+Settled in the unit:
+
+- `README.md` answers "run": the case
+  `every_command_line_of_the_readme_first_use_is_a_step_of_this_test_in_its_order` of
+  `crates/inbox-cli/tests/acceptance.rs` reads its "First use" section. `AGENTS.md`,
+  `CHANGELOG.md` and the files under `docs/` are read by no step of `task check`;
+  `docs/releasing.md` and `CHANGELOG.md` are read by `release.yml` only for a tag.
+- A path under `website/` answers "run": `task docs-words` reads `website/docs` and
+  `website/product.json`, and `task animation-drift` reads
+  `website/src/generated/animation.json`. Both steps were added after this story was drafted.
+- The decision applies to a pull request and to a push to `main`. A push that the script
+  cannot list (no `before` commit, or one the runner cannot fetch) answers "run".
+- A list with no path, a path git quoted and a path with `..` answer "run".
 
 ## Scope
 
 - `.github/workflows/check.yml`
-- a script or task that holds the path decision, and its test (place decided in the unit)
+- `tools/gate_paths.py` (the decision and its cases), `Taskfile.yml` (`task gate-paths`)
 - `AGENTS.md` (the rows of the workflows)

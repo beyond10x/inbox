@@ -24,6 +24,10 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ### Changed
 
+- The CI job `inbox / task check` ends green without installing a tool when a pull request
+  or a push changes only planning or prose files: paths under `.engineering/`, and `*.md`
+  files outside `website/` and `generated/` other than `README.md`. `tools/gate_paths.py`
+  holds the decision and `task gate-paths`, in `task check`, its 12 cases.
 - The text of the landing page states release 0.2.0 and its 2 open security findings. It said
   that no program and no client exist.
 - The documentation site is written for a user of the tool. "What works" is now "Features":
