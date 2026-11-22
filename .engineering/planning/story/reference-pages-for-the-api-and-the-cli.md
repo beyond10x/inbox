@@ -2,13 +2,14 @@
 format: aep.planning-md/3
 id: story:reference-pages-for-the-api-and-the-cli
 kind: story
-status: active
+status: implemented
 title: Reference pages for the HTTP API, the events and the command line, rendered by the shared docs system
 summary: 3 docs pages rendered from the OpenAPI and AsyncAPI projections and from a CLI reference document the binary writes; each links its document.
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-22T01:15:19Z", actor: "agent:inbox", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-22T01:15:19Z", actor: "agent:inbox", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-22T10:39:34Z", actor: "agent:inbox", revision: 5, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

@@ -1,7 +1,7 @@
 //! `inbox-xtask docs-words`: an end-user page names no part of the plan and no count of the checks.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::{tree, xtask};
 
@@ -16,10 +16,31 @@ fn the_committed_pages_name_nothing_of_the_plan() {
     let root = pages("docs-words-clean");
     let run = xtask(&root, &ARGS);
     assert_eq!(run.code, 0, "{}{}", run.stdout, run.stderr);
+    let read = page_files(&root.join("website/docs")) + 1;
+    assert!(read > 1, "no page below website/docs");
     assert_eq!(
         run.stdout_lines(),
-        ["docs-words: 8 file(s), none names the plan or a count of the checks"]
+        [format!(
+            "docs-words: {read} file(s), none names the plan or a count of the checks"
+        )]
     );
+}
+
+/// The `*.md` and `*.mdx` files below `dir`, at any depth: the pages the command has to read.
+fn page_files(dir: &Path) -> usize {
+    let mut count = 0;
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            count += page_files(&path);
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "md" || extension == "mdx")
+        {
+            count += 1;
+        }
+    }
+    count
 }
 
 #[test]

@@ -45,7 +45,10 @@ for (const reference of PAGES) {
 
   test(`${reference.title}: the page is in the sidebar and fits a phone`, async ({page}) => {
     await page.goto(reference.path);
-    await expect(page.locator(`nav.menu a[href="${reference.path}"]`)).toHaveText(reference.title);
+    // The category's own link points at its first page: leave it out.
+    await expect(
+      page.locator(`nav.menu a.menu__link:not(.menu__link--sublist)[href="${reference.path}"]`),
+    ).toHaveText(reference.title);
     await page.setViewportSize({width: 390, height: 844});
     await page.goto(reference.path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

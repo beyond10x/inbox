@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-22T10:39:34Z",
+  "actor": "agent:inbox",
+  "artifact": "story:reference-pages-for-the-api-and-the-cli",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (exit 0, 256 s) and npx playwright test in website/ (26 passed)"
+  }
+}

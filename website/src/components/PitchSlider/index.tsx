@@ -67,13 +67,20 @@ export default function PitchSlider(): ReactNode {
   const [focused, setFocused] = useState(false);
   const reduced = useReducedMotion();
   const start = useRef<number | null>(null);
+  const root = useRef<HTMLElement | null>(null);
   const count = SLIDES.length;
   const go = useCallback((to: number) => setIndex(((to % count) + count) % count), [count]);
 
   useEffect(() => {
     if (reduced || hovered || focused) return undefined;
+    const section = root.current;
     const timer = window.setTimeout(() => go(index + 1), ADVANCE_MS);
-    return () => window.clearTimeout(timer);
+    // Present only while a timer is pending: a page test waits for it before it moves the clock.
+    section?.setAttribute('data-advancing', 'true');
+    return () => {
+      window.clearTimeout(timer);
+      section?.removeAttribute('data-advancing');
+    };
   }, [index, reduced, hovered, focused, go]);
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -98,6 +105,7 @@ export default function PitchSlider(): ReactNode {
 
   return (
     <section
+      ref={root}
       className="inbox-pitch"
       data-testid="pitch"
       aria-roledescription="carousel"

@@ -375,13 +375,18 @@ test.describe('pitch slides', () => {
     const pitch = page.getByTestId('pitch');
     const active = () => activeSlide(page).getByTestId('pitch-label');
     await expect(active()).toHaveText(LABELS[0]);
+    // The timer is set by an effect after hydration: the clock moves only once it is pending.
+    await expect(pitch).toHaveAttribute('data-advancing', 'true');
     await page.clock.runFor(8_000);
     await expect(active()).toHaveText(LABELS[1]);
     await pitch.hover();
+    await expect(pitch).not.toHaveAttribute('data-advancing', 'true');
     await page.clock.runFor(30_000);
     await expect(active()).toHaveText(LABELS[1]);
     await page.mouse.move(2, 2);
+    await expect(pitch).toHaveAttribute('data-advancing', 'true');
     await pitch.getByTestId('pitch-viewport').focus();
+    await expect(pitch).not.toHaveAttribute('data-advancing', 'true');
     await page.clock.runFor(30_000);
     await expect(active()).toHaveText(LABELS[1]);
   });
@@ -390,6 +395,8 @@ test.describe('pitch slides', () => {
     await page.emulateMedia({reducedMotion: 'reduce'});
     await page.clock.install();
     await open(page);
+    // Before hydration no slider advances: the check counts only on the hydrated page.
+    await expect(page.locator('html')).toHaveAttribute('data-has-hydrated', 'true');
     await page.mouse.move(2, 2);
     await page.clock.runFor(30_000);
     await expect(activeSlide(page).getByTestId('pitch-label')).toHaveText(LABELS[0]);
