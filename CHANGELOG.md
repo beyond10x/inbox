@@ -46,7 +46,11 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   package has one integration-test binary (`tests/main.rs`, the case files as modules) and test
   builds carry no debug information (`.cargo/config.toml`): 18 test binaries where there were
   63, `target/debug/deps` 337 MB where it was 882 MB. The stand-in service of the client's
-  cases waits at most 10 s for a connection.
+  cases waits at most 10 s for a connection. The cases of `crates/inbox-xtask` that need a
+  synthesis of the unchanged `ess/` read one cache entry under `target/tmp/synthesis/`, keyed
+  by the SHA-256 of `ess/`, the `ess` release and the arguments, which `task test` makes once
+  before its bounded run: 3 syntheses per run where there were 18 (the 2 others are made by
+  the cases that change `ess/`).
 - The CI job `inbox / task check` ends green without installing a tool when a pull request
   or a push changes only planning or prose files: paths under `.engineering/`, and `*.md`
   files outside `website/` and `generated/` other than `README.md`. `tools/gate-paths.sh`

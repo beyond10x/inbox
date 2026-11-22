@@ -29,9 +29,10 @@ tasks:
       - task: build-generated
 
   test:
-    desc: The test step of task check. Build the test binaries of the workspace (cargo nextest run --no-run, outside the bound), then run them with cargo-nextest under tools/test-step.sh. A test that runs over 60 s is killed and fails (.config/nextest.toml); the run fails when it takes over 120 s; the 10 slowest tests are printed, pass or fail, from target/nextest/default/junit.xml.
+    desc: The test step of task check. Build the test binaries of the workspace (cargo nextest run --no-run, outside the bound) and make the synthesis of the unchanged ess/ the inbox-xtask cases read (one case, outside the bound; a cache under target/tmp/synthesis), then run them with cargo-nextest under tools/test-step.sh. A test that runs over 60 s is killed and fails (.config/nextest.toml); the run fails when it takes over 120 s; the 10 slowest tests are printed, pass or fail, from target/nextest/default/junit.xml.
     cmds:
       - cargo nextest run --workspace --locked --no-run
+      - cargo nextest run -p inbox-xtask --locked -E 'test(=synthesis::the_entry_of_the_repository_is_made)'
       - sh tools/test-step.sh 120 '{{.ROOT_DIR}}/target/nextest/default/junit.xml' cargo nextest run --workspace --locked
 
   generate:

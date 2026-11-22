@@ -3,4 +3,5 @@
 mod adversary;
 mod adversary2;
 mod drift;
+mod synthesis;
 mod tools;

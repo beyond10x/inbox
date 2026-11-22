@@ -111,16 +111,36 @@ fn scratch(root: &Path, name: &str) -> PathBuf {
     root.join("target").join("inbox-xtask").join(name)
 }
 
+/// The program `synthesize`, `generate` and `drift` run: `ess`, found on `PATH`.
+pub const ESS: &str = "ess";
+/// The arguments `synthesize` passes to `ess`, started in the repository root; the output
+/// directory follows them.
+pub const SYNTHESIS: [&str; 10] = [
+    "generate",
+    "synthesize",
+    "--strict-requires",
+    "--path",
+    SPECIFICATION,
+    "--target",
+    "rust",
+    "--layout",
+    "crate",
+    "--out",
+];
+
 /// Run `ess generate synthesize` on `root/ess` into `out`, which is emptied first.
 pub fn synthesize(root: &Path, out: &Path) -> Result<(), String> {
+    synthesize_with(root, Path::new(ESS), out)
+}
+
+/// `synthesize`, running the program `ess` names in place of `ess` from `PATH`.
+pub fn synthesize_with(root: &Path, ess: &Path, out: &Path) -> Result<(), String> {
     if out.exists() {
         fs::remove_dir_all(out).map_err(|e| format!("remove {}: {e}", out.display()))?;
     }
-    let status = Command::new("ess")
+    let status = Command::new(ess)
         .current_dir(root)
-        .args(["generate", "synthesize", "--strict-requires"])
-        .args(["--path", SPECIFICATION])
-        .args(["--target", "rust", "--layout", "crate", "--out"])
+        .args(SYNTHESIS)
         .arg(out)
         .status()
         .map_err(|e| format!("run ess: {e}"))?;
@@ -136,6 +156,16 @@ pub fn synthesize(root: &Path, out: &Path) -> Result<(), String> {
 /// crate is left as it was. A held crate an earlier run left only in `target/inbox-xtask/previous`
 /// is moved back first.
 pub fn generate(root: &Path) -> Result<(), String> {
+    generate_with(root, synthesize)
+}
+
+/// `generate`, with `synthesize` (called with the root and the output directory) in place of
+/// `synthesize`. The tests pass one that answers the synthesis of the unchanged `ess/` from a
+/// cache.
+pub fn generate_with(
+    root: &Path,
+    synthesize: impl Fn(&Path, &Path) -> Result<(), String>,
+) -> Result<(), String> {
     let target = root.join(GENERATED);
     let aside = scratch(root, "previous");
     recover(&target, &aside)?;
@@ -218,6 +248,14 @@ fn replace(
 /// Compare `generated/rust/inbox` with a fresh synthesis. `Ok` carries the one-line verdict;
 /// `Err` names `generated/rust/inbox` and every difference.
 pub fn drift(root: &Path) -> Result<String, String> {
+    drift_with(root, synthesize)
+}
+
+/// `drift`, with `synthesize` in place of `synthesize` (see `generate_with`).
+pub fn drift_with(
+    root: &Path,
+    synthesize: impl Fn(&Path, &Path) -> Result<(), String>,
+) -> Result<String, String> {
     let fresh = scratch(root, "drift");
     synthesize(root, &fresh)?;
     let found = differences(&fresh, &root.join(GENERATED))?;

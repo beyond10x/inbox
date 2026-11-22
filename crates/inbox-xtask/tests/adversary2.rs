@@ -2,7 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use inbox_xtask::{GENERATED, generate};
+use inbox_xtask::{GENERATED, generate_with};
+
+use crate::synthesis::{path, synthesize};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -57,6 +59,7 @@ fn generate_creates_the_crate_where_generated_rust_does_not_exist_yet() {
     let output = Command::new(env!("CARGO_BIN_EXE_inbox-xtask"))
         .arg("generate")
         .env("CARGO_MANIFEST_DIR", root.join("crates/inbox-xtask"))
+        .env("PATH", path())
         .current_dir(&root)
         .output()
         .unwrap();
@@ -81,7 +84,7 @@ fn generate_after_a_failed_restore_keeps_the_held_lock() {
     let previous = root.join("target/inbox-xtask/previous");
     copy_tree(&repository().join(GENERATED), &previous);
     write(&previous.join("Cargo.lock"), "held lock\n");
-    let result = generate(&root);
+    let result = generate_with(&root, synthesize);
     let lock = fs::read_to_string(root.join(GENERATED).join("Cargo.lock")).ok();
     assert!(
         lock.as_deref() == Some("held lock\n") || previous.join("Cargo.lock").is_file(),
@@ -105,6 +108,7 @@ fn a_relative_manifest_directory_still_reports_the_drift() {
     let output = Command::new(env!("CARGO_BIN_EXE_inbox-xtask"))
         .arg("drift")
         .env("CARGO_MANIFEST_DIR", "crates/inbox-xtask")
+        .env("PATH", path())
         .current_dir(&root)
         .output()
         .unwrap();

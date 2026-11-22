@@ -2,7 +2,9 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use inbox_xtask::{Difference, GENERATED, differences, drift, generate, repository_root};
+use inbox_xtask::{Difference, GENERATED, differences, drift_with, generate_with, repository_root};
+
+use crate::synthesis::synthesize;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -272,7 +274,7 @@ fn synthesized_root(name: &str) -> PathBuf {
     let root = scratch(name);
     copy_tree(&repository().join("ess"), &root.join("ess"));
     write(&root.join(GENERATED).join("Cargo.lock"), "held lock\n");
-    generate(&root).unwrap();
+    generate_with(&root, synthesize).unwrap();
     root
 }
 
@@ -288,7 +290,7 @@ fn generate_writes_the_crate_keeps_its_lock_and_drops_the_synthesis_state() {
     assert!(crate_dir.join("PLAN.md").is_file());
     assert!(crate_dir.join("src/lib.rs").is_file());
     assert!(!crate_dir.join(".ess-output").exists());
-    let message = drift(&root).unwrap();
+    let message = drift_with(&root, synthesize).unwrap();
     assert!(
         message.starts_with("generated/rust/inbox: no drift"),
         "{message}"
@@ -302,7 +304,7 @@ fn drift_names_generated_rust_and_every_changed_path() {
     write(&crate_dir.join("src/lib.rs"), "// edited by hand\n");
     fs::remove_file(crate_dir.join("PLAN.md")).unwrap();
     write(&crate_dir.join("src/extra.rs"), "pub struct Extra;\n");
-    let error = drift(&root).unwrap_err();
+    let error = drift_with(&root, synthesize).unwrap_err();
     let first = error.lines().next().unwrap();
     assert!(
         first.starts_with("generated/rust/inbox drifted from a fresh synthesis of ess/"),
@@ -330,7 +332,7 @@ fn an_optional_field_added_to_the_specification_is_drift() {
         1,
     );
     fs::write(&domain, changed).unwrap();
-    let error = drift(&root).unwrap_err();
+    let error = drift_with(&root, synthesize).unwrap_err();
     assert!(error.starts_with("generated/rust/inbox drifted"), "{error}");
     assert!(error.contains("  edited: src/messaging.rs"), "{error}");
 }
@@ -343,7 +345,7 @@ fn a_failed_synthesis_leaves_the_held_crate_alone() {
         &root.join("ess/domains/messaging.yaml"),
         "not: [an ess document\n",
     );
-    assert!(generate(&root).is_err());
+    assert!(generate_with(&root, synthesize).is_err());
     assert_eq!(
         fs::read(root.join(GENERATED).join("src/lib.rs")).unwrap(),
         before
@@ -357,13 +359,13 @@ fn generate_moves_a_crate_left_aside_back_and_keeps_its_lock() {
     let previous = root.join("target/inbox-xtask/previous");
     copy_tree(&repository().join(GENERATED), &previous);
     write(&previous.join("Cargo.lock"), "held lock\n");
-    generate(&root).unwrap();
+    generate_with(&root, synthesize).unwrap();
     assert_eq!(
         fs::read_to_string(root.join(GENERATED).join("Cargo.lock")).unwrap(),
         "held lock\n"
     );
     assert!(!previous.exists());
-    assert!(drift(&root).is_ok());
+    assert!(drift_with(&root, synthesize).is_ok());
 }
 
 #[test]
@@ -371,7 +373,7 @@ fn a_leftover_aside_beside_a_present_crate_is_removed() {
     let root = synthesized_root("stale-aside");
     let previous = root.join("target/inbox-xtask/previous");
     write(&previous.join("stale.rs"), "pub struct Stale;\n");
-    generate(&root).unwrap();
+    generate_with(&root, synthesize).unwrap();
     assert!(!previous.exists());
     assert_eq!(
         fs::read_to_string(root.join(GENERATED).join("Cargo.lock")).unwrap(),
@@ -384,7 +386,7 @@ fn a_leftover_aside_beside_a_present_crate_is_removed() {
 fn drift_on_a_tree_without_the_crate_reports_every_file_missing() {
     let root = scratch("no-crate");
     copy_tree(&repository().join("ess"), &root.join("ess"));
-    let error = drift(&root).unwrap_err();
+    let error = drift_with(&root, synthesize).unwrap_err();
     assert!(error.starts_with("generated/rust/inbox drifted"), "{error}");
     for line in ["  missing: Cargo.toml", "  missing: src/lib.rs"] {
         assert!(error.lines().any(|l| l == line), "{line:?} not in {error}");

@@ -5,6 +5,8 @@ use std::process::Command;
 
 use inbox_xtask::{Difference, GENERATED, differences};
 
+use crate::synthesis::path;
+
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("adversary")
@@ -75,6 +77,7 @@ fn the_drift_binary_exits_nonzero_on_drift() {
     let root = drifted_copy("binary-exit");
     let output = Command::new(env!("CARGO_BIN_EXE_inbox-xtask"))
         .arg("drift")
+        .env("PATH", path())
         .env("CARGO_MANIFEST_DIR", root.join("crates/inbox-xtask"))
         .current_dir(&root)
         .output()
@@ -102,6 +105,7 @@ fn the_binary_run_outside_cargo_checks_the_tree_it_is_run_from() {
     let root = drifted_copy("binary-outside-cargo");
     let output = Command::new(env!("CARGO_BIN_EXE_inbox-xtask"))
         .arg("drift")
+        .env("PATH", path())
         .env_remove("CARGO_MANIFEST_DIR")
         .current_dir(&root)
         .output()
