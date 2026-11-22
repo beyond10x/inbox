@@ -4,7 +4,7 @@ id: story:design-states-what-the-specification-declares
 kind: story
 status: draft
 title: The design states what the specification declares
-revision: 1
+revision: 2
 ---
 ## Outcome
 
@@ -46,7 +46,7 @@ reply, and a second run of the design review brief returns none of the 10 (state
 - The design follows the specification in all 10. A place where the designer wants the other
   reading is taken out of this story and gets its own.
 - Not in this story: whether a refusal is signed and whether a `reply_id` is a message id
-  (`story:design-decides-refusal-signature-and-reply-id`), and the 3 findings on `expires`.
+  (`story:design-decides-refusal-signature-and-reply-id`), and 3 findings held for the operator's decision.
 
 ## Scope
 
