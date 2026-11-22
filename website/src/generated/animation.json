@@ -513,7 +513,7 @@
       "words": 9
     }
   ],
-  "generated": "Written by tools/animation.py from the compiled ess/ (task animation). Do not edit.",
+  "generated": "Written by `task animation` from the compiled ess/. Do not edit.",
   "inbox": "Inbox",
   "layout": {
     "host": "host",

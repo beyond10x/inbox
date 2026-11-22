@@ -10,7 +10,7 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, hold ess/scenarios/ and ess/ess-inputs.yaml to tools/scenarios.py, the landing page's animation data to ess/ and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 3 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, check the scenario files of ess/scenarios/ and hold ess/ess-inputs.yaml to them, the landing page's animation data to ess/ and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 3 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
       - task: scenarios-drift
@@ -104,34 +104,34 @@ tasks:
       - ess verify conform synthesize --path ess --scenarios ess --suite-format 5 --out {{.OUT}}/coverage/suite.json
 
   scenarios:
-    desc: Rewrite ess/scenarios/ and ess/ess-inputs.yaml from tools/scenarios.py, after its checks pass. Needs python3 with PyYAML.
+    desc: Rewrite ess/ess-inputs.yaml from the scenario files of ess/scenarios/ (inbox-xtask scenarios), after their checks pass (one claimant per covered id, each claim of a type invariant at a view field resting on a row value, the scenario named as its file, a summary of at most 200 characters, message ids of 26 characters). A failed check changes no file.
     cmds:
-      - python3 tools/scenarios.py ess
+      - cargo run -q --locked -p inbox-xtask -- scenarios
 
   scenarios-drift:
-    desc: Fail when ess/scenarios/ or ess/ess-inputs.yaml differs from what tools/scenarios.py writes, one line per path (edited, missing, not written by the script); writes nothing.
+    desc: Run the checks of task scenarios and fail when ess/ess-inputs.yaml does not list each scenario file of ess/scenarios/ once, one line per path (edited, missing, not in the manifest); writes nothing.
     cmds:
-      - python3 tools/scenarios.py ess --check
+      - cargo run -q --locked -p inbox-xtask -- scenarios --check
 
   animation:
-    desc: Rewrite website/src/generated/animation.json, the data of the landing page's hero figure and slides, from the compiled ess/ with tools/animation.py, after its checks pass.
+    desc: Rewrite website/src/generated/animation.json, the data of the landing page's hero figure and slides, from the compiled ess/ (inbox-xtask animation), after its checks pass.
     cmds:
-      - python3 tools/animation.py ess
+      - cargo run -q --locked -p inbox-xtask -- animation
 
   docs-words:
-    desc: Fail with the matching lines when an end-user page (website/docs, website/product.json) names a wave, a stage, a story, an epic or a count of scenarios; those belong in docs/checks.md. Writes nothing.
+    desc: Fail with the matching lines when an end-user page (website/docs, website/product.json) names a wave, a stage, a story, an epic or a count of scenarios (inbox-xtask docs-words); those belong in docs/checks.md. Writes nothing.
     cmds:
-      - python3 tools/docs_words.py website/docs website/product.json
+      - cargo run -q --locked -p inbox-xtask -- docs-words website/docs website/product.json
 
   gate-paths:
-    desc: Hold the path decision of the CI job (tools/gate_paths.py, which answers skip when a change holds only planning or prose files) to its cases. Writes nothing.
+    desc: Hold the path decision of the CI job (tools/gate-paths.sh, a POSIX shell script that answers skip when a change holds only planning or prose files) to its 12 cases. Writes nothing.
     cmds:
-      - python3 tools/gate_paths.py --test
+      - sh tools/gate-paths.sh --test
 
   animation-drift:
-    desc: Fail when website/src/generated/animation.json differs from what tools/animation.py writes from the compiled ess/ (edited, missing); writes nothing.
+    desc: Fail when website/src/generated/animation.json differs from what inbox-xtask animation writes from the compiled ess/ (edited, missing); writes nothing.
     cmds:
-      - python3 tools/animation.py ess --check
+      - cargo run -q --locked -p inbox-xtask -- animation --check
 
   plan:
     desc: Validate the AEP planning store.

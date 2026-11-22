@@ -43,7 +43,7 @@ jobs:
             fi
           fi
           if [ -n "$from" ] && git diff --name-only "$from" HEAD > "$RUNNER_TEMP/changed.txt" 2> /dev/null; then
-            decision=$(python3 tools/gate_paths.py "$RUNNER_TEMP/changed.txt")
+            decision=$(sh tools/gate-paths.sh "$RUNNER_TEMP/changed.txt")
           fi
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
           echo "$decision: $(wc -l < "$RUNNER_TEMP/changed.txt") changed file(s)"
