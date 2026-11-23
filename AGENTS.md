@@ -16,6 +16,10 @@ its budget, a specification without an `UNMAPPED` marker, no Python, and ESS 0.9
 Release 0.3.1 is release 0.3.0 with the changes under "Security" in its `CHANGELOG.md` section:
 the deadline of a message, the record `collect` answers with, the control characters the
 client prints, and the read rule and the unknown-message answer in the core.
+Release 0.4.0 is release 0.3.1 with the changes its `CHANGELOG.md` section lists: TLS on the
+loopback address with a pinned certificate, the client that opens its inbox again and reposts
+by itself after a restart of the service, and a message past its deadline that takes no read
+mark and ends no wait.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
