@@ -271,7 +271,7 @@ fn concurrent_posts_with_one_dedup_key_store_one_message_under_the_scheduler() {
 // ---------------------------------------------------------------------------------------------
 // The order among the row refusals, as the ESS 0.97.1 interpreted target answered each pair
 // (probe scenarios in the adversary's scratch directory; each pair run once per candidate) and
-// the ESS 0.97.4 one answers the authored scenario `row-refusals-of-a-post-answer-in-one-order`.
+// the ESS 0.98.0 one answers the authored scenario `row-refusals-of-a-post-answer-in-one-order`.
 // The pairs with `id-taken` are in `tests/post_message_id.rs`.
 // ---------------------------------------------------------------------------------------------
 

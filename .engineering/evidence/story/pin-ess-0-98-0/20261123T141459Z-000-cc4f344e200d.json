@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T14:14:59Z",
+  "actor": "agent:inbox",
+  "artifact": "story:pin-ess-0-98-0",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

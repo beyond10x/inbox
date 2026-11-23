@@ -8,7 +8,7 @@ description: Specification first, generated code held by a drift check, a confor
 ## The specification comes first
 
 Every behaviour is written in [ESS](https://github.com/beyond10x/ess) in `ess/` before code
-exists for it: the entities, commands, views, events and every refusal. A rule ESS 0.97.4
+exists for it: the entities, commands, views, events and every refusal. A rule ESS 0.98.0
 cannot state is listed in
 [`docs/design/inbox.md`](https://github.com/beyond10x/inbox/blob/main/docs/design/inbox.md); it
 is implemented by the service and tested there.

@@ -30,7 +30,7 @@ pub const SCENARIOS: &str = "ess/scenarios";
 /// The manifest, relative to the repository root.
 pub const MANIFEST: &str = "ess/ess-inputs.yaml";
 const FORMAT: &str = "ess-inputs/2";
-const REQUIRES: &str = "ess 0.97.4";
+const REQUIRES: &str = "ess 0.98.0";
 const SPECIFICATION: [&str; 3] = ["system.yaml", "components.yaml", "domains/messaging.yaml"];
 const DOMAIN: &str = "inbox.messaging.";
 const SUMMARY_LIMIT: usize = 200;

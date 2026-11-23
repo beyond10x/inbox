@@ -7,7 +7,8 @@ none of this: they list features and limits ([features](https://beyond10x.github
 ## On `main`
 
 Numbers from 2026-11-22, ESS 0.97.4, Rust 1.99.1. Case counts are the passed cases of
-`task test` (cargo-nextest) in one run of `task check`.
+`task test` (cargo-nextest) in one run of `task check`. The numbers of the specification, the
+generated crate and the 3 conformance runs are the same on ESS 0.98.0 (2026-11-23).
 
 | Part | What it does | Number | Proof |
 |---|---|---|---|

@@ -19,6 +19,10 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   joiners U+200C and U+200D, U+034F and the variation selectors are printed as sent, and the
   flag of a part of a country is shown with the escapes of its tags. No flag, exit status or
   `--json` output changes.
+- The repository builds with ESS 0.98.0 (`ess/ess-inputs.yaml` and `ESS_VERSION` of the check
+  workflow); a contributor needs `ess` 0.98.0. The specification validates on it unchanged, and
+  0.98.0 writes `generated/` and the conformance suite byte for byte as 0.97.4 did: the same 119
+  scenarios and the same 98 refusals of synthesis. Nothing of the service or the client changes.
 
 ### Fixed
 

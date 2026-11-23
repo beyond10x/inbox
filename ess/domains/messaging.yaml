@@ -479,9 +479,10 @@ commands:
         external: the SignatureVerifier port finds no live delegation with this id that lets `from` speak for `on_behalf_of`
         before_row: true
         error: inbox.messaging.NoAuthority
-      # SYNTHESIS: ESS 0.97.4 answers `unknown-inbox` (`exists: false`) before `duplicate` and
-      # `duplicate-key`, and it is declared before them; the outcomes with `where` and
-      # `inbox-closed` follow in declaration order. A sender's repost goes to an inbox that exists.
+      # SYNTHESIS: ESS 0.98.0 answers `unknown-inbox` (`exists: false`) before `duplicate` and
+      # `duplicate-key`, and it is declared before them (declared after them, ESS 0.98.0 refuses
+      # the command: ESS-COMMAND-004); the outcomes with `where` and `inbox-closed` follow in
+      # declaration order. A sender's repost goes to an inbox that exists.
       - name: unknown-inbox
         when_related: {via: input.to, exists: false}
         error: inbox.messaging.UnknownInbox
