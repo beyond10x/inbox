@@ -42,7 +42,7 @@ record out.
 
 ## The service
 
-- **Loopback only, no TLS.**
+- **Loopback only.**
 - **No second host and no wake-up** of an idle session.
 - **One backend, in memory.** A restart of the service loses every message. The sender posts
   again with `inbox repost`; dedup by `message_id` and `dedup_key` makes the repost arrive

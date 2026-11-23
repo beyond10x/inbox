@@ -54,6 +54,9 @@ enum Command {
     /// The key file the service reads: entries signed with the operator key.
     #[command(subcommand)]
     Keyfile(KeyfileCommand),
+    /// The certificate `inbox serve` answers with over TLS.
+    #[command(subcommand)]
+    Tls(TlsCommand),
     /// Open the caller's own inbox (again after every restart of the service).
     Open {
         #[command(flatten)]
@@ -149,9 +152,13 @@ enum Command {
 /// Where a client command finds the service, the caller's key and the outbox file.
 #[derive(Debug, Args)]
 struct ClientArgs {
-    /// The service: http://<host>:<port>.
+    /// The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin.
     #[arg(long, env = "INBOX_URL")]
     url: Option<String>,
+    /// The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https://
+    /// URL the client accepts that certificate only, and sends nothing to a service with another.
+    #[arg(long, env = "INBOX_TLS_PIN")]
+    tls_pin: Option<String>,
     /// The file of the caller's secret key (`inbox key new --key-id … --principal …`); it names
     /// the key id and the principal, which is also the address of the caller's inbox.
     #[arg(long, env = "INBOX_SECRET_KEY_FILE")]
@@ -165,7 +172,7 @@ struct ClientArgs {
 impl ClientArgs {
     fn client(&self) -> Result<Client, Failure> {
         Ok(Client {
-            service: Service::from_url(self.url.as_deref())?,
+            service: Service::from_url(self.url.as_deref(), self.tls_pin.as_deref())?,
             caller: keys::caller(self.secret_key_file.as_deref())?,
             outbox: outbox::Outbox::locate(self.outbox.as_deref())?,
         })
@@ -184,6 +191,10 @@ struct ServeArgs {
     /// The operator public key (44 characters of base64) that signed the key file.
     #[arg(long, env = "INBOX_OPERATOR_PUBLIC_KEY")]
     operator_public_key: String,
+    /// The file `inbox tls new` wrote (mode 0600): the service answers over TLS with its
+    /// certificate, and the first line printed is an https:// URL. Plain HTTP without it.
+    #[arg(long)]
+    tls_file: Option<PathBuf>,
     /// The most connections served at once.
     #[arg(long, default_value_t = inbox_server::Config::MAX_CONNECTIONS)]
     max_connections: usize,
@@ -234,6 +245,17 @@ enum KeyCommand {
         /// The principal of this key's entry in the key file (a client key).
         #[arg(long, requires = "key_id")]
         principal: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum TlsCommand {
+    /// Make a key and a self-signed certificate for `inbox serve --tls-file`: both go to --out
+    /// (mode 0600, never overwritten); prints the pin the clients are given.
+    New {
+        /// The file to create.
+        #[arg(long)]
+        out: PathBuf,
     },
 }
 
@@ -380,6 +402,7 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
                 listen: args.listen,
                 key_file: &args.key_file,
                 operator_public_key: &args.operator_public_key,
+                tls_file: args.tls_file.as_deref(),
                 max_connections: args.max_connections,
                 request_timeout: args.request_timeout,
                 max_request_bytes: args.max_request_bytes,
@@ -402,6 +425,7 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
             key_id,
             principal,
         }) => keys::new(&out, key_id.as_deref().zip(principal.as_deref()))?,
+        Command::Tls(TlsCommand::New { out }) => keys::tls_new(&out)?,
         Command::Keyfile(KeyfileCommand::AddKey {
             target,
             key_id,
@@ -732,6 +756,7 @@ mod tests {
                 "key new",
                 "keyfile add-key",
                 "keyfile add-delegation",
+                "tls new",
                 "open",
                 "close",
                 "post",

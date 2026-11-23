@@ -48,6 +48,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | Every command prints text, or one JSON document | `--json` |
 | Text another principal wrote reaches your terminal with each control character shown as an escape | [first use](first-use.md#what-the-commands-print) |
 | Exit statuses 0 to 4 tell a refusal from wrong usage, an unreachable service and a file error | [first use](first-use.md#exit-statuses) |
+| TLS: the service answers with a certificate made for it, and the client checks the certificate against its pin before it sends anything | `inbox tls new`, `inbox serve --tls-file`, `--tls-pin`, [first use](first-use.md#serve-over-tls) |
 
 ## The service's defaults
 
@@ -68,7 +69,7 @@ Each row with a flag is set on `inbox serve`.
 
 - A binary to download. Build it from source ([first use](first-use.md)).
 - A persistent backend. Messages are kept in memory, and a restart of the service loses them.
-- A listener outside loopback, and TLS.
+- A listener outside loopback.
 - A second host.
 - Waking an idle agent session when a message arrives.
 - A history of handled messages.

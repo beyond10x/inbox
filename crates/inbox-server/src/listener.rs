@@ -1,4 +1,5 @@
-//! The listener: a loopback socket, one thread per connection, the expiry task, and stopping.
+//! The listener: a loopback socket, one thread per connection (over TLS two more, which end TLS
+//! in front of it: [`crate::tls`]), the expiry task, and stopping.
 
 use std::io::{self, BufReader, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -7,11 +8,13 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use inbox::server::http;
+use rustls::ServerConfig;
 
 use crate::config::Config;
 use crate::expiry::sweep;
 use crate::service::{Backend, Shared, answer, refusal as refusal_of};
 use crate::signals::{Cut, Signals};
+use crate::tls;
 
 /// The shortest pause between two sweeps, whatever `sweep_interval` says.
 const MIN_SWEEP_INTERVAL: Duration = Duration::from_millis(1);
@@ -36,6 +39,8 @@ pub struct Server<B> {
     listener: TcpListener,
     address: SocketAddr,
     shared: Arc<Shared<B>>,
+    /// The TLS configuration of [`Config::tls`]; plain HTTP where `None`.
+    tls: Option<Arc<ServerConfig>>,
 }
 
 /// Tells a service to stop. Cloned freely, and sent to another thread.
@@ -65,7 +70,8 @@ impl<B: Backend> Server<B> {
     /// [`io::ErrorKind::InvalidInput`] for an address that is not loopback, refused before
     /// anything is bound: this stage serves on a loopback address only. Otherwise what binding
     /// refuses: the address is taken, or the port is privileged; or the OS random source does not
-    /// answer.
+    /// answer; or rustls does not take the certificate of [`Config::tls`] (also
+    /// [`io::ErrorKind::InvalidInput`]).
     pub fn bind(config: Config, backend: B) -> io::Result<Self> {
         if !config.address.ip().is_loopback() {
             return Err(io::Error::new(
@@ -76,6 +82,17 @@ impl<B: Backend> Server<B> {
                 ),
             ));
         }
+        let tls = config
+            .tls
+            .as_ref()
+            .map(|identity| identity.server_config())
+            .transpose()
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("the TLS certificate: {error}"),
+                )
+            })?;
         let epoch = epoch()?;
         let listener = TcpListener::bind(config.address)?;
         let address = listener.local_addr()?;
@@ -88,6 +105,7 @@ impl<B: Backend> Server<B> {
                 signals: Arc::default(),
                 epoch,
             }),
+            tls,
         })
     }
 
@@ -161,12 +179,19 @@ impl<B: Backend> Server<B> {
                 break;
             }
             let shared = Arc::clone(&self.shared);
-            // A thread that cannot be started drops the connection and its slot with it.
+            let tls = self.tls.clone();
+            // A thread that cannot be started drops the connection and its slot with it. Over
+            // TLS the slot is held until the threads that end TLS have ended too.
             let _ = thread::Builder::new()
                 .name("inbox-connection".to_owned())
                 .spawn(move || {
                     let _slot = slot;
-                    connection(&shared, stream);
+                    match tls {
+                        Some(config) => {
+                            tls::terminate(&config, stream, |plain| connection(&shared, plain));
+                        }
+                        None => connection(&shared, stream),
+                    }
                 });
         }
         signals.wait_idle();

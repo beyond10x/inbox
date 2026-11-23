@@ -16,6 +16,7 @@ use signal_hook::iterator::Signals;
 
 use crate::clock_file::FileClock;
 use crate::failure::Failure;
+use crate::keys;
 use crate::output::{print_document, print_text, warn};
 
 /// The backends `INBOX_BACKEND` may name in this stage.
@@ -30,6 +31,8 @@ pub struct Settings<'a> {
     pub key_file: &'a Path,
     /// `--operator-public-key`.
     pub operator_public_key: &'a str,
+    /// `--tls-file`; plain HTTP where absent.
+    pub tls_file: Option<&'a Path>,
     /// `--max-connections`.
     pub max_connections: usize,
     /// `--request-timeout`, seconds.
@@ -51,16 +54,18 @@ pub struct Settings<'a> {
 }
 
 /// Serves until SIGINT or SIGTERM. The first line on standard output is the URL the service
-/// answers at (with `json`, one JSON document naming the bound address and that URL); nothing
-/// else is written to standard output.
+/// answers at, `https://` with a TLS file and `http://` without (with `json`, one JSON document
+/// naming the bound address and that URL); nothing else is written to standard output.
 ///
 /// # Errors
 ///
 /// [`Failure::Usage`] for an `INBOX_BACKEND` other than `memory`, an operator public key that is
 /// not one, a body limit over the generated reader's, a `--clock-start` that is no RFC 3339
 /// instant, or an address that is not loopback;
-/// [`Failure::Local`] for a key file that cannot be read or does not read as one, a clock file
-/// that does not hold one instant ([`crate::clock_file`]), and an address that cannot be bound.
+/// [`Failure::Local`] for a key file that cannot be read or does not read as one, a TLS file
+/// that grants a permission to its group or to others or is not one ([`keys::read_tls`]), a
+/// clock file that does not hold one instant ([`crate::clock_file`]), and an address that cannot
+/// be bound.
 pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Result<(), Failure> {
     if let Some(backend) = backend.filter(|backend| !BACKENDS.contains(backend)) {
         return Err(Failure::Usage(format!(
@@ -95,6 +100,14 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
     config.max_wait = Duration::from_secs(settings.max_wait);
     config.sweep_interval = Duration::from_secs(settings.sweep_interval);
     config.answer_retention = Duration::from_secs(settings.answer_retention);
+    if let Some(path) = settings.tls_file {
+        config.tls = Some(Arc::new(keys::read_tls(path)?));
+    }
+    let scheme = if config.tls.is_some() {
+        "https"
+    } else {
+        "http"
+    };
     if let Some(start) = settings.clock_start {
         let start = Instant::parse(start)
             .map_err(|error| Failure::Usage(format!("--clock-start: {error}")))?;
@@ -124,7 +137,7 @@ pub fn serve(settings: &Settings<'_>, backend: Option<&str>, json: bool) -> Resu
     let mut signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|error| Failure::Local(format!("the signal handlers: {error}")))?;
     let address = server.local_addr();
-    let url = format!("http://{address}");
+    let url = format!("{scheme}://{address}");
     if json {
         let mut out = String::from("{");
         json::member(&mut out, "address");

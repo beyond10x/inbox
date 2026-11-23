@@ -18,6 +18,10 @@
 //! - the epoch: every answer carries [`EPOCH_HEADER`], a value made once per bound listener, so a
 //!   caller tells an answer of this start from one of an earlier start.
 //!
+//! - TLS: with [`Config::tls`] set, every connection is served over TLS 1.3 with that certificate,
+//!   ended in front of the generated reader ([`tls`]); [`tls::client_config`] and
+//!   [`tls::connect`] are the client's side, which accepts only the certificate its pin names.
+//!
 //! [`Server::bind`] binds a loopback address (port 0 for an ephemeral one, [`Server::local_addr`]
 //! names it), and [`Server::run`] serves until a [`Stopper`] tells it to stop.
 
@@ -31,6 +35,7 @@ mod expiry;
 mod listener;
 mod service;
 mod signals;
+pub mod tls;
 
 pub use auth::{KEY_ID_HEADER, RingVerifier, SIGNATURE_HEADER, TIMESTAMP_HEADER, request_headers};
 pub use clock::{Clock, ManualClock, StartedClock, SystemClock, format_instant, format_reading};

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 4 (mutant MD: the reading thread not joined): unit case terminate_returns_only_when_the_thread_that_reads_the_caller_has_ended, 0.9 to 1.7 s, red against the mutant",
+    "review": "review-result:adversary-the-service-speaks-tls-with-a-pinned-certificate-pass-2",
+    "outcome": "fixed"
+  }
+}

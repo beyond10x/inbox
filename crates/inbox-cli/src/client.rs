@@ -1,6 +1,7 @@
 //! The client side of the wire: the service's address from `INBOX_URL`, one signed request per
-//! connection over a `TcpStream` (HTTP/1.1, no TLS, no keep-alive, as the service answers), and
-//! what its answer means.
+//! connection over a `TcpStream` (HTTP/1.1, no keep-alive, as the service answers), over TLS
+//! whose certificate is checked against the pin `INBOX_TLS_PIN` names before a byte of the
+//! request is sent (`https://`), or plain (`http://`), and what its answer means.
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -8,6 +9,7 @@ use std::time::Duration;
 
 use inbox::server::inbox_service::ROUTES;
 use inbox::server::json::{self, Value};
+use inbox_server::tls::{self, Pin};
 use inbox_server::{Clock, EPOCH_HEADER, SystemClock, format_instant, request_headers};
 
 use crate::failure::Failure;
@@ -34,32 +36,67 @@ pub fn route(method: &str, wire: &str) -> &'static str {
         .unwrap_or_else(|| panic!("the generated route table holds no `{method}` route `{wire}`"))
 }
 
-/// The service a client talks to: `INBOX_URL`, `http://<host>:<port>`, on a loopback address.
+/// Anything a request travels over: a plain socket or a TLS connection whose handshake is done.
+trait Wire: Read + Write {}
+
+impl<T: Read + Write> Wire for T {}
+
+/// The service a client talks to: `INBOX_URL`, `http://<host>:<port>` or `https://<host>:<port>`,
+/// on a loopback address, and over TLS the pin of its certificate.
 #[derive(Debug, Clone)]
 pub struct Service {
     addresses: Vec<SocketAddr>,
     host: String,
+    pin: Option<Pin>,
 }
 
 impl Service {
-    /// Reads `http://<host>:<port>` with an optional trailing `/`. The service binds a loopback
-    /// address only in this stage, and requests and envelopes travel without TLS, so the client
-    /// talks to a loopback address only: every address the host resolves to must be one.
+    /// Reads `http://<host>:<port>` or `https://<host>:<port>` with an optional trailing `/`, and
+    /// the pin (`INBOX_TLS_PIN`). An `https://` URL needs a pin, and a pin needs an `https://`
+    /// URL: a client given a pin never falls back to plain HTTP. The service binds a loopback
+    /// address only in this stage, so the client talks to a loopback address only: every address
+    /// the host resolves to must be one.
     ///
     /// # Errors
     ///
     /// [`Failure::Usage`] when no URL is given, it is not of that form, its host does not
-    /// resolve, or it resolves to an address that is not loopback.
-    pub fn from_url(url: Option<&str>) -> Result<Self, Failure> {
+    /// resolve, or it resolves to an address that is not loopback; when the pin is not one, an
+    /// `https://` URL comes without a pin, or a pin with an `http://` URL.
+    pub fn from_url(url: Option<&str>, pin: Option<&str>) -> Result<Self, Failure> {
         let url = url.ok_or_else(|| {
             Failure::Usage("the service: pass --url <url> or set INBOX_URL".to_owned())
         })?;
+        let pin = pin
+            .map(|text| {
+                Pin::parse(text).map_err(|why| Failure::Usage(format!("INBOX_TLS_PIN: {why}")))
+            })
+            .transpose()?;
         let refused = || {
             Failure::Usage(format!(
-                "INBOX_URL `{url}` is not http://<host>:<port> (no TLS, no path in this stage)"
+                "INBOX_URL `{url}` is not http://<host>:<port> or https://<host>:<port> (no path \
+                 in this stage)"
             ))
         };
-        let host = url.strip_prefix("http://").ok_or_else(refused)?;
+        let (host, tls) = match (url.strip_prefix("https://"), url.strip_prefix("http://")) {
+            (Some(host), _) => (host, true),
+            (None, Some(host)) => (host, false),
+            (None, None) => return Err(refused()),
+        };
+        match (tls, &pin) {
+            (true, None) => {
+                return Err(Failure::Usage(format!(
+                    "INBOX_URL `{url}` is https: pass the pin of the service's certificate with \
+                     --tls-pin or INBOX_TLS_PIN"
+                )));
+            }
+            (false, Some(_)) => {
+                return Err(Failure::Usage(format!(
+                    "INBOX_URL `{url}` is http, and a pin is given: a client given a pin talks \
+                     TLS only (https://), never plain HTTP"
+                )));
+            }
+            _ => {}
+        }
         let host = host.strip_suffix('/').unwrap_or(host);
         if host.is_empty() || host.contains(['/', '?', '#', '@']) {
             return Err(refused());
@@ -77,6 +114,7 @@ impl Service {
         Ok(Self {
             addresses,
             host: host.to_owned(),
+            pin,
         })
     }
 
@@ -96,11 +134,14 @@ impl Service {
         )))
     }
 
-    /// Sends one request signed by `caller` at the clock reading and reads the whole answer.
+    /// Sends one request signed by `caller` at the clock reading and reads the whole answer. Over
+    /// TLS the handshake is complete, and the certificate held to the pin, before a byte of the
+    /// request is written.
     ///
     /// # Errors
     ///
-    /// [`Failure::Transport`] when the service cannot be reached or the answer is not HTTP.
+    /// [`Failure::Transport`] when the service cannot be reached, its certificate does not match
+    /// the pin, or the answer is not HTTP.
     pub fn send(
         &self,
         caller: &Caller,
@@ -118,18 +159,26 @@ impl Service {
             &caller.key,
             &timestamp,
         );
-        let mut stream = self.connect()?;
-        let peer = stream
+        let socket = self.connect()?;
+        let peer = socket
             .peer_addr()
             .map_or_else(|_| self.host.clone(), |peer| peer.to_string());
         let transport =
             |error: std::io::Error| Failure::Transport(format!("{} ({peer}): {error}", self.host));
-        stream
+        socket
             .set_read_timeout(Some(wait.saturating_add(ANSWER_TIMEOUT)))
             .map_err(transport)?;
-        stream
+        socket
             .set_write_timeout(Some(ANSWER_TIMEOUT))
             .map_err(transport)?;
+        let mut stream: Box<dyn Wire> = match &self.pin {
+            None => Box::new(socket),
+            Some(pin) => {
+                let config = tls::client_config(pin.clone())
+                    .map_err(|error| transport(std::io::Error::other(error)))?;
+                Box::new(tls::connect(&config, socket).map_err(transport)?)
+            }
+        };
         let mut head = format!(
             "{method} {target} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
              Content-Length: {}\r\nConnection: close\r\n",
@@ -358,29 +407,59 @@ mod tests {
 
     #[test]
     fn the_url_is_http_host_and_port_only() {
-        assert!(Service::from_url(Some("http://127.0.0.1:7700")).is_ok());
-        assert!(Service::from_url(Some("http://127.0.0.1:7700/")).is_ok());
+        assert!(Service::from_url(Some("http://127.0.0.1:7700"), None).is_ok());
+        assert!(Service::from_url(Some("http://127.0.0.1:7700/"), None).is_ok());
         for refused in [
             "https://127.0.0.1:7700",
             "127.0.0.1:7700",
             "http://127.0.0.1:7700/inbox",
             "http://",
         ] {
-            assert!(Service::from_url(Some(refused)).is_err(), "{refused}");
+            assert!(Service::from_url(Some(refused), None).is_err(), "{refused}");
         }
-        assert!(Service::from_url(None).is_err());
+        assert!(Service::from_url(None, None).is_err());
+    }
+
+    /// A pin made at run time: no pin is written into this file.
+    fn a_pin() -> String {
+        inbox_server::tls::Identity::generate()
+            .unwrap()
+            .pin()
+            .to_base64()
+    }
+
+    #[test]
+    fn an_https_url_needs_a_pin_and_a_pin_needs_an_https_url() {
+        let pin = a_pin();
+        assert!(Service::from_url(Some("https://127.0.0.1:7700"), Some(&pin)).is_ok());
+        assert!(Service::from_url(Some("https://[::1]:7700/"), Some(&pin)).is_ok());
+        for (url, pin) in [
+            ("https://127.0.0.1:7700", None),
+            ("http://127.0.0.1:7700", Some(pin.as_str())),
+            ("https://127.0.0.1:7700/inbox", Some(pin.as_str())),
+            ("https://192.0.2.1:7700", Some(pin.as_str())),
+            ("https://127.0.0.1:7700", Some(&pin[..43])),
+        ] {
+            assert!(
+                matches!(
+                    Service::from_url(Some(url), pin),
+                    Err(crate::failure::Failure::Usage(_))
+                ),
+                "{url} {pin:?}"
+            );
+        }
     }
 
     #[test]
     fn the_url_names_a_loopback_address_only() {
-        assert!(Service::from_url(Some("http://[::1]:7700")).is_ok());
-        assert!(Service::from_url(Some("http://localhost:7700")).is_ok());
+        assert!(Service::from_url(Some("http://[::1]:7700"), None).is_ok());
+        assert!(Service::from_url(Some("http://localhost:7700"), None).is_ok());
         for outside in [
             "http://192.0.2.1:7700",
             "http://0.0.0.0:7700",
             "http://[2001:db8::1]:7700",
         ] {
-            match Service::from_url(Some(outside)) {
+            match Service::from_url(Some(outside), None) {
                 Err(crate::failure::Failure::Usage(detail)) => {
                     assert!(detail.contains("not a loopback address"), "{detail}");
                 }

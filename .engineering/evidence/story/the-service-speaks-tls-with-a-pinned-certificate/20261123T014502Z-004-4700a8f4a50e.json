@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "adversary pass 1 finding 4 (mutant: the canonical check of Pin::parse dropped): a case of the security review gives a pin with non-zero unused bits in character 43 and the mutant is red against it",
+    "review": "review-result:adversary-the-service-speaks-tls-with-a-pinned-certificate-pass-1",
+    "outcome": "fixed"
+  }
+}

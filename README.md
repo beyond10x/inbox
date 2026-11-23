@@ -22,7 +22,7 @@ Available:
 - Ed25519 keys, one key file signed by the operator key, and delegations.
 - An HTTP API: one `POST` per command and one `GET` per view.
 
-Missing: a persistent backend, a second host, wake-up of an idle session, TLS, a binary to
+Missing: a persistent backend, a second host, wake-up of an idle session, a binary to
 download, and any deployment.
 
 Every feature, what is missing and what is planned:
@@ -72,7 +72,7 @@ Two security findings are open:
 Use the service for the principals of one operator only: that operator's own sessions and
 hosts. `inbox serve` refuses an address outside loopback.
 
-Other limits: loopback only and no TLS; the in-memory backend is the only backend, and a restart
+Other limits: loopback only; the in-memory backend is the only backend, and a restart
 loses every message; no release attaches a binary; the first `inbox repost` after a restart
 delivers once more a note its recipient read before it; nothing is deployed.
 

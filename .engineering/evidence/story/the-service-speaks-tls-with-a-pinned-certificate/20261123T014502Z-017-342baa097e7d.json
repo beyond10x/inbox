@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

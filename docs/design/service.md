@@ -314,8 +314,11 @@ Each is set by the embedding (`Config`); the defaults are this crate's.
 | `answer_retention` | 24 h | — |
 
 The generated reader's own limits hold too: a head of at most `MAX_HEAD` bytes and 100 headers,
-1 s without a byte while a request is read (`READ_TIMEOUT`), 10 s for a stalled write
-(`WRITE_TIMEOUT`).
+1 s without a byte while a request is read (`READ_TIMEOUT`), and 10 s for each write call that
+cannot go on (`WRITE_TIMEOUT`, the socket's send timeout). That bound holds per call, not per
+answer: a write call that has moved some bytes when it passes returns them, and the next call has
+its 10 s again, so a caller that reads a large answer slowly, or stops reading in the middle of
+it, can hold its connection, and the stop, longer than 10 s.
 
 Any duration may be set, up to `Duration::MAX`: a deadline too far away to add to the clock is no
 deadline (a `wait` then ends with a row or the stop, the expiry task sleeps until the stop, a
@@ -330,9 +333,66 @@ request in full (answered `503 {"refused": "stopping"}`, step 1b, without waitin
 `request_timeout`), lets every request in flight (read in full) finish, and stops the expiry task
 and the request timeout task. `Running::stop` and `Server::run` return then.
 
+## TLS
+
+With `Config::tls` set (`inbox serve --tls-file <file>`), the service answers every connection
+over TLS 1.3 with that certificate, and over nothing else: a plain request to it is not read
+(the handshake fails on its first bytes and the connection is closed). It still binds a loopback
+address only. Without it, the service speaks plain HTTP as before.
+
+| Item | What it is |
+|---|---|
+| The certificate | self-signed, X.509 version 3, over an Ed25519 key; subject and issuer `CN=inbox serve`; valid from its making with no end (`99991231235959Z`). `inbox tls new --out <file>` makes the key and the certificate, writes both into one file with mode 0600 (never overwriting a file, as `inbox key new`) and prints the pin; `inbox serve` refuses a file that grants a permission to its group or to others, or that is not such a file, before binding (exit 4) |
+| The pin | the SHA-256 of the certificate's SubjectPublicKeyInfo, in the base64 of `signing.md` ("Encoding on the wire"): 44 characters. No command renews a certificate: each `inbox tls new` makes a new key, so a new pin |
+| The library | rustls 0.23 with its `ring` provider, TLS 1.3 only (`inbox_server::tls`) |
+
+The generated reader takes the socket itself (`http::read(&mut BufReader<TcpStream>)`), so TLS
+cannot sit between the socket and the reader, and `generated/` is not changed. The service ends
+TLS in front of it: for each accepted connection it makes a pair of connected loopback sockets
+(the end it accepts is checked to come from the end it connected, so no third process is one end
+of it), and two threads carry the bytes: one reads TLS records from the caller's socket, answers
+the handshake and writes the plain bytes to the pair, one reads the answer from the pair and
+writes it to the caller as TLS records, then closes TLS and shuts the caller's socket for writing
+only. The socket is shut for reading after the connection's thread is done, so the rest of a
+body past the bound, still arriving when its `413` is written, is read and dropped for the
+bounded time of `http::linger`, and the caller reads the `413`, as over plain HTTP. A caller
+still sending its body when a cut answers (`408` at the request timeout, `503` at the stop) gets
+a failed write instead, over TLS as over plain HTTP: the cut has shut the connection for reading
+(the caller's socket, or over TLS the plain end of the pair), nothing drains the rest, and the
+caller's next bytes are reset. An answer cut short (the service's end of the pair broke off,
+or a write to the caller failed) ends without `close_notify`, so the caller's read of it fails
+and it is never taken for a whole answer; over plain HTTP the same caller gets a reset. The
+connection's thread
+serves the plain end exactly as a plain connection, so every bound of "One request, in order"
+holds unchanged: `request_timeout` counts from the accept and covers the handshake (a request not
+arrived in full by then is answered `408`), the stop cuts a request still arriving (`503`), the
+body limits answer `413`, and `max_connections` counts the connection until both threads have
+ended. A caller that does not finish the handshake is cut off at the same bound; it gets no
+answer, since none can reach it. Cases: `crates/inbox-server/tests/tls.rs`.
+
+The client: `INBOX_URL` is `https://<host>:<port>` and `INBOX_TLS_PIN` (`--tls-pin`) the pin; the
+host must be a loopback address, as for `http://`. An `https://` URL without a pin, and a pin
+beside an `http://` URL, are wrong usage (exit 2) and nothing is sent: a client given a pin never
+falls back to plain HTTP. The client completes the handshake before it writes a byte of its
+request (`inbox_server::tls::connect`), and accepts the certificate whose public key hashes to the
+pin and no other, by no other check: no name, no validity time and no authority is consulted, and
+the handshake signature is verified with that key. A certificate the pin does not name ends the
+handshake: exit 3, `the certificate's public key does not match the pin`, and no request line,
+header or body sent; like every transport failure, a post keeps its envelope in the outbox file.
+Cases: `crates/inbox-cli/tests/tls.rs`.
+
+What the pin does not protect against:
+
+- Anyone who can read the TLS file holds the key and can pose as the service to every client
+  given the pin. The file's mode 0600 and its owner are the only guard.
+- There is no revocation. A key that leaked stays accepted by every client given its pin until
+  that client is given another pin.
+- Each `inbox tls new` makes a new key: a service started with it has a new pin, and every
+  client needs that pin before it reaches the service again.
+
 ## Left out of stage 2
 
-- TLS, and a listener on a second host: epic:two-hosts-and-wake.
+- A listener on a second host: epic:two-hosts-and-wake.
 - A replay record for requests (above).
 - Keep-alive and pipelining: one request per connection, as the generated reader reads it.
 - Reloading the key file while serving: the embedding builds a new service.

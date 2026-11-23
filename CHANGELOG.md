@@ -8,6 +8,25 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- TLS on the loopback address. `inbox tls new --out <file>` makes an Ed25519 key and a
+  self-signed certificate, writes both to one file with mode 0600 (it never overwrites a file)
+  and prints the pin: the SHA-256 of the certificate's SubjectPublicKeyInfo in canonical base64,
+  44 characters. `inbox serve --tls-file <file>` answers over TLS 1.3 only and prints an
+  `https://` URL. A client given `INBOX_URL=https://…` and `INBOX_TLS_PIN` (`--tls-pin`)
+  completes the handshake and accepts only the certificate the pin names before it sends a byte
+  of its request; another certificate ends the command with exit status 3, and a post keeps its
+  envelope in the outbox. An `https://` URL without a pin, and a pin beside an `http://` URL, are
+  wrong usage (exit status 2). Plain `http://` on loopback stays the default. The request
+  timeout, the limits of a request, `max_connections` and the stop hold over TLS as over plain
+  HTTP. The pin does not protect against a reader of the TLS file, there is no revocation, and
+  no command renews a certificate: each `inbox tls new` makes a new key and so a new pin for
+  every client (`docs/design/service.md`, TLS). The listener still binds loopback only
+  (story:the-service-speaks-tls-with-a-pinned-certificate).
+- New dependencies of `inbox-server`: `rustls` 0.23 without its default features, with the
+  `ring` provider, `ring` 0.17, and `zeroize` 1.8, which `inbox-cli` already used.
+
 ### Changed
 
 - Test builds compile every dependency at `opt-level = 2` (`[profile.dev.package."*"]` in

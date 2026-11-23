@@ -8,6 +8,7 @@ use inbox::server::http;
 use inbox_verify::KeyRing;
 
 use crate::clock::{Clock, SystemClock};
+use crate::tls::Identity;
 
 /// The configuration of one service. Every field is the embedding's to set; [`Config::new`] fills
 /// in this crate's defaults (`docs/design/service.md`, the limits).
@@ -38,6 +39,10 @@ pub struct Config {
     /// How long an answer by silence waits for its sender: `keep_until` is the sweep's reading
     /// plus this, to the second.
     pub answer_retention: Duration,
+    /// The certificate the service answers with over TLS; plain HTTP where `None`. Every bound
+    /// and limit above holds for a TLS connection as for a plain one (`docs/design/service.md`,
+    /// TLS).
+    pub tls: Option<Arc<Identity>>,
 }
 
 impl Config {
@@ -54,7 +59,8 @@ impl Config {
     /// The default answer retention.
     pub const ANSWER_RETENTION: Duration = Duration::from_secs(24 * 3600);
 
-    /// A service at `address` over `keys`, reading the system clock, with the default limits.
+    /// A service at `address` over `keys`, reading the system clock, with the default limits,
+    /// over plain HTTP.
     #[must_use]
     pub fn new(address: SocketAddr, keys: KeyRing) -> Self {
         Self {
@@ -68,6 +74,7 @@ impl Config {
             max_wait: Self::MAX_WAIT,
             sweep_interval: Self::SWEEP_INTERVAL,
             answer_retention: Self::ANSWER_RETENTION,
+            tls: None,
         }
     }
 }

@@ -17,6 +17,9 @@ getrandom = "0.4"
 inbox ={ path = "../../generated/rust/inbox", features = ["server"] }
 inbox-core = { path = "../inbox-core" }
 inbox-verify = { path = "../inbox-verify" }
+ring = "0.17"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+zeroize = "1.8"
 
 [lints]
 workspace = true

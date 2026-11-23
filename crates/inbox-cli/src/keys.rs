@@ -1,5 +1,6 @@
-//! The secret key file a client signs with, `inbox key new`, and the two commands that append an
-//! entry signed with the operator key to the key file the service reads.
+//! The secret key file a client signs with, `inbox key new`, the two commands that append an
+//! entry signed with the operator key to the key file the service reads, and the TLS file of the
+//! service, `inbox tls new`.
 //!
 //! A secret key file is one JSON object:
 //!
@@ -22,6 +23,7 @@ use inbox::messaging::{DelegationEntry, DelegationId, KeyEntry, KeyFile, Princip
 use inbox::primitives::Timestamp;
 use inbox::server::json::{self, Value};
 use inbox::server::wire;
+use inbox_server::tls::Identity;
 use inbox_server::{Clock, SystemClock, format_instant};
 use inbox_verify::{
     IgnoreReason, Instant, KeyRing, PublicKey, SecretKey, duplicate_member, sign_delegation_entry,
@@ -56,13 +58,13 @@ pub struct Caller {
     pub principal: String,
 }
 
-/// Reads the secret key file at `path`.
+/// The text of the file at `path` that holds a secret, in a holder zeroed when dropped.
 ///
 /// # Errors
 ///
-/// [`Failure::Local`] when the file cannot be read, grants a permission to its group or to
-/// others, or is not a secret key file.
-pub fn read_secret(path: &Path) -> Result<Secret, Failure> {
+/// [`Failure::Local`] when the file cannot be read, or grants a permission to its group or to
+/// others.
+fn read_private(path: &Path) -> Result<Zeroizing<String>, Failure> {
     let shown = path.display();
     let metadata =
         fs::metadata(path).map_err(|error| Failure::Local(format!("{shown}: {error}")))?;
@@ -81,6 +83,18 @@ pub fn read_secret(path: &Path) -> Result<Secret, Failure> {
     File::open(path)
         .and_then(|mut file| file.read_to_string(&mut text))
         .map_err(|error| Failure::Local(format!("{shown}: {error}")))?;
+    Ok(text)
+}
+
+/// Reads the secret key file at `path`.
+///
+/// # Errors
+///
+/// [`Failure::Local`] when the file cannot be read, grants a permission to its group or to
+/// others, or is not a secret key file.
+pub fn read_secret(path: &Path) -> Result<Secret, Failure> {
+    let shown = path.display();
+    let text = read_private(path)?;
     let refused = |why: &str| Failure::Local(format!("{shown}: not a secret key file: {why}"));
     let mut value = json::parse(&text).map_err(|error| refused(&error.to_string()))?;
     // The seed's text leaves the parsed tree into a holder zeroed when dropped, before anything
@@ -235,21 +249,7 @@ pub fn new(out: &Path, identity: Option<(&str, &str)>) -> Result<Done, Failure> 
     text.push('"');
     seed_to_base64(&key.to_seed(), &mut text);
     text.push_str("\"}\n");
-    let shown = out.display();
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(out)
-        .map_err(|error| match error.kind() {
-            ErrorKind::AlreadyExists => Failure::Local(format!(
-                "{shown} exists: `inbox key new` never overwrites a file"
-            )),
-            _ => Failure::Local(format!("{shown}: {error}")),
-        })?;
-    file.write_all(text.as_bytes())
-        .and_then(|()| file.sync_all())
-        .map_err(|error| Failure::Local(format!("{shown}: {error}")))?;
+    write_private(out, &text, "inbox key new")?;
     let mut document = String::from("{");
     json::member(&mut document, "public_key");
     json::push_text(&mut document, &public_key);
@@ -266,6 +266,99 @@ pub fn new(out: &Path, identity: Option<(&str, &str)>) -> Result<Done, Failure> 
         document,
         text: public_key,
     })
+}
+
+/// Creates the file `out` with mode 0600 and writes `text` into it; an existing file is never
+/// overwritten, which the refusal says in the name of `command`.
+fn write_private(out: &Path, text: &str, command: &str) -> Result<(), Failure> {
+    let shown = out.display();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(out)
+        .map_err(|error| match error.kind() {
+            ErrorKind::AlreadyExists => Failure::Local(format!(
+                "{shown} exists: `{command}` never overwrites a file"
+            )),
+            _ => Failure::Local(format!("{shown}: {error}")),
+        })?;
+    file.write_all(text.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|error| Failure::Local(format!("{shown}: {error}")))
+}
+
+/// The version member of a TLS file.
+const TLS_VERSION_MEMBER: &str = "inbox_tls";
+
+/// `inbox tls new`: a fresh Ed25519 key and a self-signed certificate over it
+/// ([`Identity::generate`]), written to `out` with mode 0600 as one JSON object
+/// (`{"inbox_tls":1,"certificate":"<base64 DER>","seed":"<44 base64>"}`); prints the pin of the
+/// certificate and nothing secret.
+///
+/// # Errors
+///
+/// [`Failure::Local`] when `out` exists (never overwritten) or cannot be written, or the OS
+/// random source does not answer.
+pub fn tls_new(out: &Path) -> Result<Done, Failure> {
+    let identity = Identity::generate().map_err(|error| Failure::Local(error.to_string()))?;
+    let mut certificate = String::new();
+    json::push_base64(&mut certificate, identity.certificate());
+    // Large enough from the start, so the buffer that holds the seed's text is never
+    // reallocated and only this one copy is zeroed.
+    let mut text = Zeroizing::new(String::with_capacity(128 + certificate.len()));
+    text.push('{');
+    json::member(&mut text, TLS_VERSION_MEMBER);
+    json::push_integer(&mut text, 1);
+    json::member(&mut text, "certificate");
+    text.push_str(&certificate);
+    json::member(&mut text, "seed");
+    text.push('"');
+    seed_to_base64(identity.seed(), &mut text);
+    text.push_str("\"}\n");
+    write_private(out, &text, "inbox tls new")?;
+    let pin = identity.pin().to_base64();
+    let mut document = String::from("{");
+    json::member(&mut document, "pin");
+    json::push_text(&mut document, &pin);
+    json::member(&mut document, "file");
+    json::push_text(&mut document, &out.display().to_string());
+    document.push('}');
+    Ok(Done {
+        document,
+        text: pin,
+    })
+}
+
+/// Reads the TLS file `inbox tls new` wrote at `path`: the certificate and the key of the
+/// service.
+///
+/// # Errors
+///
+/// [`Failure::Local`] when the file cannot be read, grants a permission to its group or to
+/// others, or is not a TLS file: its version member is not 1, its certificate or seed does not
+/// decode, or the certificate is not of the seed's key.
+pub fn read_tls(path: &Path) -> Result<Identity, Failure> {
+    let shown = path.display();
+    let text = read_private(path)?;
+    let refused = |why: &str| Failure::Local(format!("{shown}: not a TLS file: {why}"));
+    let mut value = json::parse(&text).map_err(|error| refused(&error.to_string()))?;
+    let seed_text = take_text(&mut value, "seed");
+    if let Some(member) = duplicate_member(&value) {
+        return Err(refused(&format!("the member `{member}` is there twice")));
+    }
+    if value.member(TLS_VERSION_MEMBER) != Some(&Value::Number("1".to_owned())) {
+        return Err(refused(&format!("`{TLS_VERSION_MEMBER}` is not 1")));
+    }
+    let seed = seed_text
+        .as_deref()
+        .and_then(|text| seed_from_base64(text))
+        .ok_or_else(|| refused("`seed` is not 32 bytes of canonical base64"))?;
+    let certificate = value
+        .member("certificate")
+        .and_then(|certificate| json::bytes_at(certificate, "certificate", "base64").ok())
+        .ok_or_else(|| refused("`certificate` is not base64"))?;
+    Identity::from_parts(certificate, seed).map_err(|why| refused(&why))
 }
 
 /// What `inbox keyfile add-key` and `add-delegation` share: the key file and the operator key.

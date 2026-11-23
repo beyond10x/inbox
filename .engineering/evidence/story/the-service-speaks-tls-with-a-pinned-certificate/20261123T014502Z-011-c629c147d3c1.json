@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 2 (the design says a caller still sending reads the 408 or 503 of a cut): docs/design/service.md says it gets a failed write over TLS as over plain HTTP; the 2 cases that asserted the status were rewritten by the coordinator's decision to hold the same class of ending over both transports and a free slot; the behaviour itself is in story:bytes-after-a-request-end-without-a-reset",
+    "review": "review-result:adversary-the-service-speaks-tls-with-a-pinned-certificate-pass-2",
+    "outcome": "fixed"
+  }
+}

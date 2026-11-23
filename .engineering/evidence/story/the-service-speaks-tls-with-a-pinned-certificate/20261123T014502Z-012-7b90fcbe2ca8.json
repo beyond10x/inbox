@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 3 (the CLI 413 case cannot show the defect its comment names): renamed the_413_of_a_post_over_max_request_bytes_arrives_over_https_as_over_http, the comment says the limit is checked after the whole body is read",
+    "review": "review-result:adversary-the-service-speaks-tls-with-a-pinned-certificate-pass-2",
+    "outcome": "fixed"
+  }
+}

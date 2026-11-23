@@ -11,8 +11,9 @@ use inbox::server::json::{self, Value};
 use crate::failure::{LOCAL, REFUSED, TRANSPORT, USAGE};
 
 const DESCRIPTION: &str = "`inbox serve` runs the HTTP service of the inbox on a loopback \
-address. Every other command is a client of that service and signs what it sends with the \
-caller's own key.";
+address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. \
+Every other command is a client of that service and signs what it sends with the caller's own \
+key.";
 
 /// The environment variables read outside a flag: name, description, the command that reads it
 /// (every client command when `None`).
@@ -41,11 +42,11 @@ const EXIT_STATUSES: [(i32, &str); 5] = [
     (REFUSED, "The service refused; the output names the error."),
     (
         USAGE,
-        "Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address.",
+        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin beside an `http://` URL.",
     ),
     (
         TRANSPORT,
-        "The service could not be reached, or its answer was neither a success nor a refusal.",
+        "The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal.",
     ),
     (LOCAL, "A local file could not be read, written or created."),
 ];

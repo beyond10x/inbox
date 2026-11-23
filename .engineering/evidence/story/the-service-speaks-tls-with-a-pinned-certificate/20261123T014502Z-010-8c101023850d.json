@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T01:45:02Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-service-speaks-tls-with-a-pinned-certificate",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 1 (an answer cut short ends with close_notify): outbound sends close_notify only after a clean end and takes the end of a reset pair as a failure; adversary_tls2::adv2_tls_an_answer_cut_short_is_never_ended_with_close_notify, unchanged, passed 200 tries in a row",
+    "review": "review-result:adversary-the-service-speaks-tls-with-a-pinned-certificate-pass-2",
+    "outcome": "fixed"
+  }
+}

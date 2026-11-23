@@ -47,14 +47,52 @@ inbox serve --listen 127.0.0.1:0 --key-file keys.json --operator-public-key "$OP
 `inbox serve` prints the URL it serves on as its first line and serves until Ctrl-C. It keeps
 every message in memory: a restart loses them.
 
+## Serve over TLS
+
+The service speaks plain HTTP unless you give it a TLS file. To serve over TLS, run these two
+commands instead of the last one above. `inbox tls new` makes a key and a certificate for the
+service, writes both to one file with mode 0600 (it never overwrites a file) and prints the pin:
+the SHA-256 of the certificate's public key, 44 characters of base64. Copy the pin: the client
+terminal below needs it. It is not secret.
+
+```sh
+inbox tls new --out tls.json
+inbox serve --listen 127.0.0.1:0 --key-file keys.json --operator-public-key "$OPERATOR_PUBLIC_KEY" --tls-file tls.json
+```
+
+The first line `inbox serve` prints is now an `https://` URL. A client checks the certificate
+against the pin before it sends anything. A certificate with another public key ends the command
+with exit status 3, and nothing of the request is sent. An `https://` URL without a pin, and a
+pin with an `http://` URL, are wrong usage (exit status 2): a client given a pin never talks
+plain HTTP. The address is a loopback address either way.
+
+What the pin does not protect against:
+
+- Anyone who can read `tls.json` can pose as the service to every client that has the pin.
+- There is no revocation. A client accepts the key of its pin until you give it another pin.
+- Each `inbox tls new` makes a new key. A service started with it has a new pin, and every client
+  needs the new pin.
+
 ## One message
 
 In a second terminal, in the same directory. Bob opens his inbox, alice posts a note to it, and
-bob reads it.
+bob reads it. First set `INBOX_URL` to the URL `inbox serve` printed:
 
 ```sh
-# the URL inbox serve printed
 export INBOX_URL=http://127.0.0.1:43117
+```
+
+Over TLS, that URL starts with `https://`, and you also set `INBOX_TLS_PIN` to the pin
+`inbox tls new` printed (or pass `--tls-pin` to each command):
+
+```sh
+export INBOX_URL=https://127.0.0.1:43117
+export INBOX_TLS_PIN='the pin inbox tls new printed'
+```
+
+Then, either way:
+
+```sh
 inbox open --secret-key-file bob.key
 MESSAGE_ID=$(inbox post --secret-key-file alice.key --to agent:demo/bob --body "Hello, bob")
 inbox pending --secret-key-file bob.key
@@ -82,8 +120,8 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 |---|---|
 | 0 | Done |
 | 1 | The service refused; the output names the error |
-| 2 | Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address |
-| 3 | The service could not be reached, or its answer was neither a success nor a refusal |
+| 2 | Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin with an `http://` URL |
+| 3 | The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal |
 | 4 | A local file could not be read or written |
 
 ## The outbox file

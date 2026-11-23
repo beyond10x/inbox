@@ -2,7 +2,7 @@
   "format": "b10x-cli-reference/1",
   "binary": "inbox",
   "about": "The inbox: one durable, addressable inbox per agent or person",
-  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address. Every other command is a client of that service and signs what it sends with the caller's own key.",
+  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. Every other command is a client of that service and signs what it sends with the caller's own key.",
   "globalOptions": [
     {
       "name": "json",
@@ -42,6 +42,13 @@
           "required": true,
           "env": "INBOX_OPERATOR_PUBLIC_KEY",
           "help": "The operator public key (44 characters of base64) that signed the key file"
+        },
+        {
+          "name": "tls_file",
+          "kind": "option",
+          "long": "tls-file",
+          "valueName": "TLS_FILE",
+          "help": "The file `inbox tls new` wrote (mode 0600): the service answers over TLS with its certificate, and the first line printed is an https:// URL. Plain HTTP without it"
         },
         {
           "name": "max_connections",
@@ -246,6 +253,23 @@
     },
     {
       "path": [
+        "tls",
+        "new"
+      ],
+      "about": "Make a key and a self-signed certificate for `inbox serve --tls-file`: both go to --out (mode 0600, never overwritten); prints the pin the clients are given",
+      "arguments": [
+        {
+          "name": "out",
+          "kind": "option",
+          "long": "out",
+          "valueName": "OUT",
+          "required": true,
+          "help": "The file to create"
+        }
+      ]
+    },
+    {
+      "path": [
         "open"
       ],
       "about": "Open the caller's own inbox (again after every restart of the service)",
@@ -256,7 +280,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -296,7 +328,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -328,7 +368,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -472,7 +520,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -511,7 +567,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -558,7 +622,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -597,7 +669,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -689,7 +769,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -736,7 +824,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -768,7 +864,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -807,7 +911,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -846,7 +958,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -885,7 +1005,15 @@
           "long": "url",
           "valueName": "URL",
           "env": "INBOX_URL",
-          "help": "The service: http://<host>:<port>"
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
         },
         {
           "name": "secret_key_file",
@@ -936,11 +1064,11 @@
     },
     {
       "code": 2,
-      "meaning": "Wrong usage, including an argument read as text that is not UTF-8 and an `INBOX_URL` that is not a loopback address."
+      "meaning": "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin beside an `http://` URL."
     },
     {
       "code": 3,
-      "meaning": "The service could not be reached, or its answer was neither a success nor a refusal."
+      "meaning": "The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal."
     },
     {
       "code": 4,
