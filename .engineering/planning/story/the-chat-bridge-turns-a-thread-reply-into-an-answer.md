@@ -36,7 +36,7 @@ scope:
   path: website/docs/first-use.md
 - confidence: cited
   path: website/docs/status.md
-revision: 6
+revision: 7
 ---
 ## Outcome
 
@@ -88,8 +88,9 @@ Checks, each of which can fail:
 8. A second matching reply after the first was taken is answered `already-settled` and gets the
    line of check 7 (Open 4).
 9. The cases run against a real `inbox serve` on loopback, with a key file made in the case (and
-   the bridge's key and delegation of story:the-chat-bridge-runs-with-its-own-key-under-a-delegation under
-   option B of the blocker), and the stand-in `connectors` with scripted thread replies; a case collects
+   the bridge's key and delegation of
+   story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, the operator's answer B), and
+   the stand-in `connectors` with scripted thread replies; a case collects
    the answer with `inbox collect` of the sender and checks the reply. No case reaches a chat
    provider, a network beyond loopback or a model; no case over 60 s, none holds a wall-clock
    time, the test step within 120 s, no new Python. A build or a test runs through `slot`, and
@@ -103,14 +104,16 @@ reply envelope signed with the bridge's key on behalf of the person, under a del
 Acceptance: "the person's thread reply moves the message from `Read` to `Answered` with
 `answered_by: principal`".
 
-Which key signs the reply, and whether a delegation is involved, is
+Which key signs the reply, and whether a delegation is involved, was
 decision-blocker:delegation-grants-inbox-ownership: today only a key whose entry names the
 person as principal can answer a message in the person's inbox (`Answer` refuses `not-sender`
-and `not-recipient` otherwise). This story builds the answer for either reading. Under B, the
-switch of every other request of the bridge to its own key (the `Pending` rounds,
-`MarkDelivered`, `MarkRead`, the `Thread` reads, and the 3 files beside the outbox file keyed by
-the caller) is story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, split from this
-story to keep it to one pull request; this story adds only the reply.
+and `not-recipient` otherwise). The operator answered B
+(approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner):
+the bridge answers with its own key under a delegation. The switch of every other request of the
+bridge to its own key (the `Pending` rounds, `MarkDelivered`, `MarkRead`, the `Thread` reads,
+and the 3 files beside the outbox file keyed by the caller) is
+story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, split from this story to keep it
+to one pull request; this story adds only the reply.
 
 The client already signs and sends a reply: `inbox answer <message id> --body --option
 --on-behalf-of --authority --expires` (`crates/inbox-cli/src/main.rs`, `AnswerArgs`;
@@ -158,15 +161,14 @@ by default.
    matches; every later one gets the line of `already-settled`; (B) the last one before a poll.
    Default: A.
 5. Moved: what the bridge does when every request is refused for its key or its delegation is
-   Open 4 of story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, which builds it; on
-   answer A of decision-blocker:delegation-grants-inbox-ownership it comes back here (see
-   Scope).
-6. `from`, `on_behalf_of` and `authority` of the reply, as decision-blocker:delegation-grants-inbox-ownership
-   is answered. Under its A: `from` and `on_behalf_of` the person, no `authority`. Under its B:
-   `from` the bridge, `on_behalf_of` the person, `authority` the delegation id the bridge is
-   given (the flag of story:the-chat-bridge-runs-with-its-own-key-under-a-delegation). Under its
-   C: as B, with requests signed by the key of the person. Recommended there: B, not taken; this
-   story does not choose it.
+   Open 4 of story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, which builds it.
+6. Settled: `from`, `on_behalf_of` and `authority` of the reply. The operator answered B of
+   decision-blocker:delegation-grants-inbox-ownership on 2026-11-23
+   (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner): `from` the bridge,
+   `on_behalf_of` the person, `authority` the delegation id the bridge is given (the flag of
+   story:the-chat-bridge-runs-with-its-own-key-under-a-delegation). The options were: (A) `from`
+   and `on_behalf_of` the person, no `authority`; (B) as settled; (C) as B, with requests signed
+   by the key of the person.
 
 ## Scope
 
@@ -174,17 +176,11 @@ After story:the-chat-bridge-asks-a-decision-once (it edits `bridge.rs` after it)
 story:the-chat-bridge-runs-with-its-own-key-under-a-delegation (edge `depends_on`), which
 switches the bridge to its own key and itself comes after
 story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal.
-decision-blocker:delegation-grants-inbox-ownership blocks this story. On answer A of the
-blocker the 2 stories for B are rejected, the edge `depends_on` to
-story:the-chat-bridge-runs-with-its-own-key-under-a-delegation is removed (`aep plan artifact
-unrelate`) and replaced by one to story:the-chat-bridge-asks-a-decision-once, and this story is
-built with the key of the person, as the first 3 bridge stories are; on answer B the edge stays;
-on answer C the switch story is rewritten and the edge stays.
-The end of the bridge on a refused key or delegation is check 6 and Open 4 of
-story:the-chat-bridge-runs-with-its-own-key-under-a-delegation. On answer A of the blocker,
-which rejects that story, they come back here: a check that a bridge whose key (of the
-person) has lapsed ends with exit 1 and one line naming the key id and `inbox keyfile add-key`,
-and the Open item with its options A and B and default A.
+decision-blocker:delegation-grants-inbox-ownership, which blocked this story, is cleared by the
+operator's answer B (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner),
+so the edge `depends_on` to story:the-chat-bridge-runs-with-its-own-key-under-a-delegation
+stays. The end of the bridge on a refused key or delegation is check 6 and Open 4 of
+story:the-chat-bridge-runs-with-its-own-key-under-a-delegation.
 
 Code:
 

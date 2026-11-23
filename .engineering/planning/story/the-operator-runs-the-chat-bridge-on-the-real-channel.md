@@ -16,7 +16,7 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 5
+revision: 6
 ---
 ## Outcome
 
@@ -47,8 +47,9 @@ Checks, each of which can fail:
 2. What the operator sets up before the run is listed in the check and is done by the operator,
    not by the bridge or a task: the connection of `connectors` to the chat provider, the write
    policy or the proofs of Open 5 of story:the-chat-bridge-posts-a-pending-message, the key file
-   with the key (and, under option B of decision-blocker:delegation-grants-inbox-ownership, the
-   delegation; story:the-chat-bridge-runs-with-its-own-key-under-a-delegation) of the
+   with the key (and the delegation, under the operator's answer B in
+   approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner;
+   story:the-chat-bridge-runs-with-its-own-key-under-a-delegation) of the
    bridge, and a restart of the service so it reads that key file.
 3. The record is one evidence record of this story (`aep plan artifact evidence`, a kind from
    the closed list the command prints), with the day, the versions of `inbox` and `connectors`,

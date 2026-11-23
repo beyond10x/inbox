@@ -4,7 +4,7 @@ id: story:the-chat-bridge-runs-with-its-own-key-under-a-delegation
 kind: story
 status: draft
 title: The chat bridge runs with its own key under a delegation for the person's inbox
-summary: 'Under option B of the delegation blocker: every request of the bridge names the person''s inbox, and the wake lock, the open record and the chat-post record are keyed by the person''s address.'
+summary: 'Under the operator''s answer B on the bridge''s key: every request of the bridge names the person''s inbox, and the wake lock, the open record and the chat-post record are keyed by the person''s address.'
 relations:
 - decomposes: epic:human-inbox
 - depends_on: story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal
@@ -35,12 +35,13 @@ scope:
   path: generated/cli/inbox.json
 - confidence: cited
   path: website/docs/first-use.md
-revision: 6
+revision: 8
 ---
 ## Outcome
 
-Under option B of decision-blocker:delegation-grants-inbox-ownership, the chat bridge runs with
-a key of its own and the delegation id the person gave it, instead of a key of the person. Every
+Under the operator's answer B (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner),
+the chat bridge runs with a key of its own and the delegation id the person gave it, instead of
+a key of the person. Every
 request it sends names the person's inbox as the inbox it acts for, and the files it keeps
 beside the outbox file are keyed by the person's address, not by its own principal. Posting,
 the delivery mark, the read mark and the decision asked once work as before for the person's
@@ -49,8 +50,7 @@ inbox.
 This is the switch the first 3 bridge stories leave out: they sign with the key they are given,
 and their cases give them a key of the person. It is split from
 story:the-chat-bridge-turns-a-thread-reply-into-an-answer to keep that story to one pull
-request. With answer A of the blocker it is rejected; with answer C the requests stay signed by
-a key of the person and only check 1 and the flags change.
+request.
 
 ## Acceptance
 
@@ -154,11 +154,9 @@ its lock, `<outbox>.lock`, hold the sender's envelopes; the bridge posts none.
 ## Scope
 
 After story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal (edge `depends_on`),
-blocked by decision-blocker:delegation-grants-inbox-ownership, and before
+and before
 story:the-chat-bridge-turns-a-thread-reply-into-an-answer, which edits `bridge.rs` after it.
 This story owns the end of the bridge on a refused key or delegation (check 6, Open 4) whole.
-On answer A of the blocker, which rejects this story, that check and that Open item go back to
-story:the-chat-bridge-turns-a-thread-reply-into-an-answer, as its Scope says.
 
 Code:
 

@@ -4,7 +4,7 @@ id: story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal
 kind: story
 status: draft
 title: An agent with a delegation acts for the inbox of its principal
-summary: 'Option B of the operator''s open decision on the bridge''s key: a live delegation lets its agent read, mark and answer the inbox of its on_behalf_of; a change of architecture that waits for the operator.'
+summary: 'A live delegation lets its agent read, mark and answer the inbox of its on_behalf_of: the operator''s answer B of 2026-11-23 on the bridge''s key.'
 relations:
 - decomposes: epic:human-inbox
 - depends_on: story:the-chat-bridge-asks-a-decision-once
@@ -39,7 +39,7 @@ scope:
   path: generated/cli/inbox.json
 - confidence: cited
   path: website/docs/status.md
-revision: 11
+revision: 14
 ---
 ## Outcome
 
@@ -52,12 +52,9 @@ key of the chat bridge reads no row of the person's inbox and its answer is refu
 
 This story exists for option B of Open 1, the reading of the epic's outcome ("a reply envelope
 signed with the bridge's key on behalf of the person, under a delegation"). It is a change of
-architecture: under the folder rule "A default proceeds" it waits for the operator's answer and
-is not built on a default. decision-blocker:delegation-grants-inbox-ownership records that wait
-and `blocks` this story. With answer A it is rejected, with
-story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, and the edge to that story from
-story:the-chat-bridge-turns-a-thread-reply-into-an-answer is removed; with answer C it is
-rewritten as a change of the model.
+architecture, which the folder rule "A default proceeds" leaves to the operator: the operator
+answered B on 2026-11-23 (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner),
+and decision-blocker:delegation-grants-inbox-ownership, which held this story, is cleared.
 
 ## Acceptance
 
@@ -144,8 +141,8 @@ relays.
   `on_behalf_of` answered" (enum `inbox.messaging.AnsweredBy`, lines 149-153; outcome `answered`,
   line 732). Inferable from the ess/1 document.
 - Delegation to the inbox it lets its agent act for: no source declares it. Whether a delegation
-  grants ownership of the inbox of its `on_behalf_of` at all is Open 1; how many inboxes one
-  agent may act for, and which one a request means, is Open 2. Requires the operator's input.
+  grants ownership of the inbox of its `on_behalf_of` at all was Open 1, settled B: it does.
+  How many inboxes one agent may act for, and which one a request means, is Open 2.
 - Inbox to owner after an open by the agent: `OpenInbox` sets `owner: {caller: principal}`
   (same file, outcome `opened`, line 348), so the owner becomes the agent, and `CloseInbox`
   refuses `not-owner` when `owner != caller.principal` (line 374): the person's own key could
@@ -154,19 +151,21 @@ relays.
 
 ## Open
 
-1. The key of the bridge and the delegation (a change of architecture: it waits for the
-   operator's answer, held by decision-blocker:delegation-grants-inbox-ownership). (A) no
+1. Settled. The key of the bridge and the delegation (a change of architecture): the operator
+   answered B on 2026-11-23 (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner;
+   decision-blocker:delegation-grants-inbox-ownership is cleared). The options were: (A) no
    delegation: the bridge holds a key whose entry names the person as principal, made with
    `inbox key new` and `inbox keyfile add-key`; its reply has `from` and `on_behalf_of` the
    person and no `authority`. No change of the service; the epic's acceptance holds
    (`answered_by: principal`), its outcome does not: a reply of the bridge cannot be told from
    one the person signed, and the bridge holds a key that speaks as the person in every command.
-   This story is rejected. (B) this story: a delegation lets its agent act as the owner of the
-   inbox of its `on_behalf_of`; the bridge holds a key of its own. Costs: the service, the design
-   decisions 4 and 5, and the signed request (Open 2). (C) the bridge reads and marks with a key
-   of the person (A) and signs only the reply with its own key under a delegation: the model's
-   `not-sender` of `Answer` refuses that, so `ess/domains/messaging.yaml`, `generated/` and the
-   suite change. Recommended: B, not taken.
+   This story would have been rejected. (B) this story: a delegation lets its agent act as the
+   owner of the inbox of its `on_behalf_of`; the bridge holds a key of its own. Costs: the
+   service, the design decisions 4 and 5, and the signed request (Open 2). (C) the bridge reads
+   and marks with a key of the person (A) and signs only the reply with its own key under a
+   delegation: the model's `not-sender` of `Answer` refuses that, so
+   `ess/domains/messaging.yaml`, `generated/` and the suite change. Answer: B, the operator's
+   answer of 2026-11-23.
 2. How a request names the inbox it acts for (B only). (A) a sixth member of the signed request
    object, sent in a header `Inbox-On-Behalf-Of`; a request without it is signed and answered as
    today; (B) a query parameter: it reaches the views, but a command's input is the generated
@@ -189,12 +188,12 @@ relays.
 
 ## Scope
 
-For the defaults of Open 1 (B) and Open 2 (A). Order: after
+For Open 1 B (settled) and the default of Open 2 (A). Order: after
 story:the-chat-bridge-asks-a-decision-once (edge `depends_on`). The reason is the shared files:
 this story edits `crates/inbox-cli/src/main.rs`, `src/reference.rs`,
 `generated/cli/inbox.json`, `AGENTS.md` and `website/docs/status.md`, which
 story:the-chat-bridge-posts-a-pending-message, story:the-chat-bridge-marks-a-message-read-on-a-reaction
-and story:the-chat-bridge-asks-a-decision-once edit too. So the first 3 bridge stories do not
+and story:the-chat-bridge-asks-a-decision-once edit too. So the first 3 bridge stories did not
 wait for the operator's answer, and this one lands after them. `generated/cli/inbox.json` is
 not merged: the story that lands later regenerates it with `task cli-reference`, which the
 case `the_cli_reference_document_is_current` holds (`AGENTS.md`, the rows of

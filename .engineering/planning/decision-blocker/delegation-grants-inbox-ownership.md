@@ -2,13 +2,15 @@
 format: aep.planning-md/3
 id: decision-blocker:delegation-grants-inbox-ownership
 kind: decision-blocker
-status: open
+status: cleared
 title: The operator has not decided whether a delegation grants acting as the owner of its principal's inbox
 relations:
 - blocks: story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal
 - blocks: story:the-chat-bridge-runs-with-its-own-key-under-a-delegation
 - blocks: story:the-chat-bridge-turns-a-thread-reply-into-an-answer
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-11-23T09:55:57Z", actor: "agent:inbox", revision: 3}
 ---
 ## The question
 
@@ -59,3 +61,9 @@ the answer: they sign with the key they are given, and their cases use a key of 
 
 The operator's answer A, B or C, relayed through `host-operator` and recorded; then the
 blocker is moved to `cleared`. Nobody moves it on a default.
+
+## The answer
+
+B. The operator picked it on 2026-11-23 between 10:50 and 10:59 CET; the host operator's session
+relayed it (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner). The line
+"Recommended: B, not taken" above is the state before the answer.

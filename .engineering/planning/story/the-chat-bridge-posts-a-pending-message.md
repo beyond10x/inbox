@@ -44,7 +44,7 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 6
+revision: 7
 ---
 ## Outcome
 
@@ -147,9 +147,10 @@ stopping"; `website/docs/limits.md`, "Loopback only"). It reaches the chat provi
 starting `connectors`, so it needs no listener: it learns of reactions and replies by asking
 (later stories), not by being called.
 
-Which key the bridge signs its requests with is decision-blocker:delegation-grants-inbox-ownership
-(under its option B, story:the-chat-bridge-runs-with-its-own-key-under-a-delegation). This story does not wait
-for that answer: it signs with the secret key file it is given (`INBOX_SECRET_KEY_FILE`), and its
+The bridge signs its requests with a key of its own under a delegation (the operator's answer B,
+approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner), built in
+story:the-chat-bridge-runs-with-its-own-key-under-a-delegation. This story does not wait for that
+story: it signs with the secret key file it is given (`INBOX_SECRET_KEY_FILE`), and its
 cases give it a key whose entry names the address of the person as its principal
 (`human:person`), which today is the only key that may read that `Pending` (decision 5 of
 `docs/design/inbox.md`; `docs/design/service.md`, "The caller").
