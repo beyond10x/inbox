@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T06:42:19Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-stage-3-acceptance-checks",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

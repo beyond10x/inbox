@@ -105,7 +105,7 @@ each open limit are in [`docs/checks.md`](docs/checks.md). The plan and its evid
 | `crates/inbox-server/` | The HTTP listener |
 | `crates/inbox-cli/` | The binary `inbox`: `inbox serve` and the command-line client |
 | `crates/inbox-conformance/` | The conformance gate: the suite run against the core and against a running `inbox serve` |
-| `tests/acceptance/` | The 3 acceptance checks against the built binary |
+| `tests/acceptance/` | The 6 acceptance checks against the built binary |
 | `crates/inbox-xtask/` | Repository tasks: the drift check of the generated crate |
 | `docs/design/` | The design notes: the inbox, signing, the HTTP service |
 | `docs/checks.md` | The numbers the gate prints, what the checks do not cover, the story of each open limit |
@@ -185,7 +185,7 @@ task check
 validates the specification, fails when the scenario files differ from the script that writes
 them or anything under `generated/` has drifted from the specification, runs
 the conformance suite on ESS's interpreted target, against the core and against a running
-`inbox serve`, runs the 3 acceptance checks, then formats, lints,
+`inbox serve`, runs the 6 acceptance checks, then formats, lints,
 tests and builds the Rust workspace and the generated crate. It needs
 [go-task](https://taskfile.dev), `ess` 0.97.4 and Rust 1.99.1 (`rust-toolchain.toml`).
 
