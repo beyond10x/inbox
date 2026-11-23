@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:56:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "design finding 1, blocker (check 6 reads the end on 401 that the thread-reply story builds one story later): check 6 is rewritten and ends with the sentence that this story builds that end; exit 1 after one line on standard error that names the delegation id or the key id, no post and no request after it; the options of the end are Open 4 of this story",
+    "review": "review-result:stage-4-design-round-2",
+    "outcome": "fixed"
+  }
+}

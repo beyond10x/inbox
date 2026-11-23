@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:01:48Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 1 (check 6 asks for 2 different lines though a lapsed key and a lapsed delegation give the same 401 and the secret key file holds no valid_until): check 6 runs both causes and asks for the same one line in each, which names the key id, the delegation id, inbox keyfile add-key, inbox keyfile add-delegation and that the service reads the key file at its start; it fails when the line lacks one of the 2 ids or one of the 2 commands; Open 4 A is worded to match, and Open 5 of the delegation story says one line for both causes",
+    "review": "review-result:stage-4-acceptance-round-3",
+    "outcome": "fixed"
+  }
+}

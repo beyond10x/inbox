@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:56:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "scope finding 1 (the lapsed delegation is claimed twice and decided in an Open item of a later story): the own-key story owns the end on 401 whole, with its check 6, its Scope lines (failure.rs, bridge.rs) and its Open 4; check 9 of the thread-reply story is removed, its check 7 cites check 6 of the own-key story, and its Open 5 points to Open 4 of the own-key story",
+    "review": "review-result:stage-4-scope-round-2",
+    "outcome": "fixed"
+  }
+}

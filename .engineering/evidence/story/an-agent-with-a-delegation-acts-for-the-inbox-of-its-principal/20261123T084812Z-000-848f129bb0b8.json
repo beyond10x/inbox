@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "design finding 2 (no edge records that the delegation story waits for the operator): decision-blocker:delegation-grants-inbox-ownership blocks the delegation story, the own-key story and the thread-reply story",
+    "review": "review-result:stage-4-design-round-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 8 (names how many sets no number): the check names 87 lines of unsupported.tsv and 71 with the reason of the principal as inbox, both read from a command on main, and task conform passes; making the 71 supported is outside the story",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}

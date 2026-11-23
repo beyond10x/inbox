@@ -2,10 +2,13 @@
 format: aep.planning-md/3
 id: epic:human-inbox
 kind: epic
-status: draft
+status: active
 title: 'Stage 4: the human inbox as a chat bridge'
 summary: A bridge posts a person's inbox into a chat channel and turns the person's thread reply into a signed reply envelope.
-revision: 1
+revision: 3
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-23T10:15:45Z", actor: "agent:inbox", revision: 2}
+- {from: "proposed", to: "active", at: "2026-11-23T10:15:45Z", actor: "agent:inbox", revision: 3}
 ---
 ## Outcome
 
