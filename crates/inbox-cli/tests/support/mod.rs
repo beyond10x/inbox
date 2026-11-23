@@ -376,10 +376,25 @@ pub fn serve_refused(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Run {
 /// service; answers the operator public key.
 pub fn keys_only(name: &str) -> (Dir, String) {
     let dir = Dir::new(name);
-    let operator_public_key = key_new(&dir.path, "operator.key", None);
-    for (file, key_id, principal) in [("alice.key", "alice-1", ALICE), ("bob.key", "bob-1", BOB)] {
-        let public_key = key_new(&dir.path, file, Some((key_id, principal)));
-        add_key(&dir.path, "operator.key", key_id, principal, &public_key);
+    let members = [("alice.key", "alice-1", ALICE), ("bob.key", "bob-1", BOB)];
+    // The 3 keys are made at once, each by a process of its own; the key file is then written by
+    // one `add-key` after the other.
+    let (operator_public_key, public_keys) = std::thread::scope(|scope| {
+        let made: Vec<_> = members
+            .iter()
+            .map(|(file, key_id, principal)| {
+                scope.spawn(|| key_new(&dir.path, file, Some((key_id, principal))))
+            })
+            .collect();
+        let operator = key_new(&dir.path, "operator.key", None);
+        let keys: Vec<String> = made
+            .into_iter()
+            .map(|key| key.join().expect("the key is made"))
+            .collect();
+        (operator, keys)
+    });
+    for ((_, key_id, principal), public_key) in members.iter().zip(&public_keys) {
+        add_key(&dir.path, "operator.key", key_id, principal, public_key);
     }
     (dir, operator_public_key)
 }

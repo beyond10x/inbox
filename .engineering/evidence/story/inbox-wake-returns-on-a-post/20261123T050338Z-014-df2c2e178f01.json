@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 2 (a reconnect whose open got no answer ends the wake with 1 and a line that is not true): the wake takes the pause of a failure and reads again; NotOpen has its own words for no record, a refused open and not open right after an open; adversary_wake_2::a_reopen_that_gets_no_answer_does_not_end_the_wake_as_never_opened. The guard against a second not-open right after an open stays, also for 2 restarts in a row; the story's Decisions say so",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}

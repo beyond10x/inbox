@@ -19,7 +19,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | A request says what its reply must look like: free text, a number of lines or a schema | `inbox post --reply-shape` |
 | A decision carries lettered options, the option the sender recommends and the option silence takes | `inbox post --option`, `--recommended-option`, `--default-on-silence` |
 | List what an inbox holds that its owner has not read | `inbox pending` |
-| Wait until a message arrives. The service holds the request open, 60 s at most by default; a message past its `expires` does not end the wait, and is listed when it ends | `inbox wait` |
+| Wait until a message arrives. The service holds the request open, 60 s at most by default; a message past its `expires` does not end the wait, and is listed when it ends. Or wait until an open inbox has a message not yet delivered and not past its `expires`, across the end of a wait and a restart of the service, then print it and mark it delivered: the command a wake adapter runs, one at a time per inbox on a host | `inbox wait`, `inbox wake` |
 | Read a message. A note is removed once read. The read of a message past its `expires` is refused (`Expired`, exit status 1) | `inbox read` |
 | Answer a request or a decision, or refuse it and say why; a note takes neither | `inbox answer`, `inbox refuse` |
 | List the live messages a sender posted, and take the answer or the refusal of one | `inbox outbox`, `inbox collect` |
@@ -47,7 +47,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | Every answer lists the events its command emitted | [events](reference/events.mdx) |
 | Every command prints text, or one JSON document | `--json` |
 | Text another principal wrote reaches your terminal with each control character shown as an escape | [first use](first-use.md#what-the-commands-print) |
-| Exit statuses 0 to 4 tell a refusal from wrong usage, an unreachable service and a file error | [first use](first-use.md#exit-statuses) |
+| Exit statuses 0 to 5 tell a refusal from wrong usage, an unreachable service, a file error and a second `inbox wake` of the same inbox on a host | [first use](first-use.md#exit-statuses) |
 | TLS: the service answers with a certificate made for it, and the client checks the certificate against its pin before it sends anything | `inbox tls new`, `inbox serve --tls-file`, `--tls-pin`, [first use](first-use.md#serve-over-tls) |
 
 ## The service's defaults
@@ -71,7 +71,7 @@ Each row with a flag is set on `inbox serve`.
 - A persistent backend. Messages are kept in memory, and a restart of the service loses them.
 - A listener outside loopback.
 - A second host.
-- Waking an idle agent session when a message arrives.
+- Waking an idle agent session when a message arrives: `inbox wake` returns on a message, and no adapter resumes a session with it yet.
 - A history of handled messages.
 - Use by principals of different operators ([limits](limits.md)).
 - A deployment.

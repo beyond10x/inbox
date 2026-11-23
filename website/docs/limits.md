@@ -43,7 +43,7 @@ record out.
 ## The service
 
 - **Loopback only.**
-- **No second host and no wake-up** of an idle session.
+- **No second host**, and no adapter yet that wakes an idle session: `inbox wake` returns on a message, and nothing resumes a session with it.
 - **One backend, in memory.** A restart of the service loses every message and every open
   inbox. The next command of the owner opens its inbox again, and the next command of the
   sender posts its kept envelopes again, by themselves; dedup by `message_id` and `dedup_key`

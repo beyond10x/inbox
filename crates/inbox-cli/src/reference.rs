@@ -8,7 +8,7 @@
 use clap::{Arg, ArgAction, Command};
 use inbox::server::json::{self, Value};
 
-use crate::failure::{LOCAL, REFUSED, TRANSPORT, USAGE};
+use crate::failure::{ANOTHER_WAKE, LOCAL, REFUSED, TRANSPORT, USAGE};
 
 const DESCRIPTION: &str = "`inbox serve` runs the HTTP service of the inbox on a loopback \
 address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. \
@@ -40,7 +40,7 @@ const ENVIRONMENT: [(&str, &str, Option<&str>); 3] = [
     ),
 ];
 
-const EXIT_STATUSES: [(i32, &str); 5] = [
+const EXIT_STATUSES: [(i32, &str); 6] = [
     (0, "Done."),
     (REFUSED, "The service refused; the output names the error."),
     (
@@ -52,6 +52,10 @@ const EXIT_STATUSES: [(i32, &str); 5] = [
         "The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal.",
     ),
     (LOCAL, "A local file could not be read, written or created."),
+    (
+        ANOTHER_WAKE,
+        "`inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent.",
+    ),
 ];
 
 fn text(value: &str) -> Value {

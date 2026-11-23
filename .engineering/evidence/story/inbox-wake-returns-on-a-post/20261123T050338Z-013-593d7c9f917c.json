@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 1 (a whole non-JSON answer without Content-Length is counted as cut and tried again forever): an answer with a whole head and neither Content-Length nor a chunked Transfer-Encoding is whole at the end of its connection; adversary_wake_2::a_whole_404_page_without_content_length_ends_the_wake_with_3",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}

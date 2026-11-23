@@ -37,9 +37,81 @@ pub fn print_document(document: &str) {
 }
 
 fn print(line: &str) {
+    let _ = print_checked(line);
+}
+
+/// [`print_text`], answering whether the text was written: `inbox wake` sends no `MarkDelivered`
+/// after a write that failed. It writes through [`reader`], so a write the kernel refuses (a
+/// reader that is gone, a descriptor 1 open only for reading) is an error; the bytes are those
+/// [`print_text`] writes.
+///
+/// # Errors
+///
+/// The error of [`reader`] or of the write.
+pub fn try_print_text(text: &str) -> std::io::Result<()> {
+    write_to_reader(&visible(text))
+}
+
+/// [`print_document`], answering whether the document was written, as [`try_print_text`] does.
+///
+/// # Errors
+///
+/// The error of [`reader`] or of the write.
+pub fn try_print_document(document: &str) -> std::io::Result<()> {
+    write_to_reader(&plain_document(document))
+}
+
+/// Whether standard output can reach a reader ([`reader`]); `inbox wake` asks it before its lock
+/// and its first request, and again before it writes its rows.
+///
+/// # Errors
+///
+/// The error of [`reader`].
+pub fn reaches_a_reader() -> std::io::Result<()> {
+    reader().map(drop)
+}
+
+/// A file made from a duplicate of descriptor 1, when it can reach a reader: descriptor 1 is open
+/// and is not `/dev/null`. A process started with descriptor 1 closed (`inbox wake >&-`) finds
+/// `/dev/null` there, which the standard library's start of the program opens in place of a
+/// closed standard descriptor; a write to it succeeds and reaches no one. A write through the
+/// file goes to the kernel unbuffered, and its error is not swallowed as the standard library's
+/// standard output swallows `EBADF`.
+///
+/// # Errors
+///
+/// An error that says so when descriptor 1 is closed or is `/dev/null`.
+fn reader() -> std::io::Result<std::fs::File> {
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let nobody = || std::io::Error::other("it is closed or /dev/null, which no one reads");
+    let held = std::io::stdout()
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(|_| nobody())?;
+    let file = std::fs::File::from(held);
+    let found = file.metadata().map_err(|_| nobody())?;
+    let null = std::fs::metadata("/dev/null").ok();
+    if null.is_some_and(|null| found.file_type().is_char_device() && found.rdev() == null.rdev()) {
+        return Err(nobody());
+    }
+    Ok(file)
+}
+
+/// Writes `line` and a line end through [`reader`], in one `write_all`.
+fn write_to_reader(line: &str) -> std::io::Result<()> {
+    let mut file = reader()?;
+    let mut bytes = String::with_capacity(line.len() + 1);
+    bytes.push_str(line);
+    bytes.push('\n');
+    file.write_all(bytes.as_bytes())?;
+    file.flush()
+}
+
+fn print_checked(line: &str) -> std::io::Result<()> {
     let mut stdout = std::io::stdout().lock();
-    let _ = writeln!(stdout, "{line}");
-    let _ = stdout.flush();
+    writeln!(stdout, "{line}")?;
+    stdout.flush()
 }
 
 /// `text` with each control character but the line end (C0 with the tab and the carriage

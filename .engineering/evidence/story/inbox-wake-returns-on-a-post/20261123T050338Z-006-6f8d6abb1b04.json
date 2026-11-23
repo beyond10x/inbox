@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 7 (the acceptance case red in 3 of 4 package runs): the same rule as finding 6; 349 of 349 in 5 package runs in a row in round 3",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-1",
+    "outcome": "fixed"
+  }
+}

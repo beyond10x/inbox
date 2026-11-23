@@ -140,8 +140,8 @@ impl Service {
     ///
     /// # Errors
     ///
-    /// [`Failure::Transport`] when the service cannot be reached, its certificate does not match
-    /// the pin, or the answer is not HTTP.
+    /// [`Failure::Transport`] when the service cannot be reached or the answer is not HTTP;
+    /// [`Failure::Certificate`] when its certificate does not match the pin or it speaks no TLS.
     pub fn send(
         &self,
         caller: &Caller,
@@ -176,7 +176,16 @@ impl Service {
             Some(pin) => {
                 let config = tls::client_config(pin.clone())
                     .map_err(|error| transport(std::io::Error::other(error)))?;
-                Box::new(tls::connect(&config, socket).map_err(transport)?)
+                // `InvalidData`: the handshake was refused here, the certificate not being the
+                // pinned one or the peer speaking no TLS; a handshake the peer cut stays a
+                // transport failure.
+                Box::new(tls::connect(&config, socket).map_err(|error| {
+                    if error.kind() == std::io::ErrorKind::InvalidData {
+                        Failure::Certificate(format!("{} ({peer}): {error}", self.host))
+                    } else {
+                        transport(error)
+                    }
+                })?)
             }
         };
         let mut head = format!(
@@ -194,8 +203,13 @@ impl Service {
         stream.flush().map_err(transport)?;
         let mut answer = Vec::new();
         stream.read_to_end(&mut answer).map_err(transport)?;
-        Reply::read(&answer)
-            .map_err(|why| Failure::Transport(format!("{} ({peer}): {why}", self.host)))
+        Reply::read(&answer).map_err(|(status, why)| {
+            let detail = format!("{} ({peer}): {why}", self.host);
+            match status {
+                Some(status) => Failure::Unexpected { status, detail },
+                None => Failure::Transport(detail),
+            }
+        })
     }
 }
 
@@ -234,17 +248,41 @@ pub struct Reply {
 }
 
 impl Reply {
-    fn read(answer: &[u8]) -> Result<Self, String> {
-        let answer = std::str::from_utf8(answer).map_err(|_| "the answer is not UTF-8")?;
-        let (head, body) = answer
-            .split_once("\r\n\r\n")
-            .ok_or("the answer has no end of its head")?;
+    /// The answer read from the bytes a connection carried until its end. A body that is not JSON
+    /// is an answer cut before its end ([`Failure::Transport`]: the error carries no status) unless
+    /// the answer is whole: it holds every byte its `Content-Length` names, or it has neither a
+    /// `Content-Length` nor a chunked `Transfer-Encoding` and so ends with its connection. Then it
+    /// is whole and not JSON ([`Failure::Unexpected`]: the error carries its status). A head that
+    /// is not whole is cut, and so is a chunked answer whose body is not JSON.
+    fn read(answer: &[u8]) -> Result<Self, (Option<u16>, String)> {
+        let cut = |why: &str| (None, why.to_owned());
+        let split = answer
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .ok_or_else(|| cut("the answer has no end of its head"))?;
+        let head =
+            std::str::from_utf8(&answer[..split]).map_err(|_| cut("the head is not UTF-8"))?;
+        let body = &answer[split + 4..];
         let status = head
             .split(' ')
             .nth(1)
             .and_then(|status| status.parse().ok())
-            .ok_or("the answer has no status line")?;
-        let body = json::parse(body).map_err(|error| format!("the answer is not JSON: {error}"))?;
+            .ok_or_else(|| cut("the answer has no status line"))?;
+        let whole = match content_length(head) {
+            Some(length) => body.len() >= length,
+            // Without a length the body ends with the connection (RFC 9112, 6.3), which this
+            // client asks to close: what it read until the end is the whole answer. A chunked
+            // body is not read as one: it stays cut, as before.
+            None => !chunked(head),
+        };
+        let whole = |why: String| (whole.then_some(status), why);
+        let body = std::str::from_utf8(body)
+            .map_err(|_| whole(format!("the answer with the status {status} is not UTF-8")))?;
+        let body = json::parse(body).map_err(|error| {
+            whole(format!(
+                "the answer with the status {status} is not JSON: {error}"
+            ))
+        })?;
         Ok(Self {
             status,
             body,
@@ -258,7 +296,7 @@ impl Reply {
     ///
     /// # Errors
     ///
-    /// [`Failure::Refused`] for either refusal; [`Failure::Transport`] naming the status for any
+    /// [`Failure::Refused`] for either refusal; [`Failure::Unexpected`] naming the status for any
     /// other answer (a `3xx`, or an error without a `refused` text), which no service of the
     /// inbox gives.
     pub fn accepted(self) -> Result<Value, Failure> {
@@ -279,13 +317,38 @@ impl Reply {
         if (200..300).contains(&self.status) {
             return Ok(self.body);
         }
-        Err(Failure::Transport(format!(
-            "the answer has the status {}, which is neither a success nor a refusal of the \
-             service: {}",
-            self.status,
-            output::document(&self.body)
-        )))
+        Err(Failure::Unexpected {
+            status: self.status,
+            detail: format!(
+                "the answer has the status {}, which is neither a success nor a refusal of the \
+                 service: {}",
+                self.status,
+                output::document(&self.body)
+            ),
+        })
     }
+}
+
+/// The value of the `Content-Length` header of an answer's head, when it has one that reads.
+fn content_length(head: &str) -> Option<usize> {
+    head.split("\r\n")
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .find(|(name, _)| name.trim().eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, value)| value.trim().parse().ok())
+}
+
+/// Whether the head of an answer names `chunked` in a `Transfer-Encoding` header.
+fn chunked(head: &str) -> bool {
+    head.split("\r\n")
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(name, _)| name.trim().eq_ignore_ascii_case("transfer-encoding"))
+        .any(|(_, value)| {
+            value
+                .split(',')
+                .any(|coding| coding.trim().eq_ignore_ascii_case("chunked"))
+        })
 }
 
 /// The epoch the head of an answer names: the value of its [`EPOCH_HEADER`] headers (the name
@@ -369,6 +432,28 @@ mod tests {
         }
     }
 
+    /// An answer whose body is not JSON is whole, and keeps its status, when it fills its
+    /// `Content-Length` or has none and is not chunked (it ended with its connection); it is cut,
+    /// with no status, when it is chunked, falls short of its `Content-Length`, or has no whole
+    /// head.
+    #[test]
+    fn a_body_that_is_not_json_is_whole_or_cut_by_its_head() {
+        let page = "<html>Not Found</html>\n";
+        let read = |headers: &str| {
+            let text = format!("HTTP/1.1 404 Not Found\r\n{headers}\r\n{page}");
+            Reply::read(text.as_bytes()).map(|reply| reply.status)
+        };
+        let whole = |result: Result<u16, (Option<u16>, String)>| result.unwrap_err().0;
+        assert_eq!(whole(read("Connection: close\r\n")), Some(404));
+        let filled = format!("Content-Length: {}\r\n", page.len());
+        assert_eq!(whole(read(&filled)), Some(404));
+        let short = format!("Content-Length: {}\r\n", page.len() + 1);
+        assert_eq!(whole(read(&short)), None);
+        assert_eq!(whole(read("Transfer-Encoding: gzip, Chunked\r\n")), None);
+        let no_head = Reply::read(b"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n");
+        assert!(matches!(no_head, Err((None, _))), "{no_head:?}");
+    }
+
     /// Every wire name the client sends to, by method.
     pub const USED: &[(&str, &str)] = &[
         ("POST", "open-inbox"),
@@ -378,6 +463,7 @@ mod tests {
         ("POST", "answer"),
         ("POST", "refuse"),
         ("POST", "collect"),
+        ("POST", "mark-delivered"),
         ("GET", "pending"),
         ("GET", "outbox"),
         ("GET", "thread"),

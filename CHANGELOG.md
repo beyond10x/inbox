@@ -8,6 +8,39 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- `inbox wake` waits until the caller's own inbox has a message not yet delivered and not past its
+  `expires`, across the end of a wait and a restart of the service, prints those messages as `inbox
+  pending` does (`--json`: one document), then marks each delivered with `MarkDelivered` and exits
+  0. It is the command a wake adapter runs; no adapter is included yet. The messages are written
+  and flushed before the first mark; a mark that fails (such as `Expired` for a message that turned
+  due in between) is named on standard error and sets the exit status (1 or 3). A message already
+  delivered and not yet read neither ends the wait nor is printed; `inbox pending` lists it. A wake
+  of an inbox that is not open at the service ends with 1 and a line that names `inbox open` when
+  this host has no record of an `inbox open` of it, when the service refuses to open it again, or
+  when it is still not open right after an open that succeeded; so does an `inbox close` while the
+  wake waits, and the wake never opens an inbox its owner closed. When the open after a restart
+  gets no answer, or an answer that is tried again, the wake pauses and reads again. No answer, an
+  answer cut before its end, `408` and a status from `500` on without a refusal of the service are
+  tried again after a pause that grows from 100 ms to 30 s; a redirect, a `4xx` without a refusal,
+  an answer that is not the view and a TLS certificate the pin does not name end it with 3 (a whole
+  answer fills its `Content-Length`, or has none and is not chunked). A held read answered within 1
+  s without a message is followed by the same pause, so a service that ends every wait at once does
+  not make it spin. A standard output that is closed or is `/dev/null` ends it with 4 before the
+  lock and any request; one that cannot be written (the reader gone, open only for reading) ends it
+  with 4 and nothing marked. A second wake of the same inbox with the same outbox file on the same
+  host exits with the new exit status 5 and sends nothing (a lock file beside the outbox file,
+  opened without following a link). SIGINT and SIGTERM end it at once, also when they were ignored
+  at its start (story:inbox-wake-returns-on-a-post).
+- The wait on `Pending` (`GET /messaging/views/pending`) takes `undelivered=1`, alone or beside
+  `wait`: the answer holds only the caller's rows in `Sent` that are not due at the service's
+  clock, and a held wait ends only on such a row; a row in `Delivered` does not end it. While
+  the caller's inbox is not open the request is answered at once with
+  `409 {"refused": "inbox not open"}`, and a close ends a held one with it. Any other value is
+  `400 {"refused": "undelivered is not 1"}`. Without the parameter every answer is as before;
+  `inbox wait` and `inbox pending` do not send it (`docs/design/service.md`, "The wait").
+
 ## [0.4.0] - 2026-11-23
 
 ### Added

@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use inbox::messaging::{
     Address, Answer, Body, CloseInbox, Collect, DecisionAsk, DecisionOption, DedupKey,
-    DelegationId, MarkRead, MessageId, OpenInbox, OptionLetter, PostMessage, Principal, Refuse,
-    Signature, ThreadId,
+    DelegationId, MarkDelivered, MarkRead, MessageId, OpenInbox, OptionLetter, PostMessage,
+    Principal, Refuse, Signature, ThreadId,
 };
 use inbox::primitives::Timestamp;
 use inbox::server::json::{self, Value};
@@ -253,6 +253,19 @@ pub fn read(client: &Client, message_id: &str) -> Result<Done, Failure> {
     Ok(outcome(&answer, message_id))
 }
 
+/// `MarkDelivered` of `message_id`, which `inbox wake` sends once the rows are on its standard
+/// output: `delivered` moves it from `Sent` to `Delivered`, `already-delivered` changes nothing.
+pub fn mark_delivered(client: &Client, message_id: &str) -> Result<Value, Failure> {
+    let mut body = String::new();
+    wire::encode_command_inbox_messaging_mark_delivered(
+        &MarkDelivered {
+            message_id: MessageId(message_id.to_owned()),
+        },
+        &mut body,
+    );
+    client.command("mark-delivered", &body)
+}
+
 /// `inbox refuse`.
 pub fn refuse(client: &Client, message_id: &str, reason: &str) -> Result<Done, Failure> {
     let mut body = String::new();
@@ -324,15 +337,37 @@ pub fn collect(client: &Client, message_id: &str) -> Result<Done, Failure> {
 /// `inbox pending`, and `inbox wait` with `wait` seconds: the `Pending` view of `inbox`
 /// (the caller's own by default), held open by the service until it has a row or the wait ends.
 pub fn pending(client: &Client, inbox: Option<&str>, wait: Option<u64>) -> Result<Done, Failure> {
+    Ok(view_done(&pending_view(client, inbox, wait, false)?))
+}
+
+/// The read of `inbox wake`: the caller's own `Pending` with `undelivered=1` and `wait` seconds,
+/// which only a row in `Sent` ends (`docs/design/service.md`, the wait); the view as answered.
+pub fn undelivered(client: &Client, wait: u64) -> Result<Value, Failure> {
+    pending_view(client, None, Some(wait), true)
+}
+
+/// What `inbox pending` prints of a view answer: the document as it is, or its rows for a person.
+pub fn pending_done(answer: &Value) -> Done {
+    view_done(answer)
+}
+
+fn pending_view(
+    client: &Client,
+    inbox: Option<&str>,
+    wait: Option<u64>,
+    undelivered: bool,
+) -> Result<Value, Failure> {
     let inbox = inbox.map_or_else(|| client.own_inbox().0, str::to_owned);
     let mut target = format!("{}?inbox={}", route("GET", "pending"), query_value(&inbox));
     if let Some(seconds) = wait {
         target.push_str(&format!("&wait={seconds}"));
     }
-    let answer = client
+    if undelivered {
+        target.push_str("&undelivered=1");
+    }
+    client
         .exchange("GET", &target, b"", Duration::from_secs(wait.unwrap_or(0)))?
-        .accepted()?;
-    Ok(view_done(&answer))
+        .accepted()
 }
 
 /// `inbox outbox`: the caller's `Outbox` view, every live message it sent, and, as `unreadable`,
@@ -518,7 +553,7 @@ fn holds(answer: &Value) -> bool {
 /// `401`, `413`, a refusal of the model.
 fn unsent(outcome: &Result<Value, Failure>) -> bool {
     match outcome {
-        Err(Failure::Transport(_)) => true,
+        Err(Failure::Transport(_) | Failure::Certificate(_) | Failure::Unexpected { .. }) => true,
         Err(Failure::Refused { name, answer, .. }) if declared_error(answer).is_some() => {
             name == UNKNOWN_INBOX
         }
@@ -970,6 +1005,21 @@ pub struct Reconnected {
     /// The JSON document of the member `reconnected`: the new start's `epoch`, and `open` and
     /// `repost` for the steps that ran, each the document the typed command would print.
     pub document: String,
+    /// What the open of the reconnect came to, when one ran.
+    pub open: Option<Reopen>,
+}
+
+/// What the open of a reconnect came to.
+#[derive(Debug)]
+pub enum Reopen {
+    /// The caller's inbox is open at the service: the open succeeded (its own, or the second one
+    /// after a close meanwhile), or another command of the owner opened it meanwhile.
+    Opened,
+    /// An `inbox close` of the owner took the record meanwhile, and no `inbox open` wrote one
+    /// again: the reconnect closed the inbox again and did not open it.
+    Closed,
+    /// The open failed (the first one, or the second after a close meanwhile).
+    Failed(Failure),
 }
 
 /// The reconnect after a client command (`typed`): when the answer to the command's last request
@@ -1007,6 +1057,7 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
     let mut said = Vec::new();
     let mut failed = false;
     let mut gone = false;
+    let mut reopen = None;
     if let Some(from) = open {
         let inbox = client.own_inbox().0;
         let adapter = &from.adapter;
@@ -1017,12 +1068,16 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
                     "opened {inbox} again with the adapter {adapter} ({})",
                     first_word(&done.text)
                 ));
+                reopen = Some(Reopen::Opened);
                 parsed(&done.document)
             }
             Ok((done, Recorded::Gone)) => {
-                closed_meanwhile(client, parsed(&done.document), &mut said)
+                let (shown, came) = closed_meanwhile(client, parsed(&done.document), &mut said);
+                reopen = Some(came);
+                shown
             }
             Ok((done, Recorded::Other)) => {
+                reopen = Some(Reopen::Opened);
                 said.push(format!(
                     "{inbox} was opened by another command meanwhile: its record is left as it is"
                 ));
@@ -1036,7 +1091,10 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
             }
             Err(failure) => {
                 failed = true;
-                gone = matches!(failure, Failure::Transport(_));
+                gone = matches!(
+                    failure,
+                    Failure::Transport(_) | Failure::Certificate(_) | Failure::Unexpected { .. }
+                );
                 said.push(format!(
                     "the open of {inbox} again failed: {}",
                     failure.message()
@@ -1045,6 +1103,9 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
             }
         };
         members.push(("open".to_owned(), shown));
+        if let Err(failure) = step {
+            reopen = Some(Reopen::Failed(failure));
+        }
     }
     if repost && !gone {
         let (shown, line) = match repost_at(client, Some(current.clone()), posted.as_deref()) {
@@ -1087,6 +1148,7 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
             said.join("; ")
         ),
         document: document(&Value::Object(members)),
+        open: reopen,
     })
 }
 
@@ -1099,7 +1161,10 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
 /// second open, or the document of its failure) when it was sent; pushes the step's part of the
 /// reconnect's line to `said`. A failure of the close is one line on standard error, a failure of
 /// the second open a part of the reconnect's line; neither changes the exit status.
-fn closed_meanwhile(client: &Client, opened: Value, said: &mut Vec<String>) -> Value {
+///
+/// Answers also what the open came to: [`Reopen::Closed`] when no record was written again, else
+/// what that second open came to.
+fn closed_meanwhile(client: &Client, opened: Value, said: &mut Vec<String>) -> (Value, Reopen) {
     let input = CloseInbox {
         address: client.own_inbox(),
     };
@@ -1126,18 +1191,21 @@ fn closed_meanwhile(client: &Client, opened: Value, said: &mut Vec<String>) -> V
         ("closed".to_owned(), closed),
     ];
     let inbox = &input.address.0;
-    match client.outbox.opened(inbox) {
-        None => said.push(format!("{inbox} was closed meanwhile: not opened again")),
+    let came = match client.outbox.opened(inbox) {
+        None => {
+            said.push(format!("{inbox} was closed meanwhile: not opened again"));
+            Reopen::Closed
+        }
         Some(record) => {
             let adapter = &record.adapter;
-            let reopened = match sent_open(client, adapter) {
+            let (reopened, came) = match sent_open(client, adapter) {
                 Ok((done, _)) => {
                     said.push(format!(
                         "{inbox} was closed meanwhile, then opened by another command: opened it \
                          again with the adapter {adapter} ({})",
                         first_word(&done.text)
                     ));
-                    parsed(&done.document)
+                    (parsed(&done.document), Reopen::Opened)
                 }
                 Err(failure) => {
                     said.push(format!(
@@ -1145,13 +1213,14 @@ fn closed_meanwhile(client: &Client, opened: Value, said: &mut Vec<String>) -> V
                          again with the adapter {adapter} failed: {}",
                         failure.message()
                     ));
-                    parsed(&failure.document())
+                    (parsed(&failure.document()), Reopen::Failed(failure))
                 }
             };
             members.push(("reopened".to_owned(), reopened));
+            came
         }
-    }
-    Value::Object(members)
+    };
+    (Value::Object(members), came)
 }
 
 /// The first word of `text`: the outcome a command's text starts with.

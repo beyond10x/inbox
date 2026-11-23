@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 6 (a start that changes between the 2 reads of a round holds the wake up to 60 s on a start where the inbox is not open): a request with undelivered=1 is answered 409 at once while the caller's own inbox is not open, and the wake runs the reconnect and reads again; adversary_wake::a_restart_between_the_two_reads_of_a_round_still_opens_the_inbox_again_first",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-1",
+    "outcome": "fixed"
+  }
+}

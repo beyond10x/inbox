@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 5 (mutant: passing() moved to 501 or to 499): adversary_wake_2::a_500_is_tried_again_and_a_499_ends_the_wake_with_3 holds both ends; both mutants are red against it in round 4",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}

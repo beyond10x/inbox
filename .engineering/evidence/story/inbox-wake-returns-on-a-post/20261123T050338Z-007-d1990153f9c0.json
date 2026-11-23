@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 8 (mutant: the reset of failures after an answer dropped): adversary_wake::each_run_of_failures_after_an_answer_is_said_again holds it; the mutant is red against it in round 3",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-1",
+    "outcome": "fixed"
+  }
+}

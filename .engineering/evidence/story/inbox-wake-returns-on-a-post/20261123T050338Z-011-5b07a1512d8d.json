@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T05:03:38Z",
+  "actor": "agent:inbox",
+  "artifact": "story:inbox-wake-returns-on-a-post",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 12 (an inherited SIG_IGN of SIGINT is overridden): kept as built and documented; a wake adapter starts the wake from a script, and a wake that cannot be stopped is the worse failure; the story's Decisions say so",
+    "review": "review-result:adversary-inbox-wake-returns-on-a-post-pass-1",
+    "outcome": "no-op"
+  }
+}

@@ -612,6 +612,46 @@
     },
     {
       "path": [
+        "wake"
+      ],
+      "about": "Wait until the caller's own inbox has a message not yet delivered and not past its `expires`, for a wake adapter: print those rows of `pending` (with --json one document of them), then mark each delivered, and exit 0, or with the status of the first mark that failed. A message already delivered and not yet read neither ends the wait nor is printed: `pending` lists it. The wait is asked again when the service ends it without such a row (after a pause that grows to 30 s when that answer came within a second), after a restart of the service (the reconnect of every client command opens the inbox again), and, after a pause that grows to 30 s, while the service cannot be reached or answers 408 or a status from 500 on (also to the open after a restart). An inbox that is not open at the service ends it with 1 when this host has no record of an `inbox open` of it (also after `inbox close`), when the service refuses to open it again, or when it is still not open right after an open; an answer that is neither a success nor a refusal ends it with 3. A standard output that is closed or /dev/null ends it with 4 before any request; one it cannot write, with 4 and no mark. A second wake of the same inbox with the same outbox file on this host exits 5 and sends nothing. SIGINT and SIGTERM end it at once with nothing printed",
+      "arguments": [
+        {
+          "name": "url",
+          "kind": "option",
+          "long": "url",
+          "valueName": "URL",
+          "env": "INBOX_URL",
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
+        },
+        {
+          "name": "secret_key_file",
+          "kind": "option",
+          "long": "secret-key-file",
+          "valueName": "SECRET_KEY_FILE",
+          "env": "INBOX_SECRET_KEY_FILE",
+          "help": "The file of the caller's secret key (`inbox key new --key-id … --principal …`); it names the key id and the principal, which is also the address of the caller's inbox"
+        },
+        {
+          "name": "outbox",
+          "kind": "option",
+          "long": "outbox",
+          "valueName": "OUTBOX",
+          "env": "INBOX_OUTBOX",
+          "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        }
+      ]
+    },
+    {
+      "path": [
         "read"
       ],
       "about": "Mark a message read: a note is handled and removed, a request or decision waits for its answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1; the expiry task removes it or decides it on silence",
@@ -1073,6 +1113,10 @@
     {
       "code": 4,
       "meaning": "A local file could not be read, written or created."
+    },
+    {
+      "code": 5,
+      "meaning": "`inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent."
     }
   ]
 }

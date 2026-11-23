@@ -123,6 +123,7 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 | 2 | Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin with an `http://` URL |
 | 3 | The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal |
 | 4 | A local file could not be read or written |
+| 5 | `inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent |
 
 ## The outbox file
 
@@ -160,3 +161,54 @@ the kept envelopes that the epochs file does not record at that epoch. An envelo
 start has already answered is left alone and not listed, so a second `repost` in the same start
 posts nothing. A note its recipient read before the restart is delivered once more by the first
 repost after it, typed or not ([limits](limits.md)).
+
+## Wake a session
+
+`inbox wake` waits until your own inbox has a message not yet delivered and not past its
+`expires`, prints what `inbox pending` prints of those messages (`--json`: one document), marks
+each delivered, and exits 0:
+
+```sh
+inbox open
+inbox wake
+```
+
+Your inbox must be open at the service. `inbox wake` of an inbox that is not open there, and that
+no `inbox open` on this host opened, ends at once with 1 and one line that says to run
+`inbox open`; so does `inbox close` while a wake waits, and the wake does not open the inbox
+again. It also ends with 1 and such a line when the service refuses to open your inbox again
+after a restart, or when your inbox is still not open right after it was opened again.
+
+It keeps waiting when the service ends a wait without a message, after a restart of the service
+(it opens your inbox again first, as every command does), and while the service cannot be
+reached or answers 408 or a status from 500 on, also when that happens to the open after a
+restart: it tries again after a pause that grows to 30 s. An answer that is neither a success
+nor a refusal of the service (a redirect, a 404 page of another program on the URL, with or
+without a `Content-Length`) ends it with 3, and so does a TLS certificate that does not match the
+pin. The messages are printed before they are marked delivered; when a mark fails, the messages
+are still printed, one line on standard error names the failure, and it exits with its status
+(1 or 3). When its standard output is `/dev/null` or was closed, it exits 4 at once, before it
+sends anything. When it cannot write its standard output (the reader is gone, or it is open only
+for reading), it marks nothing and exits 4. A second `inbox wake` of the same inbox with the same
+outbox file on the same host exits 5 and sends nothing. Ctrl-C or SIGTERM ends it at once, with
+nothing printed, also when it was started with them ignored.
+
+A delivered message stays in `inbox pending` until it is read (`inbox read <message id>` takes it
+out), but it does not wake again: an `inbox wake` started again neither returns on it nor prints
+it, and waits for the next message. A message past its `expires` does not wake it either. A
+service that ends every wait at once does not make `inbox wake` spin: after an answer that came
+back within a second without a new message, it pauses, the pause growing to 30 s.
+
+An adapter runs `inbox wake` for a session and resumes the session when it exits.
+
+### claude_code
+
+Not available yet.
+
+### metaharness
+
+Not available yet.
+
+### terminal
+
+Not available yet.

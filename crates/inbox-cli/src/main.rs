@@ -3,7 +3,8 @@
 //!
 //! Exit statuses: 0 done; 1 the service refused (the model's error name for a declared refusal,
 //! the service's own `refused` text otherwise); 2 wrong usage; 3 transport failure; 4 a local
-//! file that cannot be read, written or created.
+//! file that cannot be read, written or created; 5 (`inbox wake` only) another wake of the same
+//! inbox with the same outbox file runs on this host.
 
 #![forbid(unsafe_code)]
 
@@ -19,6 +20,7 @@ mod output;
 #[cfg(test)]
 mod reference;
 mod serve;
+mod wake;
 
 use std::ffi::{OsStr, OsString};
 use std::net::SocketAddr;
@@ -95,6 +97,26 @@ enum Command {
         /// The longest wait in seconds; the service cuts it to its own --max-wait.
         #[arg(long, default_value_t = 60)]
         seconds: u64,
+    },
+    /// Wait until the caller's own inbox has a message not yet delivered and not past its
+    /// `expires`, for a wake adapter: print those rows of `pending` (with --json one document of
+    /// them), then mark each delivered, and exit 0, or with the status of the first mark that
+    /// failed. A message already delivered and not yet read neither ends the wait nor is printed:
+    /// `pending` lists it. The wait is asked again when the service ends it without such a row
+    /// (after a pause that grows to 30 s when that answer came within a second), after a restart
+    /// of the service (the reconnect of every client command opens the inbox again), and, after a
+    /// pause that grows to 30 s, while the service cannot be reached or answers 408 or a status
+    /// from 500 on (also to the open after a restart). An inbox that is not open at the service
+    /// ends it with 1 when this host has no record of an `inbox open` of it (also after `inbox
+    /// close`), when the service refuses to open it again, or when it is still not open right
+    /// after an open; an answer that is neither a success nor a refusal ends it with 3. A
+    /// standard output that is closed or /dev/null ends it with 4 before any request; one it
+    /// cannot write, with 4 and no mark. A second wake of the same inbox with the same outbox file
+    /// on this host exits 5 and sends nothing. SIGINT and SIGTERM end it at once with nothing
+    /// printed.
+    Wake {
+        #[command(flatten)]
+        client: ClientArgs,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
     /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
@@ -435,6 +457,7 @@ fn run(command: Command, json: bool) -> Ran {
         Command::Serve(_) | Command::Key(_) | Command::Keyfile(_) | Command::Tls(_) => {
             return (local(command, json), None);
         }
+        Command::Wake { .. } => unreachable!("main runs inbox wake itself"),
     };
     // The body is read before the client is made, as before the reconnect.
     let body = match &command {
@@ -496,7 +519,11 @@ fn client_command(command: &Command, body: String, client: &Client) -> Result<Do
         Command::Thread { thread, .. } => commands::thread(client, "thread", thread),
         Command::Replies { thread, .. } => commands::thread(client, "replies", thread),
         Command::Repost { .. } => commands::repost(client),
-        Command::Serve(_) | Command::Key(_) | Command::Keyfile(_) | Command::Tls(_) => {
+        Command::Serve(_)
+        | Command::Key(_)
+        | Command::Keyfile(_)
+        | Command::Tls(_)
+        | Command::Wake { .. } => {
             unreachable!("run sends only a client command here")
         }
     }
@@ -576,7 +603,8 @@ fn local(command: Command, json: bool) -> Result<Option<Done>, Failure> {
         | Command::Collect { .. }
         | Command::Thread { .. }
         | Command::Replies { .. }
-        | Command::Repost { .. } => unreachable!("run sends a client command to client_command"),
+        | Command::Repost { .. }
+        | Command::Wake { .. } => unreachable!("run sends a client command to client_command"),
     };
     Ok(Some(done))
 }
@@ -736,6 +764,15 @@ fn main() {
         }
     };
     let json = cli.json;
+    // `inbox wake` writes its own output: the rows before the marks, and the reconnects as they
+    // run.
+    if let Command::Wake { client } = &cli.command {
+        let status = match client.client() {
+            Ok(client) => wake::run(&client, json),
+            Err(failure) => wake::report(&failure, json),
+        };
+        std::process::exit(status);
+    }
     let (result, after) = run(cli.command, json);
     // Text: the command's own lines are written before the reconnect starts. `--json`: the one
     // document waits for the reconnect, whose member `reconnected` it carries.
@@ -846,6 +883,7 @@ mod tests {
                 "post",
                 "pending",
                 "wait",
+                "wake",
                 "read",
                 "answer",
                 "refuse",
@@ -865,6 +903,7 @@ mod tests {
             "\"kind\": \"switch\"",
             "\"name\": \"BodyArgs\"",
             "\"code\": 4",
+            "\"code\": 5",
         ] {
             assert!(text.contains(expected), "the document lacks {expected}");
         }

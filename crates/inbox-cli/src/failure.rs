@@ -15,6 +15,9 @@ pub const USAGE: i32 = 2;
 pub const TRANSPORT: i32 = 3;
 /// The exit status of a local failure: a file that cannot be read, written or created.
 pub const LOCAL: i32 = 4;
+/// The exit status of an `inbox wake` that found another wake of the same inbox with the same
+/// outbox file running on this host: it sent nothing.
+pub const ANOTHER_WAKE: i32 = 5;
 
 /// Why a command failed.
 #[derive(Debug)]
@@ -40,10 +43,33 @@ pub enum Failure {
     },
     /// A flag or a value the command does not take.
     Usage(String),
-    /// The service could not be reached, or its answer could not be read.
+    /// The service could not be reached, or its answer could not be read whole (no answer, or one
+    /// cut before the end its head names).
     Transport(String),
+    /// A whole answer that is neither a success nor a refusal of the service (a `3xx`, an error
+    /// without a `refused` text, a body that is not JSON). Said and exited as
+    /// [`Failure::Transport`]; apart from it so that `inbox wake` tries again only what its
+    /// status says may pass (`408`, from `500` on).
+    Unexpected {
+        /// The status of the answer.
+        status: u16,
+        /// What it was.
+        detail: String,
+    },
+    /// The TLS handshake was refused by the client: the service's certificate is not the one the
+    /// pin names, or the peer speaks no TLS. Said and exited as [`Failure::Transport`]; apart
+    /// from it so that `inbox wake` does not try again against such a service.
+    Certificate(String),
     /// A local file could not be read, written or created.
     Local(String),
+    /// `inbox wake`: another wake of the caller's inbox with the same outbox file runs on this
+    /// host.
+    AnotherWake(String),
+    /// `inbox wake`: the service answered that the caller's inbox is not open, and the wake does
+    /// not open it: this host has no record of an `inbox open` of it (never opened here, or closed
+    /// by `inbox close`), the service refused the reconnect's open, or it is still not open right
+    /// after an open that succeeded. Exits as a refusal.
+    NotOpen(String),
     /// The command did its work at the service, and what it took from there is printed, but a
     /// step after it failed: `done` is printed, then `cause` is reported and decides the exit.
     After {
@@ -58,10 +84,11 @@ impl Failure {
     /// The exit status.
     pub fn status(&self) -> i32 {
         match self {
-            Self::Refused { .. } | Self::Unreadable { .. } => REFUSED,
+            Self::Refused { .. } | Self::Unreadable { .. } | Self::NotOpen(_) => REFUSED,
             Self::Usage(_) => USAGE,
-            Self::Transport(_) => TRANSPORT,
+            Self::Transport(_) | Self::Certificate(_) | Self::Unexpected { .. } => TRANSPORT,
             Self::Local(_) => LOCAL,
+            Self::AnotherWake(_) => ANOTHER_WAKE,
             Self::After { cause, .. } => cause.status(),
         }
     }
@@ -72,8 +99,12 @@ impl Failure {
             Self::Refused { name, status, .. } => format!("refused: {name} ({status})"),
             Self::Unreadable { detail, .. } => format!("unreadable outbox entry: {detail}"),
             Self::Usage(detail) => format!("usage: {detail}"),
-            Self::Transport(detail) => format!("transport: {detail}"),
-            Self::Local(detail) => detail.clone(),
+            Self::Transport(detail)
+            | Self::Certificate(detail)
+            | Self::Unexpected { detail, .. } => format!("transport: {detail}"),
+            Self::Local(detail) | Self::AnotherWake(detail) | Self::NotOpen(detail) => {
+                detail.clone()
+            }
             Self::After { cause, .. } => cause.message(),
         }
     }
@@ -116,13 +147,23 @@ impl Failure {
                 json::member(out, "answer");
                 output::write(answer, out);
             }
-            Self::Usage(detail) | Self::Transport(detail) | Self::Local(detail) => {
+            Self::Usage(detail)
+            | Self::Transport(detail)
+            | Self::Certificate(detail)
+            | Self::Unexpected { detail, .. }
+            | Self::Local(detail)
+            | Self::AnotherWake(detail)
+            | Self::NotOpen(detail) => {
                 json::member(out, "error");
                 json::push_text(
                     out,
                     match self {
                         Self::Usage(_) => "usage",
-                        Self::Transport(_) => "transport",
+                        Self::Transport(_) | Self::Certificate(_) | Self::Unexpected { .. } => {
+                            "transport"
+                        }
+                        Self::AnotherWake(_) => "another wake",
+                        Self::NotOpen(_) => "inbox not open",
                         _ => "local",
                     },
                 );

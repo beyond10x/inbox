@@ -290,6 +290,31 @@ answers that read, what `pending` lists then, not the read it slept on. The wait
 `{"refused": "wait is not a whole number of seconds"}`. `wait` on another view is ignored, as the
 generated reader ignores any key a view does not declare.
 
+`&undelivered=1` (`inbox wake` sends it, `inbox wait` and `inbox pending` do not) changes three
+things of a read of `Pending`, with a `wait`, with `wait=0` and without a `wait` (which is then a
+wait of no time):
+
+- The answer holds only the rows that can end the wait: the caller's rows in `Sent` that are not
+  due at the clock reading after the view was read. Rows in `Delivered` and due rows are left
+  out; the other members of the view are as they were. So only such a row ends the wait: a row in
+  `Delivered` sleeps as a due one does, and a `MarkDelivered`, an answered command, wakes the
+  wait, which reads its view again and sleeps on when no such row is left. A wait that ends at its
+  bound or at the stop answers its last read cut the same way (an empty `rows` when none is left).
+- The read is never held for a caller whose own inbox is not open at the service: before each
+  read of the view, the one at the bound included, the service looks the caller's inbox up, and
+  while it is not stored or not `Open` the answer is `409` `{"refused": "inbox not open"}` at
+  once. A close is an answered command, so it wakes a held read, which then gets that answer. A
+  new start of the service holds no inbox, so the first read of a wake there is answered so at
+  once, with the new start's `Inbox-Epoch`, and the client's reconnect can open the inbox again
+  before it waits (`docs/design/wake.md`).
+- Nothing else: the bound, the stop and the epoch are those of a wait without it.
+
+Without the parameter every answer is byte for byte as before it existed. A value other than `1`
+(`0`, `true`, an empty one) is `400` `{"refused": "undelivered is not 1"}`, also without `wait`;
+the key given twice is `400` as `wait` given twice is. It is part of the request's target, so it
+is signed as every other part of the query is. The refusal is the listener's own, as `400`, `408`
+and `413` are; it is no outcome of the model, so no generated route changes.
+
 The waiting request does not hold the backend's section: it reads the view inside the section,
 leaves it, and sleeps until a command has been answered on another connection, then reads again.
 Each connection has its own thread, so a waiting request does not hold another request; it holds
