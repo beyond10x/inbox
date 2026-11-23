@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:14:05Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-tls-terminate-test-holds-on-a-loaded-host",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (the Scope says no change of the listener while the diff adds the seam terminate_on, and the permission is recorded nowhere): the Scope names the seam and the Decisions record who allowed it, the 3 options and why",
+    "review": "review-result:adversary-tls-terminate-test-pass-1",
+    "outcome": "fixed"
+  }
+}

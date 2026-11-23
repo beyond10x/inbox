@@ -526,6 +526,16 @@ pub(crate) fn terminate(
     outer: TcpStream,
     serve: impl FnOnce(TcpStream),
 ) {
+    terminate_on(config, outer, pair, serve);
+}
+
+/// [`terminate`] on the socket pair `pair` makes.
+fn terminate_on(
+    config: &Arc<ServerConfig>,
+    outer: TcpStream,
+    pair: impl FnOnce() -> io::Result<(TcpStream, TcpStream)>,
+    serve: impl FnOnce(TcpStream),
+) {
     let Ok(connection) = ServerConnection::new(Arc::clone(config)) else {
         return;
     };
@@ -660,11 +670,12 @@ fn outbound(connection: &Mutex<ServerConnection>, mut inner: TcpStream, mut oute
 
 #[cfg(test)]
 mod tests {
-    use super::{Identity, Pin, client_config, connect, der, pair_on, terminate};
+    use super::{
+        Identity, Pin, client_config, connect, der, pair, pair_on, terminate, terminate_on,
+    };
     use std::io::{ErrorKind, Read, Write};
     use std::net::{Ipv4Addr, Shutdown, TcpListener, TcpStream};
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, mpsc};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
 
@@ -718,11 +729,18 @@ mod tests {
     /// The wait that only ends a hang.
     const HANG: Duration = Duration::from_secs(20);
 
-    /// A caller over TLS of `terminate` running `serve` on a thread of its own, its handshake
-    /// done; beside it a clone of its socket, and what says `terminate` has returned.
+    /// A caller over TLS of `terminate_on` running `serve` on the socket pair `given`, on a thread
+    /// of its own, its handshake done; beside it a clone of its socket, a clone of the socket
+    /// `terminate_on` reads it from, and what says `terminate_on` has returned.
     fn caller_of(
+        given: (TcpStream, TcpStream),
         serve: impl FnOnce(TcpStream) + Send + 'static,
-    ) -> (super::ClientStream, TcpStream, mpsc::Receiver<()>) {
+    ) -> (
+        super::ClientStream,
+        TcpStream,
+        TcpStream,
+        mpsc::Receiver<()>,
+    ) {
         let identity = Identity::generate().unwrap();
         let server = identity.server_config().unwrap();
         let client = client_config(identity.pin().clone()).unwrap();
@@ -732,42 +750,83 @@ mod tests {
         caller.set_write_timeout(Some(HANG)).unwrap();
         let raw = caller.try_clone().unwrap();
         let (outer, _) = listener.accept().unwrap();
+        let seen = outer.try_clone().unwrap();
         let (ended, terminate_returned) = mpsc::channel();
         thread::spawn(move || {
-            terminate(&server, outer, serve);
+            terminate_on(&server, outer, move || Ok(given), serve);
             let _ = ended.send(());
         });
-        (connect(&client, caller).unwrap(), raw, terminate_returned)
+        (
+            connect(&client, caller).unwrap(),
+            raw,
+            seen,
+            terminate_returned,
+        )
     }
 
-    /// Writes to `stream` on a thread of its own until a write fails, and returns once the
-    /// writes have stopped moving for 500 ms: every buffer on the way into the service is full,
-    /// and the thread that reads the caller is held writing into the pair, which the service
-    /// does not read. The thread ends when the caller's socket is shut or fails.
-    fn fill_the_way_in(mut stream: super::ClientStream) -> thread::JoinHandle<()> {
-        let sent = Arc::new(AtomicUsize::new(0));
-        let writer = {
-            let sent = Arc::clone(&sent);
-            thread::spawn(move || {
-                let chunk = vec![b'f'; 65_536];
-                while stream.write_all(&chunk).is_ok() {
-                    sent.fetch_add(chunk.len(), Ordering::SeqCst);
-                }
-            })
-        };
-        let (mut last, mut still, mut polls) = (0, 0, 0);
-        while still < 10 {
-            polls += 1;
-            assert!(polls < 400, "the way in never filled");
-            thread::sleep(Duration::from_millis(50));
-            let now = sent.load(Ordering::SeqCst);
-            if now == last && now > 0 {
-                still += 1;
-            } else {
-                (last, still) = (now, 0);
+    /// Writes to `into`, whose socket is set to non-blocking, until a write would block. The
+    /// bound of 1 GiB only ends a hang.
+    fn until_a_write_would_block(into: &mut impl Write) {
+        let chunk = vec![b'f'; 65_536];
+        for _ in 0..16_384 {
+            match into.write(&chunk) {
+                Ok(_) => {}
+                Err(error) if error.kind() == ErrorKind::WouldBlock => return,
+                Err(error) => panic!("a write failed before one would block: {error}"),
             }
         }
-        writer
+        panic!("no write would block after 1 GiB");
+    }
+
+    /// Writes to `into`, blocking, on a thread of its own until a write fails.
+    fn keep_writing(mut into: impl Write + Send + 'static) -> thread::JoinHandle<()> {
+        thread::spawn(move || {
+            let chunk = vec![b'f'; 65_536];
+            while into.write_all(&chunk).is_ok() {}
+        })
+    }
+
+    /// A caller over TLS of `terminate_on` on a socket pair of the case's own, whose way in is
+    /// full when `serve` starts: the thread that reads the caller cannot end on its own, as
+    /// `outer` holds records for it and the pair, which the service has not read, has no room
+    /// for their plain bytes. Returns a clone of the caller's socket, the writer that goes on
+    /// writing to the caller (it ends when that socket is shut) and the one that goes on writing
+    /// into the pair (it ends when the pair is closed or shut), and what says `terminate_on` has
+    /// returned.
+    fn the_way_in_full(
+        serve: impl FnOnce(TcpStream) + Send + 'static,
+    ) -> (TcpStream, [thread::JoinHandle<()>; 2], mpsc::Receiver<()>) {
+        // A non-blocking write to the pair's `inner` end would block: the pair is full before
+        // `terminate_on` starts, and the service never reads it. The residual: such a write can
+        // also block while the window of `plain` is still open, with bytes in flight; a writer
+        // that goes on takes any room that is left.
+        let (plain, inner) = pair().unwrap();
+        let mut probe = inner.try_clone().unwrap();
+        probe.set_nonblocking(true).unwrap();
+        until_a_write_would_block(&mut probe);
+        probe.set_nonblocking(false).unwrap();
+        let filler = keep_writing(probe);
+        let (full, filled) = mpsc::channel::<()>();
+        let (mut stream, raw, outer, terminate_returned) =
+            caller_of((plain, inner), move |plain| {
+                let _ = filled.recv_timeout(HANG);
+                serve(plain);
+            });
+        // A non-blocking write of the caller would block, and then a peek at `outer` returns a
+        // byte: `outer` holds records the thread that reads the caller has not read, the would-
+        // block alone also comes with the records still in flight. The thread reads them also
+        // after `outer` is shut for reading, and is then held writing their plain bytes into the
+        // full pair; a writer that goes on keeps `outer` fed.
+        raw.set_nonblocking(true).unwrap();
+        until_a_write_would_block(&mut stream);
+        raw.set_nonblocking(false).unwrap();
+        let writer = keep_writing(stream);
+        outer.set_read_timeout(Some(HANG)).unwrap();
+        let held_records = outer.peek(&mut [0_u8; 1]).expect("outer holds records");
+        outer.set_read_timeout(None).unwrap();
+        assert_eq!(held_records, 1, "outer ended before it held a record");
+        full.send(()).unwrap();
+        (raw, [writer, filler], terminate_returned)
     }
 
     /// The thread that reads the caller can outlive `serve`: held writing into the pair, it ends
@@ -775,17 +834,19 @@ mod tests {
     /// `max_connections`, waits for it.
     #[test]
     fn terminate_returns_only_when_the_thread_that_reads_the_caller_has_ended() {
-        let (full, filled) = mpsc::channel::<()>();
         let (handed, held) = mpsc::channel();
-        let (stream, raw, terminate_returned) = caller_of(move |plain| {
-            let _ = filled.recv_timeout(HANG);
+        let (mut raw, writers, terminate_returned) = the_way_in_full(move |plain| {
             // The answer is whole; the service's end stays open, unread, beyond `serve`.
             let _ = plain.shutdown(Shutdown::Write);
             let _ = handed.send(plain);
         });
-        let writer = fill_the_way_in(stream);
-        full.send(()).unwrap();
         let plain: TcpStream = held.recv_timeout(HANG).expect("serve returns");
+        // The end of the answer: the thread that writes it has shut `outer` for writing.
+        let mut answer = Vec::new();
+        raw.read_to_end(&mut answer).expect("the answer ends");
+        // 300 ms: past the end of the answer a `terminate` that does not wait for the thread that
+        // reads the caller has only a join, a shutdown and its return left. A slow host can only
+        // make the window miss that, never turn it red against a `terminate` that waits.
         assert!(
             terminate_returned
                 .recv_timeout(Duration::from_millis(300))
@@ -797,7 +858,9 @@ mod tests {
             .recv_timeout(HANG)
             .expect("terminate returns once the service's end is closed");
         let _ = raw.shutdown(Shutdown::Both);
-        writer.join().unwrap();
+        for writer in writers {
+            writer.join().unwrap();
+        }
     }
 
     /// When the caller is gone in the middle of an answer, the service's next write to its end of
@@ -806,16 +869,12 @@ mod tests {
     #[test]
     fn a_caller_gone_in_the_middle_of_an_answer_fails_the_services_next_write() {
         let (failed_with, failure) = mpsc::channel();
-        let (full, filled) = mpsc::channel::<()>();
-        let (stream, raw, terminate_returned) = caller_of(move |mut plain| {
+        let (raw, [writer, filler], terminate_returned) = the_way_in_full(move |mut plain| {
             // Longer than the test waits for the failure: a write that waits it out is red.
             plain.set_write_timeout(Some(HANG + HANG)).unwrap();
-            // The answer starts after the first byte of the request, as a service's does, and
-            // once the way in is full: the thread that reads the caller is then held writing
-            // into the pair, not waiting for the lock the thread that writes the answer holds.
-            let mut first = [0_u8; 1];
-            let _ = plain.read_exact(&mut first);
-            let _ = filled.recv_timeout(HANG);
+            // The answer starts once the way in is full: the thread that reads the caller is
+            // alive and keeps the pair open, so only the thread that writes the answer can make
+            // the service's write fail.
             let chunk = vec![b'a'; 65_536];
             let kind = loop {
                 if let Err(error) = plain.write_all(&chunk) {
@@ -824,8 +883,6 @@ mod tests {
             };
             let _ = failed_with.send(kind);
         });
-        let writer = fill_the_way_in(stream);
-        full.send(()).unwrap();
         // The caller goes, its answer unread: closing its socket resets the connection.
         raw.shutdown(Shutdown::Both).unwrap();
         writer.join().unwrap();
@@ -840,6 +897,7 @@ mod tests {
         terminate_returned
             .recv_timeout(HANG)
             .expect("terminate returns");
+        filler.join().unwrap();
     }
 
     #[test]

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T09:22:37Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-tls-terminate-test-holds-on-a-loaded-host",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

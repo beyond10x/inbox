@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:14:05Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-tls-terminate-test-holds-on-a-loaded-host",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a join of the reading thread that gives up after 1 s survives 20 of 20 runs): judged INFEASIBLE by the adversary and older than this story; the case keeps the thread alive about 300 ms after the answer, no form without a window exists, and the listener has no such join; written under Decisions",
+    "review": "review-result:adversary-tls-terminate-test-pass-1",
+    "outcome": "no-op"
+  }
+}
