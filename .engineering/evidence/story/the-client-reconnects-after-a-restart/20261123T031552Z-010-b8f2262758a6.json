@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 3 (a post killed on its way is never posted again): the mark none is written with keep, under the lock, before the request; adversary_reconnect_2::a_post_killed_on_its_way_is_posted_again_by_a_later_command_after_a_restart",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-2",
+    "outcome": "fixed"
+  }
+}

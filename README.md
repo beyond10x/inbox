@@ -170,8 +170,10 @@ own (`400`, `401`, `408`, `413`, `503`) keeps it. Every answer of the service ca
 `Inbox-Epoch`, which changes with each start, and `inbox post` records it in `<outbox>.epochs`
 beside the outbox file. `inbox repost` is for after the service was restarted: it posts again
 the kept envelopes that the current start of the service did not answer, and leaves alone those
-it did. A note its recipient read before the restart is delivered once more by the first
-`repost` after it.
+it did. A client command that meets a new start does both by itself after its own request: it
+opens the caller's inbox again with the adapter of the last `inbox open` (kept in
+`<outbox>.opened`) and posts the kept envelopes again. A note its recipient read before the
+restart is delivered once more by the first repost after it.
 
 ## Check
 

@@ -44,9 +44,14 @@ record out.
 
 - **Loopback only.**
 - **No second host and no wake-up** of an idle session.
-- **One backend, in memory.** A restart of the service loses every message. The sender posts
-  again with `inbox repost`; dedup by `message_id` and `dedup_key` makes the repost arrive
-  once.
+- **One backend, in memory.** A restart of the service loses every message and every open
+  inbox. The next command of the owner opens its inbox again, and the next command of the
+  sender posts its kept envelopes again, by themselves; dedup by `message_id` and `dedup_key`
+  makes the repost arrive once. The inbox is opened again only when `inbox open` ran on this
+  host with this version or later; after an upgrade, run `inbox open` once. An envelope kept by
+  a version before this one is not posted again by itself; a typed `inbox repost` posts it.
+  More than one typed `inbox open` or `inbox close` of the owner while a reconnect runs can
+  leave the record and the service apart until the next typed `inbox open` or `inbox close`.
 - **Nothing is deployed**, and no release attaches a binary ([releases](releases.md)).
 - One request per connection: no keep-alive and no pipelining.
 - The key file is not reloaded while the service runs.
@@ -55,7 +60,9 @@ record out.
 
 A note stays in its sender's outbox file until it expires, 24 hours by default. `repost`
 leaves alone an envelope the current start of the service already took
-([first use](first-use.md#the-outbox-file)). A note is delivered a second time in 3 cases:
+([first use](first-use.md#the-outbox-file)). After a restart the repost happens by itself, on
+the sender's next command, and what follows holds for it as for a typed `inbox repost`. A note
+is delivered a second time in 3 cases:
 
 - The first `repost` after a restart of the service posts every kept envelope. The service
   keeps no record of a handled note, so a note its recipient read before the restart is posted

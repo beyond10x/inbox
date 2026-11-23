@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 1 (a kept request with no recorded epoch is never posted again by itself): a post that failed in transport or was refused UnknownInbox is marked none in the epochs file and posted again by the next command; the adversary's cases 1 and 2 pass as written; reconnect::the_reconnect_of_a_typed_post_does_not_post_its_own_envelope_again counts 2 requests",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

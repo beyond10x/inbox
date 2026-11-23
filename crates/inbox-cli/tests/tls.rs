@@ -11,6 +11,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::Duration;
 
+use inbox::server::json::Value;
 use support::{
     BOB, LOCAL, REFUSED, Run, Service, TRANSPORT, USAGE, accept_within, ids, keys_only, run, text,
 };
@@ -114,8 +115,25 @@ fn a_client_with_the_pin_posts_over_tls_and_one_with_another_pin_exits_3() {
     let outcome = text(answer.member("answer").expect("an answer"), "outcome");
     assert_eq!(outcome, "posted", "{posted:#?}");
     let message = text(&answer, "message_id");
+    // The post that never reached the service is kept marked unsent: the reconnect of this
+    // command posts it, over the pinned certificate (story:the-client-reconnects-after-a-restart).
+    let reposted = match answer
+        .member("reconnected")
+        .and_then(|reconnect| reconnect.member("repost"))
+        .and_then(|repost| repost.member("reposted"))
+    {
+        Some(Value::Array(entries)) => entries.clone(),
+        other => panic!("the reconnect reposted {other:?}: {posted:#?}"),
+    };
+    assert_eq!(reposted.len(), 1, "{posted:#?}");
+    assert_eq!(reposted[0].member("arrived"), Some(&Value::Bool(true)));
+    let kept = text(&reposted[0], "message_id");
     let pending = client(&dir.path, &url, Some(&pin), "bob", &["pending", "--json"]).ok();
-    assert_eq!(ids(&pending.json()), [message]);
+    let mut held = ids(&pending.json());
+    held.sort();
+    let mut both = vec![message, kept];
+    both.sort();
+    assert_eq!(held, both);
 }
 
 /// The `413` of a post over `--max-request-bytes` arrives over `https://` as over `http://`: exit

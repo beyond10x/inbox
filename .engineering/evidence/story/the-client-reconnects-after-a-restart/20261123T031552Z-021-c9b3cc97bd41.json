@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 3 finding 6 (duplicate-key in the reconnect clears the mark and records no epoch, unlike the coordinator's first decision): the coordinator took the implementor's rule; recording the epoch breaks the older case that a typed inbox repost posts such an envelope once the key is free; the story's Decisions say so",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-3",
+    "outcome": "no-op"
+  }
+}

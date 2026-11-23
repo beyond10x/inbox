@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 6 (2 document lines disagree with the code): website/docs/first-use.md and CHANGELOG.md say close puts the record back on anything but UnknownInbox; docs/design/service.md says what a failed repost step writes",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-2",
+    "outcome": "fixed"
+  }
+}

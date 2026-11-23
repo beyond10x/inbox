@@ -88,7 +88,55 @@ or at none. An envelope records the epoch of an answer that accepted its post or
 `duplicate` (the message id is stored), right after that answer, so a `repost` ended between two
 posts keeps the epochs of the posts that arrived; `duplicate-key` records none, since the service
 stored nothing of that envelope. When the epochs file cannot be written, `repost` still posts
-every envelope, prints its report and exits 4 with the local failure.
+every envelope, prints its report and exits 4 with the local failure. Every client command
+reads the epoch for a reconnect too: after its own request, when the answer names an epoch
+other than one the client recorded, it opens the caller's own inbox again with the adapter of
+its last `inbox open` (the file `<outbox>.opened` holds it with the epoch of the answer that
+said the inbox is open; `inbox close` removes it before it sends the close and puts it back when
+the close fails in transport or is refused other than `UnknownInbox`), and posts the kept
+envelopes again as `repost` does, at that epoch and without asking for it, when one of them is
+recorded at another epoch or marked unsent (the epochs file holds `<message id>\tnone` for
+it): each envelope not recorded at that epoch once, but the one the command itself posted.
+`inbox post` writes the mark with the envelope, in the same change under the lock, before its
+request is sent; the epochs file is replaced before the outbox file, so a process ended between
+the two leaves a mark of an envelope the outbox file does not keep, which nothing posts and the
+next write drops. The mark goes only when the answer says that this request, sent again
+unchanged, is refused again (`400`, `401`, `413`, a refusal of the model that keeps the
+envelope), or when it records an epoch or drops the envelope. An answer of the listener's own
+that says the request was not taken (`408`, any `5xx`, such as `503` while the service stops)
+counts as a failure in transport, as does `UnknownInbox`: the mark stays, in `inbox post` as in
+the reconnect's repost, and the sender's next command posts the envelope again. A second command of the sender that runs while a post is still on its way posts that
+envelope too; the post on its way is then answered `Duplicate` with the outcome `duplicate`
+for its own message id, which `inbox post` takes as arrived (exit 0). The reconnect's repost
+leaves an envelope in the state a typed post would leave it for the same answer, but that
+`duplicate-key` keeps the envelope without a mark and without an epoch, so no reconnect posts
+it again and a typed `inbox repost` still does once the key is free. An envelope kept by a
+version before this one has no line in the epochs file and starts no reconnect; a typed
+`inbox repost` posts it. When the reconnect's open reaches the service after an `inbox close`
+of the owner took the record, it sends `CloseInbox` again, writes no record, says on standard
+error that the inbox was closed meanwhile, and its `open` member is
+`{"outcome":"closed-meanwhile","opened":…,"closed":…}`; a failure of that close is one line on
+standard error. After that close it reads the record again: when an `inbox open` of the owner
+wrote one meanwhile, it sends `OpenInbox` once with that record's adapter, leaves the record as
+it is, and adds `"reopened":…` to the member. When the reconnect's open finds another record
+than the one it started from (an `inbox open` of the owner after a close, while the open was on
+its way), it leaves that record as it is, sends nothing more, says on standard error that the
+inbox was opened by another command meanwhile, and its `open` member is
+`{"outcome":"opened-meanwhile","opened":…}`; neither is a failed step. More than one typed
+`inbox open` or `inbox close` of the owner while a reconnect runs can leave the record and the
+service apart until the next typed `inbox open` or `inbox close`. A typed `inbox open` and a
+typed `inbox close` that run at once end in the order the service and the outbox lock take
+them, which the owner chose by starting both: the record can stay while the service holds the
+inbox closed, and the reconnect after a restart then opens it again. The answers of these requests start no other reconnect. A step that fails
+leaves the command's output and exit status as they are and is named in one line on standard
+error; it writes only what the same answer to a typed command writes (a repost refused
+`UnknownInbox`, answered `408` or `5xx`, or failed in transport marks an envelope at no epoch
+unsent, one refused for good loses the mark), so the next command tries again. Without `--json` the command's own
+lines are written before the reconnect starts; with `--json` its one document is written once
+the reconnect ended, with the member `reconnected`. A file beside the outbox file that is no
+regular file or is over its bound is read as holding nothing, named in one line on standard
+error, and blocks no command. Two commands that do it at once post a message id twice, and the
+service answers the second `duplicate`.
 
 The value is not made from the `Clock` of `Config` (a clock a test sets does not move between two
 starts) and carries no time and no secret. It is written in the one function that writes the head

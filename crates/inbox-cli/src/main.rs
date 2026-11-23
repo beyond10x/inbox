@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 
 use crate::client::Service;
-use crate::commands::{AnswerInput, Client, PostInput};
+use crate::commands::{AnswerInput, Client, PostInput, Reconnected, Typed};
 use crate::failure::{Failure, USAGE};
 use crate::output::Done;
 
@@ -36,7 +36,9 @@ use crate::output::Done;
 #[derive(Debug, Parser)]
 #[command(name = "inbox", version)]
 struct Cli {
-    /// Print one JSON document on standard output instead of text.
+    /// Print one JSON document on standard output instead of text. After an answer from a new
+    /// start of the service it is printed once the reconnect ended, with the member
+    /// `reconnected`; text is printed before the reconnect starts.
     #[arg(long, global = true)]
     json: bool,
     #[command(subcommand)]
@@ -57,7 +59,9 @@ enum Command {
     /// The certificate `inbox serve` answers with over TLS.
     #[command(subcommand)]
     Tls(TlsCommand),
-    /// Open the caller's own inbox (again after every restart of the service).
+    /// Open the caller's own inbox. The adapter is recorded beside the outbox file: after a
+    /// restart of the service the caller's next command opens the inbox again with it, until
+    /// `inbox close`.
     Open {
         #[command(flatten)]
         client: ClientArgs,
@@ -140,9 +144,10 @@ enum Command {
         thread: String,
     },
     /// Post again, unchanged, every envelope the outbox file keeps for the caller that did not
-    /// arrive at the service's current start: for after a restart of the service. An envelope
-    /// whose post the current start answered (`posted` or `Duplicate`) is left alone; a note its
-    /// recipient read before a restart is delivered once more by the first repost after it.
+    /// arrive at the service's current start. Every client command does this by itself after an
+    /// answer from a new start of the service. An envelope whose post the current start answered
+    /// (`posted` or `Duplicate`) is left alone; a note its recipient read before a restart is
+    /// delivered once more by the first repost after it.
     Repost {
         #[command(flatten)]
         client: ClientArgs,
@@ -171,13 +176,29 @@ struct ClientArgs {
 
 impl ClientArgs {
     fn client(&self) -> Result<Client, Failure> {
-        Ok(Client {
-            service: Service::from_url(self.url.as_deref(), self.tls_pin.as_deref())?,
-            caller: keys::caller(self.secret_key_file.as_deref())?,
-            outbox: outbox::Outbox::locate(self.outbox.as_deref())?,
-        })
+        Ok(Client::new(
+            Service::from_url(self.url.as_deref(), self.tls_pin.as_deref())?,
+            keys::caller(self.secret_key_file.as_deref())?,
+            outbox::Outbox::locate(self.outbox.as_deref())?,
+        ))
+    }
+
+    /// Runs the client command `command` (`typed`), and hands back the client for the reconnect
+    /// its answer calls for ([`commands::reconnect`]), which `main` runs after it printed what it
+    /// can print before it.
+    fn run(&self, typed: Typed, command: impl FnOnce(&Client) -> Result<Done, Failure>) -> Ran {
+        let client = match self.client() {
+            Ok(client) => client,
+            Err(failure) => return (Err(failure), None),
+        };
+        let result = command(&client);
+        (result.map(Some), Some((client, typed)))
     }
 }
+
+/// What a command did, and for a client command the client and the command it ran, for the
+/// reconnect after it.
+type Ran = (Result<Option<Done>, Failure>, Option<(Client, Typed)>);
 
 #[derive(Debug, Args)]
 struct ServeArgs {
@@ -395,7 +416,94 @@ struct AnswerArgs {
     expires: Option<String>,
 }
 
-fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
+/// Runs `command`; a client command also runs the reconnect after it.
+fn run(command: Command, json: bool) -> Ran {
+    let (typed, client) = match &command {
+        Command::Open { client, .. } => (Typed::Open, client),
+        Command::Close { client } => (Typed::Close, client),
+        Command::Repost { client } => (Typed::Repost, client),
+        Command::Post(PostArgs { client, .. })
+        | Command::Answer(AnswerArgs { client, .. })
+        | Command::Pending { client, .. }
+        | Command::Wait { client, .. }
+        | Command::Read { client, .. }
+        | Command::Refuse { client, .. }
+        | Command::Outbox { client }
+        | Command::Collect { client, .. }
+        | Command::Thread { client, .. }
+        | Command::Replies { client, .. } => (Typed::Other, client),
+        Command::Serve(_) | Command::Key(_) | Command::Keyfile(_) | Command::Tls(_) => {
+            return (local(command, json), None);
+        }
+    };
+    // The body is read before the client is made, as before the reconnect.
+    let body = match &command {
+        Command::Post(args) => Some(args.body.read()),
+        Command::Answer(args) => Some(args.body.read()),
+        _ => None,
+    };
+    let body = match body.transpose() {
+        Ok(body) => body.unwrap_or_default(),
+        Err(failure) => return (Err(failure), None),
+    };
+    client.run(typed, |client| client_command(&command, body, client))
+}
+
+/// A client command against `client`; `body` is the body of `post` and `answer`, read already.
+fn client_command(command: &Command, body: String, client: &Client) -> Result<Done, Failure> {
+    match command {
+        Command::Open { adapter, .. } => commands::open(client, adapter),
+        Command::Close { .. } => commands::close(client),
+        Command::Post(args) => commands::post(
+            client,
+            &PostInput {
+                to: args.to.clone(),
+                kind: args.kind.clone(),
+                thread: args.thread.clone(),
+                dedup_key: args.dedup_key.clone(),
+                on_behalf_of: args.on_behalf_of.clone(),
+                authority: args.authority.clone(),
+                reply_shape: args.reply_shape.clone(),
+                options: args.options.clone(),
+                recommended_option: args.recommended_option.clone(),
+                default_on_silence: args.default_on_silence.clone(),
+                request_ref: args.request_ref.clone(),
+                expires: args.expires.clone(),
+                body,
+            },
+        ),
+        Command::Pending { inbox, .. } => commands::pending(client, inbox.as_deref(), None),
+        Command::Wait { inbox, seconds, .. } => {
+            commands::pending(client, inbox.as_deref(), Some(*seconds))
+        }
+        Command::Read { message_id, .. } => commands::read(client, message_id),
+        Command::Answer(args) => commands::answer(
+            client,
+            &AnswerInput {
+                in_reply_to: args.message_id.clone(),
+                option: args.option.clone(),
+                on_behalf_of: args.on_behalf_of.clone(),
+                authority: args.authority.clone(),
+                expires: args.expires.clone(),
+                body,
+            },
+        ),
+        Command::Refuse {
+            message_id, reason, ..
+        } => commands::refuse(client, message_id, reason),
+        Command::Outbox { .. } => commands::outbox(client),
+        Command::Collect { message_id, .. } => commands::collect(client, message_id),
+        Command::Thread { thread, .. } => commands::thread(client, "thread", thread),
+        Command::Replies { thread, .. } => commands::thread(client, "replies", thread),
+        Command::Repost { .. } => commands::repost(client),
+        Command::Serve(_) | Command::Key(_) | Command::Keyfile(_) | Command::Tls(_) => {
+            unreachable!("run sends only a client command here")
+        }
+    }
+}
+
+/// A command that is no client of the service: `serve`, `key`, `keyfile`, `tls`.
+fn local(command: Command, json: bool) -> Result<Option<Done>, Failure> {
     let done = match command {
         Command::Serve(args) => {
             let settings = serve::Settings {
@@ -456,68 +564,19 @@ fn run(command: Command, json: bool) -> Result<Option<Done>, Failure> {
             &on_behalf_of,
             &keys::valid_until(target.valid_until.as_deref())?,
         )?,
-        Command::Open { client, adapter } => commands::open(&client.client()?, &adapter)?,
-        Command::Close { client } => commands::close(&client.client()?)?,
-        Command::Post(args) => {
-            let body = args.body.read()?;
-            commands::post(
-                &args.client.client()?,
-                &PostInput {
-                    to: args.to,
-                    kind: args.kind,
-                    thread: args.thread,
-                    dedup_key: args.dedup_key,
-                    on_behalf_of: args.on_behalf_of,
-                    authority: args.authority,
-                    reply_shape: args.reply_shape,
-                    options: args.options,
-                    recommended_option: args.recommended_option,
-                    default_on_silence: args.default_on_silence,
-                    request_ref: args.request_ref,
-                    expires: args.expires,
-                    body,
-                },
-            )?
-        }
-        Command::Pending { client, inbox } => {
-            commands::pending(&client.client()?, inbox.as_deref(), None)?
-        }
-        Command::Wait {
-            client,
-            inbox,
-            seconds,
-        } => commands::pending(&client.client()?, inbox.as_deref(), Some(seconds))?,
-        Command::Read { client, message_id } => commands::read(&client.client()?, &message_id)?,
-        Command::Answer(args) => {
-            let body = args.body.read()?;
-            commands::answer(
-                &args.client.client()?,
-                &AnswerInput {
-                    in_reply_to: args.message_id,
-                    option: args.option,
-                    on_behalf_of: args.on_behalf_of,
-                    authority: args.authority,
-                    expires: args.expires,
-                    body,
-                },
-            )?
-        }
-        Command::Refuse {
-            client,
-            message_id,
-            reason,
-        } => commands::refuse(&client.client()?, &message_id, &reason)?,
-        Command::Outbox { client } => commands::outbox(&client.client()?)?,
-        Command::Collect { client, message_id } => {
-            commands::collect(&client.client()?, &message_id)?
-        }
-        Command::Thread { client, thread } => {
-            commands::thread(&client.client()?, "thread", &thread)?
-        }
-        Command::Replies { client, thread } => {
-            commands::thread(&client.client()?, "replies", &thread)?
-        }
-        Command::Repost { client } => commands::repost(&client.client()?)?,
+        Command::Open { .. }
+        | Command::Close { .. }
+        | Command::Post(_)
+        | Command::Pending { .. }
+        | Command::Wait { .. }
+        | Command::Read { .. }
+        | Command::Answer(_)
+        | Command::Refuse { .. }
+        | Command::Outbox { .. }
+        | Command::Collect { .. }
+        | Command::Thread { .. }
+        | Command::Replies { .. }
+        | Command::Repost { .. } => unreachable!("run sends a client command to client_command"),
     };
     Ok(Some(done))
 }
@@ -677,19 +736,44 @@ fn main() {
         }
     };
     let json = cli.json;
-    match run(cli.command, json) {
-        Ok(Some(done)) if json => output::print_document(&done.document),
-        Ok(Some(done)) => output::print_text(&done.text),
-        Ok(None) => {}
-        Err(failure) => {
-            if json {
-                output::print_document(&failure.document());
-            } else if let Some(text) = failure.text() {
-                output::print_text(text);
+    let (result, after) = run(cli.command, json);
+    // Text: the command's own lines are written before the reconnect starts. `--json`: the one
+    // document waits for the reconnect, whose member `reconnected` it carries.
+    if !json {
+        match &result {
+            Ok(Some(done)) => output::print_text(&done.text),
+            Ok(None) => {}
+            Err(failure) => {
+                if let Some(text) = failure.text() {
+                    output::print_text(text);
+                }
+                output::warn(&format!("inbox: {}", failure.message()));
             }
-            output::warn(&format!("inbox: {}", failure.message()));
-            std::process::exit(failure.status());
         }
+    }
+    let reconnected: Option<Reconnected> =
+        after.and_then(|(client, typed)| commands::reconnect(&client, typed));
+    if json {
+        let shown = |document: &str| match &reconnected {
+            Some(reconnected) => {
+                output::with_member(document, "reconnected", &reconnected.document).into_owned()
+            }
+            None => document.to_owned(),
+        };
+        match &result {
+            Ok(Some(done)) => output::print_document(&shown(&done.document)),
+            Ok(None) => {}
+            Err(failure) => {
+                output::print_document(&shown(&failure.document()));
+                output::warn(&format!("inbox: {}", failure.message()));
+            }
+        }
+    }
+    if let Some(reconnected) = &reconnected {
+        output::warn(&reconnected.line);
+    }
+    if let Err(failure) = &result {
+        std::process::exit(failure.status());
     }
 }
 

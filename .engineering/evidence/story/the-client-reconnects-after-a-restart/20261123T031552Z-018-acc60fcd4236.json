@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 3 finding 3 (a post answered 503 or 408 loses its mark and is never posted by itself): 408 and 503 keep the mark as a transport failure does, in post and in the reconnect's repost; adversary_reconnect_3::a_post_the_stopping_service_answered_503_is_posted_again_by_a_later_command",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-3",
+    "outcome": "fixed"
+  }
+}

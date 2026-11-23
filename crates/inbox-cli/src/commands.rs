@@ -1,6 +1,7 @@
 //! The client commands: each signs its requests with the caller's key and talks to the service
 //! only.
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::time::Duration;
 
@@ -15,12 +16,12 @@ use inbox::server::wire;
 use inbox_server::{Clock, SystemClock, format_instant};
 use inbox_verify::{Instant, sign_envelope};
 
-use crate::client::{Epoch, Service, declared_error, query_value, route};
+use crate::client::{Epoch, Reply, Service, declared_error, query_value, route};
 use crate::collected;
 use crate::failure::Failure;
 use crate::ids::ulid;
 use crate::keys::Caller;
-use crate::outbox::{Outbox, Unreadable};
+use crate::outbox::{Opened, Outbox, Recorded, Unreadable};
 use crate::output::{self, Done, document, rows_text, warn};
 
 /// The model's error a repeated `message_id` or `dedup_key` is answered with (the outcomes
@@ -41,12 +42,47 @@ pub struct Client {
     pub caller: Caller,
     /// The outbox file.
     pub outbox: Outbox,
+    /// The epoch the answer to the last request named; `None` before the first answer, after an
+    /// answer without one, and after a request that got no answer.
+    seen: RefCell<Option<Epoch>>,
+    /// The message id of the envelope `inbox post` kept and posted in this command: the
+    /// reconnect after it does not post it a second time.
+    posted: RefCell<Option<String>>,
 }
 
 impl Client {
+    /// A client of `service` for `caller`, with its outbox file.
+    pub fn new(service: Service, caller: Caller, outbox: Outbox) -> Self {
+        Self {
+            service,
+            caller,
+            outbox,
+            seen: RefCell::new(None),
+            posted: RefCell::new(None),
+        }
+    }
+
+    /// Sends one request and reads its answer, keeping the epoch it named ([`Client::seen`]).
+    /// Every request of the client goes through here.
+    fn exchange(
+        &self,
+        method: &str,
+        target: &str,
+        body: &[u8],
+        wait: Duration,
+    ) -> Result<Reply, Failure> {
+        let sent = self.service.send(&self.caller, method, target, body, wait);
+        *self.seen.borrow_mut() = sent.as_ref().ok().and_then(|reply| reply.epoch.clone());
+        sent
+    }
+
+    /// The epoch the answer to the last request named.
+    fn seen(&self) -> Option<Epoch> {
+        self.seen.borrow().clone()
+    }
+
     fn send(&self, method: &str, target: &str, body: &[u8]) -> Result<Value, Failure> {
-        self.service
-            .send(&self.caller, method, target, body, Duration::ZERO)?
+        self.exchange(method, target, body, Duration::ZERO)?
             .accepted()
     }
 
@@ -62,13 +98,7 @@ impl Client {
     /// [`Client::command`], with the epoch its answer named, whatever the answer was; `None`
     /// beside a transport failure.
     fn command_in_epoch(&self, wire: &str, body: &str) -> (Result<Value, Failure>, Option<Epoch>) {
-        let sent = self.service.send(
-            &self.caller,
-            "POST",
-            route("POST", wire),
-            body.as_bytes(),
-            Duration::ZERO,
-        );
+        let sent = self.exchange("POST", route("POST", wire), body.as_bytes(), Duration::ZERO);
         match sent {
             Ok(reply) => {
                 let epoch = reply.epoch.clone();
@@ -86,10 +116,7 @@ impl Client {
             route("GET", "outbox"),
             query_value(&self.caller.principal)
         );
-        Ok(self
-            .service
-            .send(&self.caller, "GET", &target, b"", Duration::ZERO)?
-            .epoch)
+        Ok(self.exchange("GET", &target, b"", Duration::ZERO)?.epoch)
     }
 
     /// The caller's own inbox: the address with the text of its principal (decision 5 of
@@ -128,8 +155,37 @@ fn view_done(answer: &Value) -> Done {
     }
 }
 
-/// `inbox open`.
+/// `inbox open`: opens the caller's own inbox with `adapter`, then records in the file of the
+/// opened inbox beside the outbox file the adapter and the epoch of the answer, for a reconnect
+/// to open it again with ([`reconnect`]). The outcome is printed also when that file cannot be
+/// written, and the local failure is reported beside it.
 pub fn open(client: &Client, adapter: &str) -> Result<Done, Failure> {
+    opened_with(client, adapter, None).map(|(done, _)| done)
+}
+
+/// `inbox open`, or the open of a reconnect from the record `from`: then the record is replaced
+/// only while it is still `from` ([`Outbox::record_opened`]). Answers what it did with the record.
+fn opened_with(
+    client: &Client,
+    adapter: &str,
+    from: Option<&Opened>,
+) -> Result<(Done, Recorded), Failure> {
+    let (done, epoch) = sent_open(client, adapter)?;
+    match client
+        .outbox
+        .record_opened(&client.own_inbox().0, adapter, epoch.as_ref(), from)
+    {
+        Ok(recorded) => Ok((done, recorded)),
+        Err(cause) => Err(Failure::After {
+            done,
+            cause: Box::new(cause),
+        }),
+    }
+}
+
+/// Sends `OpenInbox` for the caller's own inbox with `adapter` and records nothing: the outcome,
+/// and the epoch the answer names.
+fn sent_open(client: &Client, adapter: &str) -> Result<(Done, Option<Epoch>), Failure> {
     let input = OpenInbox {
         address: client.own_inbox(),
         adapter: decoded(
@@ -140,19 +196,48 @@ pub fn open(client: &Client, adapter: &str) -> Result<Done, Failure> {
     };
     let mut body = String::new();
     wire::encode_command_inbox_messaging_open_inbox(&input, &mut body);
-    let answer = client.command("open-inbox", &body)?;
-    Ok(outcome(&answer, &input.address.0))
+    let (answer, epoch) = client.command_in_epoch("open-inbox", &body);
+    Ok((outcome(&answer?, &input.address.0), epoch))
 }
 
-/// `inbox close`.
+/// `inbox close`. The record of the inbox is removed from the file of the opened inbox before
+/// `CloseInbox` is sent, so a close the service did is never followed by a reconnect that opens
+/// the inbox again; a record that cannot be removed fails the command before the request (exit
+/// 4, nothing sent). The record is put back when the close did not happen: a refusal other than
+/// `UnknownInbox` (which says the service holds no open inbox there, as after a restart) or a
+/// transport failure. A record that cannot be put back is named in one line on standard error;
+/// the close's own failure decides the exit.
 pub fn close(client: &Client) -> Result<Done, Failure> {
     let input = CloseInbox {
         address: client.own_inbox(),
     };
+    let taken = client.outbox.take_opened(&input.address.0)?;
     let mut body = String::new();
     wire::encode_command_inbox_messaging_close_inbox(&input, &mut body);
-    let answer = client.command("close-inbox", &body)?;
-    Ok(outcome(&answer, &input.address.0))
+    let failure = match client.command("close-inbox", &body) {
+        Ok(answer) => return Ok(outcome(&answer, &input.address.0)),
+        Err(Failure::Refused {
+            name,
+            status,
+            answer,
+        }) if declared_error(&answer).is_some() && name == UNKNOWN_INBOX => {
+            return Err(Failure::Refused {
+                name,
+                status,
+                answer,
+            });
+        }
+        Err(failure) => failure,
+    };
+    if let Some(record) = taken
+        && let Err(cause) = client.outbox.put_back_opened(&input.address.0, record)
+    {
+        warn(&format!(
+            "inbox close: the record of the opened inbox could not be put back: {}",
+            cause.message()
+        ));
+    }
+    Err(failure)
 }
 
 /// `inbox read`.
@@ -245,14 +330,7 @@ pub fn pending(client: &Client, inbox: Option<&str>, wait: Option<u64>) -> Resul
         target.push_str(&format!("&wait={seconds}"));
     }
     let answer = client
-        .service
-        .send(
-            &client.caller,
-            "GET",
-            &target,
-            b"",
-            Duration::from_secs(wait.unwrap_or(0)),
-        )?
+        .exchange("GET", &target, b"", Duration::from_secs(wait.unwrap_or(0)))?
         .accepted()?;
     Ok(view_done(&answer))
 }
@@ -432,6 +510,37 @@ fn holds(answer: &Value) -> bool {
     declared_error(answer).is_none() || output::text(answer, "outcome") == "duplicate"
 }
 
+/// Whether a post did not reach a service that holds the recipient's inbox, so the same request
+/// sent again may be taken: it failed in transport, the service refused it `UnknownInbox` (after
+/// a restart the owner has not opened it again yet), or the listener answered of its own that it
+/// did not take the request (`408`, or any `5xx` such as `503` while it stops). Such an envelope
+/// keeps its mark unsent. The mark goes for an answer that refuses the same request again: `400`,
+/// `401`, `413`, a refusal of the model.
+fn unsent(outcome: &Result<Value, Failure>) -> bool {
+    match outcome {
+        Err(Failure::Transport(_)) => true,
+        Err(Failure::Refused { name, answer, .. }) if declared_error(answer).is_some() => {
+            name == UNKNOWN_INBOX
+        }
+        Err(Failure::Refused { status, .. }) => *status == 408 || *status >= 500,
+        _ => false,
+    }
+}
+
+/// Whether a refusal of a post is `Duplicate` with the outcome `duplicate`: the service holds a
+/// message of the sender under this envelope's own message id, so the envelope arrived.
+fn own_duplicate(name: &str, answer: &Value) -> bool {
+    name == DUPLICATE && declared_error(answer).is_some() && holds(answer)
+}
+
+/// A change of the mark of an envelope after the answer to its post: a file that cannot be
+/// written is named in one line on standard error, after `what`, and ends nothing.
+fn settle_or_warn(changed: Result<(), Failure>, what: &str) {
+    if let Err(cause) = changed {
+        warn(&format!("{what}: {}", cause.message()));
+    }
+}
+
 /// The encoded envelope read back by the generated decoder, as the service reads it: what the
 /// decoder refuses (a body over the model's limit, an id of the wrong shape) is wrong usage, and
 /// never kept or sent. The decoder holds the model's rules; the client writes none of them.
@@ -447,11 +556,16 @@ fn admitted<T>(
 
 /// `inbox post`: writes the envelope (draws `id`, and `thread` when none is given; `created` is
 /// the clock reading and `expires` `created` plus 24 hours when none is given), signs it, reads
-/// it back through the generated decoder, keeps it in the outbox, and posts it. A final refusal
-/// ([`final_refusal`]) drops it from the outbox again; a transport failure and every other
-/// refusal keep it for `repost`. A post that arrived records the epoch of its answer on the kept
-/// envelope; the message id is printed also when the outbox file cannot be changed after that,
-/// and the local failure is reported beside it.
+/// it back through the generated decoder, keeps it in the outbox marked unsent
+/// ([`Outbox::keep`]), and posts it. A final refusal ([`final_refusal`]) drops it from the outbox
+/// again; a transport failure and every other refusal keep it for `repost`. A post that arrived
+/// (also when answered `duplicate` for its own message id: the reconnect of another command of
+/// the sender posted it first) records the epoch of its answer, which ends the mark; a transport
+/// failure and every answer that says the request was not taken ([`unsent`]) leave the mark, for
+/// the reconnect of a later command to post it again; a refusal of this request for good (`413`
+/// and the like) removes it. The message id is
+/// printed also when the outbox file cannot be changed after that, and the local failure is
+/// reported beside it.
 pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     let reading = now();
     let message_id = ulid()?;
@@ -512,11 +626,22 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
     wire::encode_command_inbox_messaging_post_message(&envelope, &mut text);
     admitted(&text, wire::decode_command_inbox_messaging_post_message)?;
     client.outbox.keep(&text, reading)?;
+    *client.posted.borrow_mut() = Some(message_id.clone());
     let (outcome, epoch) = client.command_in_epoch("post", &text);
+    // `duplicate` names this envelope's own message id, drawn fresh above: the reconnect of
+    // another command of the sender posted the kept envelope while this request was on its way.
+    // It arrived.
+    let outcome = match outcome {
+        Err(Failure::Refused { name, answer, .. }) if own_duplicate(&name, &answer) => Ok(answer),
+        other => other,
+    };
+    let not_reached = unsent(&outcome);
     match outcome {
         Ok(answer) => {
-            let recorded =
-                epoch.map(|epoch| client.outbox.record_epoch(&message_id, &epoch, now()));
+            let recorded = Some(match &epoch {
+                Some(epoch) => client.outbox.record_epoch(&message_id, epoch, now()),
+                None => client.outbox.clear_unsent(&message_id, now()),
+            });
             let done = Done {
                 document: document(&Value::Object(vec![
                     ("message_id".to_owned(), Value::Text(message_id.clone())),
@@ -540,6 +665,10 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
         }) => {
             if final_refusal(&name, &answer) {
                 client.outbox.remove(&message_id, now())?;
+            } else if !not_reached {
+                // A refusal that the same request meets again (`400`, `401`, `413`): kept, but
+                // no reconnect posts it again. `408`, `5xx` and `UnknownInbox` keep the mark.
+                settle_or_warn(client.outbox.clear_unsent(&message_id, now()), "inbox post");
             }
             Err(Failure::Refused {
                 name,
@@ -547,6 +676,7 @@ pub fn post(client: &Client, input: &PostInput) -> Result<Done, Failure> {
                 answer,
             })
         }
+        // A transport failure keeps the mark: the post is due for a later command.
         Err(other) => Err(other),
     }
 }
@@ -632,24 +762,127 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
 /// A note its recipient read before a restart is delivered once more by the first `repost`
 /// after it: the service keeps no record of a handled note.
 pub fn repost(client: &Client) -> Result<Done, Failure> {
+    let run = repost_at(client, None, None)?;
+    if run.first_refusal.is_some() || !run.unreadable.is_empty() {
+        for line in run
+            .lines
+            .iter()
+            .cloned()
+            .chain(unreadable_lines(&run.unreadable))
+        {
+            warn(&format!("inbox repost: {line}"));
+        }
+    }
+    run.finish(client)
+}
+
+/// What one run of [`repost_at`] did, before it is reported.
+struct Reposted {
+    entries: Vec<Value>,
+    lines: Vec<String>,
+    unreadable: Vec<Unreadable>,
+    first_refusal: Option<(String, u16)>,
+    local: Option<Failure>,
+    /// The envelopes posted.
+    posted: usize,
+    /// Of them, those that arrived.
+    arrived: usize,
+}
+
+impl Reposted {
+    /// The report, and the failure the run ends with ([`repost`]).
+    fn finish(self, client: &Client) -> Result<Done, Failure> {
+        let Self {
+            entries,
+            mut lines,
+            unreadable,
+            first_refusal,
+            local,
+            ..
+        } = self;
+        let report = Value::Object(vec![
+            ("reposted".to_owned(), Value::Array(entries)),
+            ("unreadable".to_owned(), unreadable_value(&unreadable)),
+        ]);
+        lines.extend(unreadable_lines(&unreadable));
+        let text = if lines.is_empty() {
+            "nothing to repost".to_owned()
+        } else {
+            lines.join("\n")
+        };
+        if let Some(cause) = local {
+            return Err(Failure::After {
+                done: Done {
+                    document: document(&report),
+                    text,
+                },
+                cause: Box::new(cause),
+            });
+        }
+        if let Some((name, status)) = first_refusal {
+            return Err(Failure::Refused {
+                name,
+                status,
+                answer: report,
+            });
+        }
+        if !unreadable.is_empty() {
+            let numbers: Vec<String> = unreadable
+                .iter()
+                .map(|entry| entry.line.to_string())
+                .collect();
+            return Err(Failure::Unreadable {
+                detail: format!(
+                    "line {} of {}",
+                    numbers.join(", "),
+                    client.outbox.path().display()
+                ),
+                answer: report,
+            });
+        }
+        Ok(Done {
+            document: document(&report),
+            text,
+        })
+    }
+}
+
+/// The posts of `repost`: at the epoch `known` when the caller knows it (a reconnect, from the
+/// answer that started it), else at the epoch the service is asked for when a kept envelope
+/// records one. The envelope `skip` (the one the command itself posted) is left alone.
+fn repost_at(
+    client: &Client,
+    known: Option<Epoch>,
+    skip: Option<&str>,
+) -> Result<Reposted, Failure> {
     let contents = client.outbox.kept(&client.caller.principal, now())?;
     let kept = contents.kept;
-    let current = if kept.iter().any(|entry| entry.epoch.is_some()) {
-        client.epoch()?
-    } else {
-        None
+    let current = match known {
+        Some(epoch) => Some(epoch),
+        None if kept.iter().any(|entry| entry.epoch.is_some()) => client.epoch()?,
+        None => None,
     };
     let mut entries = Vec::new();
     let mut lines = Vec::new();
     let mut first_refusal: Option<(String, u16)> = None;
     let mut local: Option<Failure> = None;
+    let mut arrived_count = 0;
     for entry in kept {
-        if current.is_some() && entry.epoch == current {
+        if (current.is_some() && entry.epoch == current)
+            || Some(entry.envelope.message_id.0.as_str()) == skip
+        {
             continue;
         }
         let message_id = entry.envelope.message_id.0.clone();
         let to = entry.envelope.to.0.clone();
         let (outcome, epoch) = client.command_in_epoch("post", &entry.text);
+        let not_reached = unsent(&outcome);
+        if entry.epoch.is_none() && not_reached {
+            settle_or_warn(
+                client.outbox.mark_unsent(&message_id, now()),
+                "inbox repost",
+            );
+        }
         let (arrived, answer, said) = match outcome {
             Ok(answer) => (true, answer, "arrived".to_owned()),
             Err(Failure::Refused {
@@ -660,9 +893,16 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
                 if declared_error(&answer).is_some() && name == DUPLICATE {
                     (true, answer, format!("arrived ({name})"))
                 } else {
-                    if final_refusal(&name, &answer)
-                        && let Err(cause) = client.outbox.remove(&message_id, now())
-                    {
+                    let changed = if final_refusal(&name, &answer) {
+                        client.outbox.remove(&message_id, now())
+                    } else if not_reached {
+                        Ok(())
+                    } else {
+                        // A refusal of this request for good (`413` and the like): as after a
+                        // typed post, kept and no longer due for a reconnect.
+                        client.outbox.clear_unsent(&message_id, now())
+                    };
+                    if let Err(cause) = changed {
                         local.get_or_insert(cause);
                     }
                     let said = format!("refused: {name} ({status})");
@@ -672,11 +912,22 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
             }
             Err(other) => return Err(other),
         };
-        if let (true, Some(epoch)) = (arrived && holds(&answer), &epoch)
-            && let Err(cause) = client.outbox.record_epoch(&message_id, epoch, now())
-        {
-            local.get_or_insert(cause);
+        // An arrival records the answer's epoch where the service holds the message. Otherwise
+        // (`duplicate-key`: another message holds the key; or an answer without an epoch) the
+        // mark goes and no epoch is written: no reconnect posts the envelope again, and a typed
+        // `repost` still does, as once the key is free.
+        if arrived {
+            let changed = match &epoch {
+                Some(epoch) if holds(&answer) => {
+                    client.outbox.record_epoch(&message_id, epoch, now())
+                }
+                _ => client.outbox.clear_unsent(&message_id, now()),
+            };
+            if let Err(cause) = changed {
+                local.get_or_insert(cause);
+            }
         }
+        arrived_count += usize::from(arrived);
         lines.push(format!("{message_id} to {to}: {said}"));
         entries.push(Value::Object(vec![
             ("message_id".to_owned(), Value::Text(message_id)),
@@ -685,60 +936,230 @@ pub fn repost(client: &Client) -> Result<Done, Failure> {
             ("answer".to_owned(), answer),
         ]));
     }
-    let report = Value::Object(vec![
-        ("reposted".to_owned(), Value::Array(entries)),
-        (
-            "unreadable".to_owned(),
-            unreadable_value(&contents.unreadable),
+    let posted = entries.len();
+    Ok(Reposted {
+        entries,
+        lines,
+        unreadable: contents.unreadable,
+        first_refusal,
+        local,
+        posted,
+        arrived: arrived_count,
+    })
+}
+
+/// Which command a reconnect follows: it does not repeat the step the command was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Typed {
+    /// `inbox open`: the reconnect opens nothing.
+    Open,
+    /// `inbox close`: the reconnect opens nothing.
+    Close,
+    /// `inbox repost`: the reconnect posts nothing.
+    Repost,
+    /// Every other client command.
+    Other,
+}
+
+/// What a reconnect did: the line it writes to standard error and the member `reconnected` of
+/// the `--json` document.
+#[derive(Debug)]
+pub struct Reconnected {
+    /// The one line for standard error.
+    pub line: String,
+    /// The JSON document of the member `reconnected`: the new start's `epoch`, and `open` and
+    /// `repost` for the steps that ran, each the document the typed command would print.
+    pub document: String,
+}
+
+/// The reconnect after a client command (`typed`): when the answer to the command's last request
+/// names an epoch ([`Client::seen`]) and the files beside the outbox file say a step is due at it
+/// ([`Outbox::due`]), it opens the caller's own inbox again with the adapter recorded for it, and
+/// posts the kept envelopes again as `repost` does, at that epoch, without asking the service
+/// for it: when an envelope is recorded at another epoch or marked unsent ([`Outbox::due`]),
+/// each envelope not recorded at that epoch, once, but the envelope `inbox post` posted in this
+/// command. The repost leaves each envelope in the state a typed post would leave it for the same
+/// answer, but that `duplicate-key` keeps it, without a mark and without an epoch. When the open
+/// reaches the service after a `close` took the record, it sends `CloseInbox` again
+/// ([`closed_meanwhile`]); when it finds another record than the one it started from (an `open`
+/// of the owner meanwhile), it leaves that record as it is (`opened-meanwhile`). The answers of
+/// these requests start no reconnect: this runs once per command.
+///
+/// A step that fails changes nothing of the command's output and exit status, and leaves the
+/// files as a failed typed step leaves them (a refused envelope stays kept at its epoch or with
+/// its mark, a record keeps its epoch), so the next command tries again. A transport failure of
+/// the open ends the reconnect: the post would meet the same service. `None` when nothing is
+/// due.
+pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
+    let current = client.seen()?;
+    let posted = client.posted.borrow().clone();
+    let due = client
+        .outbox
+        .due(&client.caller.principal, &current, now(), posted.as_deref());
+    let open = due
+        .open
+        .filter(|_| !matches!(typed, Typed::Open | Typed::Close));
+    let repost = due.repost && typed != Typed::Repost;
+    if open.is_none() && !repost {
+        return None;
+    }
+    let mut members = vec![("epoch".to_owned(), Value::Text(current.as_str().to_owned()))];
+    let mut said = Vec::new();
+    let mut failed = false;
+    let mut gone = false;
+    if let Some(from) = open {
+        let inbox = client.own_inbox().0;
+        let adapter = &from.adapter;
+        let step = opened_with(client, adapter, Some(&from));
+        let shown = match &step {
+            Ok((done, Recorded::Written)) => {
+                said.push(format!(
+                    "opened {inbox} again with the adapter {adapter} ({})",
+                    first_word(&done.text)
+                ));
+                parsed(&done.document)
+            }
+            Ok((done, Recorded::Gone)) => {
+                closed_meanwhile(client, parsed(&done.document), &mut said)
+            }
+            Ok((done, Recorded::Other)) => {
+                said.push(format!(
+                    "{inbox} was opened by another command meanwhile: its record is left as it is"
+                ));
+                Value::Object(vec![
+                    (
+                        "outcome".to_owned(),
+                        Value::Text("opened-meanwhile".to_owned()),
+                    ),
+                    ("opened".to_owned(), parsed(&done.document)),
+                ])
+            }
+            Err(failure) => {
+                failed = true;
+                gone = matches!(failure, Failure::Transport(_));
+                said.push(format!(
+                    "the open of {inbox} again failed: {}",
+                    failure.message()
+                ));
+                parsed(&failure.document())
+            }
+        };
+        members.push(("open".to_owned(), shown));
+    }
+    if repost && !gone {
+        let (shown, line) = match repost_at(client, Some(current.clone()), posted.as_deref()) {
+            Ok(run) => {
+                let tally = format!(
+                    "reposted {} kept envelope{}, {} arrived",
+                    run.posted,
+                    if run.posted == 1 { "" } else { "s" },
+                    run.arrived
+                );
+                match run.finish(client) {
+                    Ok(done) => (done.document, tally),
+                    Err(failure) => {
+                        failed = true;
+                        (
+                            failure.document(),
+                            format!("{tally}: {}", failure.message()),
+                        )
+                    }
+                }
+            }
+            Err(failure) => {
+                failed = true;
+                (
+                    failure.document(),
+                    format!("the repost failed: {}", failure.message()),
+                )
+            }
+        };
+        said.push(line);
+        members.push(("repost".to_owned(), parsed(&shown)));
+    }
+    if failed {
+        said.push("the next command tries again".to_owned());
+    }
+    Some(Reconnected {
+        line: format!(
+            "inbox: reconnect at the start {} of the service: {}",
+            current.as_str(),
+            said.join("; ")
         ),
-    ]);
-    lines.extend(unreadable_lines(&contents.unreadable));
-    if first_refusal.is_some() || !contents.unreadable.is_empty() {
-        for line in &lines {
-            warn(&format!("inbox repost: {line}"));
+        document: document(&Value::Object(members)),
+    })
+}
+
+/// The open of a reconnect reached the service after an `inbox close` of the owner took the
+/// record: the reconnect sends `CloseInbox` for the inbox, so the owner's close holds, then reads
+/// the record again. When an `inbox open` of the owner wrote one meanwhile, it sends `OpenInbox`
+/// once with that record's adapter and leaves the record as it is. Answers the `open` member of
+/// the reconnect: `{"outcome":"closed-meanwhile","opened":<the open's answer>,"closed":<the
+/// close's answer, or the document of its failure>}`, with `"reopened"` (the answer of that
+/// second open, or the document of its failure) when it was sent; pushes the step's part of the
+/// reconnect's line to `said`. A failure of the close is one line on standard error, a failure of
+/// the second open a part of the reconnect's line; neither changes the exit status.
+fn closed_meanwhile(client: &Client, opened: Value, said: &mut Vec<String>) -> Value {
+    let input = CloseInbox {
+        address: client.own_inbox(),
+    };
+    let mut body = String::new();
+    wire::encode_command_inbox_messaging_close_inbox(&input, &mut body);
+    let closed = match client.command("close-inbox", &body) {
+        Ok(answer) => answer,
+        Err(failure) => {
+            warn(&format!(
+                "inbox: {} was closed while the reconnect opened it, and closing it again failed: \
+                 {}",
+                input.address.0,
+                failure.message()
+            ));
+            parsed(&failure.document())
+        }
+    };
+    let mut members = vec![
+        (
+            "outcome".to_owned(),
+            Value::Text("closed-meanwhile".to_owned()),
+        ),
+        ("opened".to_owned(), opened),
+        ("closed".to_owned(), closed),
+    ];
+    let inbox = &input.address.0;
+    match client.outbox.opened(inbox) {
+        None => said.push(format!("{inbox} was closed meanwhile: not opened again")),
+        Some(record) => {
+            let adapter = &record.adapter;
+            let reopened = match sent_open(client, adapter) {
+                Ok((done, _)) => {
+                    said.push(format!(
+                        "{inbox} was closed meanwhile, then opened by another command: opened it \
+                         again with the adapter {adapter} ({})",
+                        first_word(&done.text)
+                    ));
+                    parsed(&done.document)
+                }
+                Err(failure) => {
+                    said.push(format!(
+                        "{inbox} was closed meanwhile, then opened by another command: opening it \
+                         again with the adapter {adapter} failed: {}",
+                        failure.message()
+                    ));
+                    parsed(&failure.document())
+                }
+            };
+            members.push(("reopened".to_owned(), reopened));
         }
     }
-    if let Some(cause) = local {
-        return Err(Failure::After {
-            done: Done {
-                document: document(&report),
-                text: if lines.is_empty() {
-                    "nothing to repost".to_owned()
-                } else {
-                    lines.join("\n")
-                },
-            },
-            cause: Box::new(cause),
-        });
-    }
-    if let Some((name, status)) = first_refusal {
-        return Err(Failure::Refused {
-            name,
-            status,
-            answer: report,
-        });
-    }
-    if !contents.unreadable.is_empty() {
-        let numbers: Vec<String> = contents
-            .unreadable
-            .iter()
-            .map(|entry| entry.line.to_string())
-            .collect();
-        return Err(Failure::Unreadable {
-            detail: format!(
-                "line {} of {}",
-                numbers.join(", "),
-                client.outbox.path().display()
-            ),
-            answer: report,
-        });
-    }
-    Ok(Done {
-        document: document(&report),
-        text: if lines.is_empty() {
-            "nothing to repost".to_owned()
-        } else {
-            lines.join("\n")
-        },
-    })
+    Value::Object(members)
+}
+
+/// The first word of `text`: the outcome a command's text starts with.
+fn first_word(text: &str) -> &str {
+    text.split_whitespace().next().unwrap_or_default()
+}
+
+/// A document this client wrote, read back as a value.
+fn parsed(written: &str) -> Value {
+    json::parse(written).unwrap_or_else(|_| Value::Text(written.to_owned()))
 }

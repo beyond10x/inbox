@@ -26,6 +26,31 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   (story:the-service-speaks-tls-with-a-pinned-certificate).
 - New dependencies of `inbox-server`: `rustls` 0.23 without its default features, with the
   `ring` provider, `ring` 0.17, and `zeroize` 1.8, which `inbox-cli` already used.
+- The client reconnects by itself after a restart of the service. A client command whose answer
+  carries an `Inbox-Epoch` other than the one the client recorded runs its own request first. It
+  then opens the caller's own inbox again with the adapter of its last `inbox open`, kept in the
+  new file `<outbox>.opened` beside the outbox file (`inbox close` removes it), and posts the kept
+  envelopes again as `inbox repost` does. An envelope is marked in the epochs file (`<id>`, a tab,
+  `none`) from the moment `inbox post` keeps it until an answer says it arrived or refuses it for
+  good. A post that did not reach the service, was stopped on its way, was answered `408` or a
+  `5xx` status such as `503`, or was refused `UnknownInbox` keeps its mark and is posted again by
+  the sender's next command in the same way, with or without a restart. A post whose envelope
+  another command of the sender posted meanwhile is answered `Duplicate` for its own id; `inbox
+  post` takes that as arrived and exits 0. One line on standard error names a reconnect, and a
+  `--json` document carries the member `reconnected` (`epoch`, `open`, `repost`). Without `--json`
+  the command's own lines are written before the reconnect starts. A step that fails changes
+  neither the command's output nor its exit status, and the next command tries again. The answers
+  of the reconnect's own requests start no other reconnect. `inbox close` removes the record before
+  it sends its request and puts it back when the close did not reach the service or was refused
+  with anything but `UnknownInbox`; a reconnect whose open a `close` overtook closes the inbox
+  again, and opens it once more when a typed `inbox open` wrote a record meanwhile. A reconnect
+  replaces the record only while it is the one it started from. A typed `inbox repost` answered
+  `408` or `5xx` now leaves its envelope marked, so the next command posts it again. A file beside
+  the outbox that is no regular file, or is over its bound, is read as empty with one warning.
+  After an upgrade run `inbox open` once (an inbox opened with an older version has no record) and
+  `inbox repost` once (an envelope an older version kept has no mark, and an older version that
+  writes the epochs file drops the marks). `inbox open` and `inbox repost` stay as typed commands
+  (story:the-client-reconnects-after-a-restart).
 
 ### Changed
 

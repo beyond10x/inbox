@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 4 (a close while a reconnect's open is on its way is undone at the service): a reconnect whose open succeeded and whose record is gone sends CloseInbox; adversary_reconnect_2::a_close_while_a_reconnects_open_is_on_its_way_leaves_the_inbox_closed",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-2",
+    "outcome": "fixed"
+  }
+}

@@ -259,7 +259,14 @@ fn an_answer_without_the_epoch_header_posts_the_kept_lines_without_an_epoch_too(
     assert_eq!(refused.status, REFUSED, "{refused:#?}");
     let outbox = world.outbox("alice");
     let recorded = fs::read_to_string(epochs_file(&outbox)).expect("the epochs file");
-    assert_eq!(recorded.lines().count(), 1, "{recorded:?}");
+    // One line at an epoch; the refused one is marked unsent, at no epoch
+    // (story:the-client-reconnects-after-a-restart).
+    let at: Vec<&str> = recorded
+        .lines()
+        .filter(|line| !line.ends_with("\tnone"))
+        .collect();
+    assert_eq!(at.len(), 1, "{recorded:?}");
+    assert_eq!(recorded.lines().count(), 2, "{recorded:?}");
     assert_eq!(world.kept("alice").len(), 2);
 
     let (url, served) = stand_in(vec![

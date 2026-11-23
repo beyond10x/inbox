@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 3 finding 1 (the reconnect's CloseInbox closes an inbox the owner opened again): after its CloseInbox the reconnect reads the record again and opens the inbox once more with that record's adapter; adversary_reconnect_3::a_reconnects_close_after_closed_meanwhile_does_not_undo_a_typed_open_that_came_between",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-3",
+    "outcome": "fixed"
+  }
+}

@@ -94,17 +94,31 @@ fn a_post_that_arrived_records_the_epoch_beside_the_outbox_and_one_refused_recor
     let world = World::new("epoch-recorded");
     let refused = world.client("alice", &["post", "--to", BOB, "--body", "too early"]);
     assert_eq!(refused.status, REFUSED, "{refused:#?}");
+    let outbox = world.outbox("alice");
+    let early = world.kept("alice");
+    assert_eq!(early.len(), 1);
+    // Refused `UnknownInbox`: no epoch, the envelope is marked unsent.
+    assert_eq!(
+        entries(&outbox),
+        [(early[0].clone(), "none".to_owned())],
+        "{refused:#?}"
+    );
     world.client("bob", &["open"]).ok();
     let arrived = post_a_note(&world, "arrives");
-    let outbox = world.outbox("alice");
     for line in lines(&outbox) {
         assert!(json::parse(&line).is_ok(), "{line:?}");
         assert!(!line.ends_with([' ', '\t']), "{line:?}");
     }
+    // The reconnect of that post posted the refused envelope again (round 2 of
+    // story:the-client-reconnects-after-a-restart): both record the epoch of their arrival.
     let recorded = entries(&outbox);
-    assert_eq!(recorded.len(), 1, "{recorded:?}");
-    assert_eq!(recorded[0].0, arrived);
-    assert!(is_epoch(&recorded[0].1), "{recorded:?}");
+    assert_eq!(recorded.len(), 2, "{recorded:?}");
+    assert_eq!(recorded[0].0, early[0]);
+    assert_eq!(recorded[1].0, arrived);
+    assert!(
+        recorded.iter().all(|(_, epoch)| is_epoch(epoch)),
+        "{recorded:?}"
+    );
     let mode = fs::metadata(epochs_file(&outbox))
         .expect("the epochs file")
         .permissions()
@@ -136,7 +150,10 @@ fn a_post_refused_unknown_inbox_is_posted_again_in_the_same_start_until_it_arriv
     let still = world.client("alice", &["repost", "--json"]);
     assert_eq!(still.status, REFUSED, "{still:#?}");
     assert_eq!(text(&still.json(), "error"), "inbox.messaging.UnknownInbox");
-    assert!(entries(&world.outbox("alice")).is_empty());
+    // No epoch: the envelope is marked unsent (story:the-client-reconnects-after-a-restart).
+    let marked = entries(&world.outbox("alice"));
+    assert_eq!(marked.len(), 1, "{marked:?}");
+    assert_eq!(marked[0].1, "none", "{marked:?}");
 
     // The recipient opens later: the next repost in the same start delivers it, once.
     world.client("bob", &["open"]).ok();

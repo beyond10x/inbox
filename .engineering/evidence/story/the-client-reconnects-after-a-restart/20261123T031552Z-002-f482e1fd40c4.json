@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 3 (a FIFO in place of the opened file blocks every command): the files beside the outbox are opened without blocking, as regular files only and under a bound; the adversary's case 4 passes as written; reconnect::a_link_to_a_device_beside_the_outbox_holds_nothing_and_blocks_no_command and a_file_of_the_opened_inbox_over_its_bound_holds_nothing",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-1",
+    "outcome": "fixed"
+  }
+}

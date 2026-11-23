@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 3 finding 4 (mutant: the mark kept on an arrival whose answer names no epoch): a case with a stand-in that answers without Inbox-Epoch holds that the mark is gone",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-3",
+    "outcome": "fixed"
+  }
+}

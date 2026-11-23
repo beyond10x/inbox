@@ -26,7 +26,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | Follow a thread: its live messages and its answered ones | `inbox thread`, `inbox replies` |
 | Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires`. From `expires` on, by the service's clock, a message takes no answer, no refusal and no read or delivery mark (`Expired`) and stays listed until it is removed, and a post or a reply whose own `expires` has passed is refused (`AlreadyExpired`) | `inbox post --expires` |
 | A message arrives once: a second post with the message id or the dedup key of a stored message of the same sender stores nothing | `inbox post --dedup-key` |
-| Post again after a restart of the service, from the sender's outbox file | `inbox repost` |
+| Post again after a restart of the service, from the sender's outbox file, and open the owner's inbox again: the next command of each does it by itself. The inbox is opened again only when `inbox open` ran on this host with this version or later; after an upgrade, run `inbox open` once | any client command, `inbox repost` |
 
 ### Keys and authority
 
@@ -81,7 +81,7 @@ Each row with a flag is set on `inbox serve`.
 In this order. None has a date.
 
 1. **Two hosts and wake-up.** Sessions on two hosts exchange messages through one service over
-   TLS. A post wakes an idle agent session. The client reposts by itself after a reconnect.
+   TLS. A post wakes an idle agent session.
 2. **An inbox for a person.** A bridge posts a person's messages into a chat channel and turns
    the person's reply into a signed answer.
 3. **A persistent backend.** A restart of the service loses nothing.

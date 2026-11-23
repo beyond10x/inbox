@@ -2,13 +2,13 @@
   "format": "b10x-cli-reference/1",
   "binary": "inbox",
   "about": "The inbox: one durable, addressable inbox per agent or person",
-  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. Every other command is a client of that service and signs what it sends with the caller's own key.",
+  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. Every other command is a client of that service and signs what it sends with the caller's own key. A client command whose answer comes from a new start of the service then opens the caller's own inbox again with the adapter of its last `inbox open` (none after `inbox close`) and posts the kept envelopes again, as `inbox repost` does; one line on standard error says so, and with `--json` the member `reconnected` of the document.",
   "globalOptions": [
     {
       "name": "json",
       "kind": "switch",
       "long": "json",
-      "help": "Print one JSON document on standard output instead of text"
+      "help": "Print one JSON document on standard output instead of text. After an answer from a new start of the service it is printed once the reconnect ended, with the member `reconnected`; text is printed before the reconnect starts"
     }
   ],
   "commands": [
@@ -272,7 +272,7 @@
       "path": [
         "open"
       ],
-      "about": "Open the caller's own inbox (again after every restart of the service)",
+      "about": "Open the caller's own inbox. The adapter is recorded beside the outbox file: after a restart of the service the caller's next command opens the inbox again with it, until `inbox close`",
       "arguments": [
         {
           "name": "url",
@@ -997,7 +997,7 @@
       "path": [
         "repost"
       ],
-      "about": "Post again, unchanged, every envelope the outbox file keeps for the caller that did not arrive at the service's current start: for after a restart of the service. An envelope whose post the current start answered (`posted` or `Duplicate`) is left alone; a note its recipient read before a restart is delivered once more by the first repost after it",
+      "about": "Post again, unchanged, every envelope the outbox file keeps for the caller that did not arrive at the service's current start. Every client command does this by itself after an answer from a new start of the service. An envelope whose post the current start answered (`posted` or `Duplicate`) is left alone; a note its recipient read before a restart is delivered once more by the first repost after it",
       "arguments": [
         {
           "name": "url",

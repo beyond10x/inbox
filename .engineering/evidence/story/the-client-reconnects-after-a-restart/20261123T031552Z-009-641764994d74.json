@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 2 (a marked envelope answered duplicate-key or 413 is posted again by every later command): the reconnect's repost leaves an envelope as the typed post would for the same answer; adversary_reconnect_2::an_envelope_the_service_answered_duplicate_key_is_not_posted_again_by_every_command",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-2",
+    "outcome": "fixed"
+  }
+}

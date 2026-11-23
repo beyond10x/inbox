@@ -139,8 +139,24 @@ Every answer of the service carries the header `Inbox-Epoch`: 32 hex digits that
 start of the service. When a post arrives, `inbox post` records that value in the epochs file
 beside the outbox file (`<outbox>.epochs`, one line per envelope).
 
-`inbox repost` is for after a restart of the service, which loses every message. It asks the
-service for its epoch and posts again the kept envelopes that the epochs file does not record at
-that epoch. An envelope the current start has already answered is left alone and not listed, so
-a second `repost` in the same start posts nothing. A note its recipient read before the restart
-is delivered once more by the first `repost` after it ([limits](limits.md)).
+`inbox open` records the adapter it opened the inbox with beside the outbox file
+(`<outbox>.opened`); `inbox close` removes it, and puts it back when the close did not reach the
+service or the service refused it with anything but `UnknownInbox`.
+
+A restart of the service loses every message and every open inbox. The client takes care of it
+by itself: when the answer to any command comes from a new start, the command, after its own
+request, opens the caller's inbox again with the adapter it was last opened with, when it was
+opened on this host and not closed since, and posts again, once each, the kept envelopes the new
+start has not answered, when one of them is recorded at an earlier start or has not reached the
+service (its post failed in transport, was refused with `UnknownInbox`, was answered `408` or
+`503` by a service that did not take it, or was stopped before an answer). The command prints its own answer first, one line on standard error names the new
+start and what was done, and with `--json` the one document is printed after the reconnect and
+carries the member `reconnected`. A step that does not succeed, such as a post the service
+refuses with `UnknownInbox` because the recipient has not opened its inbox again yet, keeps the
+envelope, and the next command tries again.
+
+`inbox repost` does the same posts when typed. It asks the service for its epoch and posts again
+the kept envelopes that the epochs file does not record at that epoch. An envelope the current
+start has already answered is left alone and not listed, so a second `repost` in the same start
+posts nothing. A note its recipient read before the restart is delivered once more by the first
+repost after it, typed or not ([limits](limits.md)).

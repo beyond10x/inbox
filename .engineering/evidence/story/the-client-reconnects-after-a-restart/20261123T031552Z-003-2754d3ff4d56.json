@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 4 (the typed command's output is printed after the reconnect): without --json the command's lines are written before the reconnect starts; the adversary's case 5 passes as written; the help of --json and docs/design/service.md say that the one JSON document waits",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-1",
+    "outcome": "fixed"
+  }
+}

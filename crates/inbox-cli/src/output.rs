@@ -125,6 +125,20 @@ pub fn document(value: &Value) -> String {
     out
 }
 
+/// `document`, a JSON object this client wrote, with the member `name` set to the JSON
+/// document `member` after its own members. A document that does not read as an object, or a
+/// member that does not read as JSON, leaves it as it is.
+pub fn with_member<'a>(document: &'a str, name: &str, member: &str) -> Cow<'a, str> {
+    match (json::parse(document), json::parse(member)) {
+        (Ok(Value::Object(mut members)), Ok(member)) => {
+            members.retain(|(held, _)| held != name);
+            members.push((name.to_owned(), member));
+            Cow::Owned(self::document(&Value::Object(members)))
+        }
+        _ => Cow::Borrowed(document),
+    }
+}
+
 /// The text member `name` of `value`, or an empty text.
 pub fn text<'a>(value: &'a Value, name: &str) -> &'a str {
     match value.member(name) {

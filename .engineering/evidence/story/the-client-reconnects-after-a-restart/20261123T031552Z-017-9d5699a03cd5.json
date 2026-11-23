@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T03:15:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-client-reconnects-after-a-restart",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 3 finding 2 (the reconnect's open overwrites the record of a later typed open): record_opened with held_only replaces only the record the reconnect started from; adversary_reconnect_3::a_reconnects_open_on_its_way_does_not_overwrite_the_record_of_a_typed_open_after_a_close",
+    "review": "review-result:adversary-the-client-reconnects-after-a-restart-pass-3",
+    "outcome": "fixed"
+  }
+}
