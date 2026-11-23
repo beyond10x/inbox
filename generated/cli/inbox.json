@@ -647,6 +647,12 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "follow",
+          "kind": "switch",
+          "long": "follow",
+          "help": "The terminal adapter: after the marks wait again instead of exiting, and show each message as it arrives (--json: one document per line) until SIGINT or SIGTERM ends it; a mark that fails is named on standard error and it goes on. Without --json, on a terminal, the rows of each arrival are followed by one bell. An inbox this host opened with another adapter ends it with 1, at the start before any request, and while it waits with the next arrival, which is not shown: run `inbox open --adapter terminal`"
         }
       ]
     },

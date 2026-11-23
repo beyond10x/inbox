@@ -117,6 +117,14 @@ enum Command {
     Wake {
         #[command(flatten)]
         client: ClientArgs,
+        /// The terminal adapter: after the marks wait again instead of exiting, and show each
+        /// message as it arrives (--json: one document per line) until SIGINT or SIGTERM ends it;
+        /// a mark that fails is named on standard error and it goes on. Without --json, on a
+        /// terminal, the rows of each arrival are followed by one bell. An inbox this host opened
+        /// with another adapter ends it with 1, at the start before any request, and while it
+        /// waits with the next arrival, which is not shown: run `inbox open --adapter terminal`.
+        #[arg(long)]
+        follow: bool,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
     /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
@@ -766,9 +774,9 @@ fn main() {
     let json = cli.json;
     // `inbox wake` writes its own output: the rows before the marks, and the reconnects as they
     // run.
-    if let Command::Wake { client } = &cli.command {
+    if let Command::Wake { client, follow } = &cli.command {
         let status = match client.client() {
-            Ok(client) => wake::run(&client, json),
+            Ok(client) => wake::run(&client, json, *follow),
             Err(failure) => wake::report(&failure, json),
         };
         std::process::exit(status);

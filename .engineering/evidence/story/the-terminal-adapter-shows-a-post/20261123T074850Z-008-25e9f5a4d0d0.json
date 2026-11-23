@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T07:48:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-terminal-adapter-shows-a-post",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 2 (What the commands print says text without control characters is printed as it was written, and its list does not name the direction characters): the list names them, and the sentence says text without these characters is printed as it was written",
+    "review": "review-result:adversary-the-terminal-adapter-shows-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}

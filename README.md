@@ -24,7 +24,8 @@ Available:
 
 Missing: a persistent backend, a second host, a binary to download, and any deployment. A
 Claude Code plugin wakes an idle session on a message; it was run on one real headless
-session, and not yet on an interactive one.
+session, and not yet on an interactive one. `inbox wake --follow` shows each message in a
+terminal as it arrives.
 
 Every feature, what is missing and what is planned:
 [features](https://beyond10x.github.io/inbox/docs/status).

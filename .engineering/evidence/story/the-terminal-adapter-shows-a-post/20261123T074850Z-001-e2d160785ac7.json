@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T07:48:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-terminal-adapter-shows-a-post",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 2, pre-existing (the characters that change the direction of text reach the terminal as sent): output::visible shows U+061C, U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069 as their escapes; 3 unit cases and the adversary's case, red with U+202E taken out of the range; --json unchanged. Scope widened, written in the story's Decisions",
+    "review": "review-result:adversary-the-terminal-adapter-shows-a-post-pass-1",
+    "outcome": "fixed"
+  }
+}

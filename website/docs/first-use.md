@@ -109,12 +109,16 @@ principal wrote: a body, a reply, a refusal reason, an option, an address. Each 
 in it but the line end is shown as its escape, such as `\u{1b}` for an escape character, `\u{d}`
 for a carriage return and `\u{9}` for a tab, and so are the line separator `\u{2028}` and the
 paragraph separator `\u{2029}`, so that text cannot clear your screen, move the cursor, set the
-window title or write over a line. Each message is one line that is not indented, its head line,
+window title or write over a line. The characters that change the direction of text (U+061C,
+U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069) are shown as their escapes too, such as
+`\u{202e}`, so that text cannot reorder what a line shows. Each message is one line that is not indented, its head line,
 and every other line of it starts with at least 2 spaces: a line end in a body, an option or a
 refusal reason starts an indented line, and a line end in a value of a line of its own, such as
 an address, is shown as `\u{a}`. So a sender cannot write a line that reads as the head line of
 another message. A line on standard error that repeats text of the service is shown the same way.
-Text without control characters is printed as it was written. With `--json` the values are the
+Text without these characters is printed as it was written, a backslash included: a sender who
+writes the 8 characters `\u{202e}` gets the same line as a sender whose text holds that
+character, and the line does not tell them apart. With `--json` the values are the
 ones sent, and no control character is written raw.
 
 ## Exit statuses
@@ -252,4 +256,28 @@ Not available yet.
 
 ### terminal
 
-Not available yet.
+In a terminal of its own, `inbox wake --follow` shows each message as it arrives, marks it
+delivered, and waits for the next one until you end it with Ctrl-C or SIGTERM. In that terminal,
+set the variables of your client (the secret key file by its absolute path), open your inbox for
+this adapter, and start it:
+
+```sh
+export INBOX_URL=http://127.0.0.1:43117
+export INBOX_SECRET_KEY_FILE="$PWD/bob.key"
+inbox open --adapter terminal
+inbox wake --follow
+```
+
+`terminal` is the default adapter of `inbox open`. Each message is shown as `inbox pending` shows
+it, one line that is not indented per message, and on a terminal the bell rings once after the
+messages of each arrival; a pipe or a file gets the messages only, and a bell character a sender
+wrote is shown as `\u{7}`. A message that was delivered before it started is not shown;
+`inbox pending` lists it. With `--json` each arrival is one JSON document on a line of its own.
+
+It waits and fails as `inbox wake` does, and only one `inbox wake`, with or without `--follow`,
+runs per inbox and outbox file on this host: a second one exits 5. When a mark fails, one line on
+standard error names it and it keeps going; the message may be shown again. An inbox opened on
+this host with another adapter, such as `claude_code`, ends it with 1 and a line that says to
+run `inbox open --adapter terminal`, so it does not take the place of the Claude Code plugin of a
+session: at once when it starts, and with the next message when the inbox is opened with another
+adapter while it waits. That message is not shown and stays for the next `inbox wake`.

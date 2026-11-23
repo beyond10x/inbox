@@ -8,6 +8,26 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- `inbox wake --follow`, the adapter `terminal`: in a terminal of its own it shows each message
+  as it arrives, in the form `inbox pending` prints, marks it delivered and waits for the next
+  one, until Ctrl-C or SIGTERM. On a terminal it rings the bell once per arrival; a pipe or a
+  file gets the rows only. With `--json` it writes one document per line. A mark that fails is
+  named on standard error and the mode goes on. It takes the lock of `inbox wake`, so a second
+  `inbox wake` of the inbox exits 5. It is for an inbox opened with `inbox open --adapter
+  terminal`: when this host opened the inbox with another adapter it ends with 1 and a line that
+  names that command, at its start or with the next arrival, and that message is not shown and
+  stays for the next `inbox wake`. `inbox wake` without the flag is unchanged.
+
+### Security
+
+- A message's text can no longer reorder what a terminal shows. `pending`, `wait`, `wake`,
+  `outbox`, `collect`, `thread`, `replies` and the lines on standard error that repeat text of
+  the service show the characters that change the direction of text (U+061C, U+200E, U+200F,
+  U+202A to U+202E and U+2066 to U+2069) as their escapes, such as `\u{202e}`. Before, they were
+  printed as sent. `--json` is unchanged.
+
 ## [0.5.0] - 2026-11-23
 
 ### Added

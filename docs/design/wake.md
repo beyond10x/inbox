@@ -182,8 +182,8 @@ the story starts the service with `--max-wait 1` for the end of a wait and the n
 
 ## What it leaves out
 
-- No adapter but `claude_code`, which is built: each other adapter is a story of its own and a
-  section below.
+- No adapter but `claude_code` and `terminal`, which are built: each other adapter is a story of
+  its own and a section below (`metaharness`).
 - No wake for one message id or one kind; every row of `Pending` in `Sent` wakes it.
 - `inbox wait` stays as it is: one held read, its answer printed, nothing marked.
 
@@ -424,4 +424,83 @@ Not built yet: story:the-metaharness-adapter-wakes-an-idle-session.
 
 ## terminal
 
-Not built yet: story:the-terminal-adapter-shows-a-post.
+`inbox wake --follow` is the adapter `terminal` (story:the-terminal-adapter-shows-a-post,
+decisions B and A of its 2 open items): a person or an agent at a shell runs it in a terminal of
+its own, and it shows each message posted to the inbox there, with no typed `inbox pending`, and
+keeps running. The code is `crates/inbox-cli/src/wake.rs`; without the flag `inbox wake` is as
+above, byte for byte.
+
+- Each round is the wake's round: the reads with `undelivered=1`, the reconnect after every
+  answer, the tries and the pauses, all as above. When an answer has rows in `Sent` that are not
+  due, it writes them and flushes them to standard output through the printer of `inbox wake`
+  (`rows_text`, one head line that is not indented per message whatever a sender wrote, each
+  control character of a sender escaped), then sends `MarkDelivered` for each, one after
+  another, then starts the next round with a read without a wait. A message is marked delivered
+  only after its rows were written, as above: the terminal is the live wake surface it was
+  handed to. A message in `Delivered` when it starts (a wake before it printed it) is not shown;
+  `inbox pending` lists it.
+- With `--json` each round writes the one document of its answer on a line of its own (with the
+  member `reconnected` when a reconnect ran in that round): a stream of JSON lines, and no bell.
+- The bell. After the text of a round, in the same write, one BEL (0x07) when standard output
+  is a terminal (`isatty` of the duplicate of descriptor 1 the rows are written through,
+  `output::try_print_round`), and none when it is not: a pipe or a file gets the rows only. The
+  BEL is the client's own byte, added after the text went through `visible`, so a round rings
+  once however many messages it holds, and a BEL in a sender's text is shown as `\u{7}` and
+  rings nothing. `visible` also shows each bidirectional control of a sender as its escape
+  (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069, such as `\u{202e}`), in every
+  command that prints text, so a sender's text cannot reorder what the terminal shows; `--json`
+  keeps them as values. A backslash is printed as it was sent, so a sender who writes the 8
+  characters `\u{202e}`, or `\u{7}`, gets the line of a sender whose text holds that character:
+  the text output does not tell the 2 apart, and `--json` does. Escaping the backslash would
+  change text that holds none of these characters, and is not done.
+- It never exits 0 by itself. SIGINT and SIGTERM end it at once by their default action, as they
+  end `inbox wake`: its status is that of the signal (128 + n in a shell), and the kernel
+  releases the lock. A failure that ends `inbox wake` ends it with the same status (1, 3, 4) in
+  any round. A terminal that is closed sends SIGHUP, which ends it by its default action unless
+  it was started with SIGHUP ignored (`nohup`); then a write to the closed terminal fails and
+  ends it with 4 and no mark. No case holds the SIGHUP.
+- A mark that fails is named in one line on standard error, as `inbox wake` names it, and the
+  mode goes on: the failure does not change how it ends later (a signal gives the status of the
+  signal). The row may still be in `Sent`, so the next round may get it and show it again; it
+  starts after the pause of a failure (`wake::pause`: 100 ms, doubled for each such round in a
+  row, up to 30 s), so a service that keeps answering a row it refuses to mark does not make it
+  spin. A round that gets a row the round before marked delivered with success counts the same
+  (a service that answers the mark and does not keep it): it shows the row again and pauses
+  after it. Only the message ids of the round before are kept, so nothing grows over a long
+  run. A round whose marks all succeed and that got no such row resets the pause.
+- The lock is the wake's lock: one `inbox wake`, with or without the flag, runs per inbox and
+  outbox file on a host, and a second exits 5 and sends nothing.
+- The adapter of the record. It reads this host's record of an `inbox open` of the caller
+  (`<outbox>.opened`, the adapter of the last `inbox open`) twice over: at the start, after the
+  check of standard output (exit 4 first of all) and before the lock and any request; and in
+  every round, after the answer with rows and before the rows of that round are written. When
+  the record names another adapter (`claude_code`, `metaharness`, `slack`) it ends with 1 and
+  one line:
+  `inbox wake: <address> was opened on this host with the adapter <adapter>, and `inbox wake
+  --follow` is the adapter terminal: run `inbox open --adapter terminal` to show its messages in
+  this terminal` (with `--json` also `{"error":"another adapter","detail":…}`). In a round it
+  writes no row of that round and marks nothing, and the end of the process frees the lock. So a
+  terminal does not keep the lock of a Claude Code session's plugin, whose `inbox wake` would
+  then exit 5 and never wake the session. What is still open: an `inbox open --adapter
+  claude_code` while the mode holds a read does not end that read, so the mode sees the new
+  record only when its read is answered with a row. The message that ends the read stays in
+  `Sent`, neither shown nor marked, and the next `inbox wake` of the plugin returns on it; a
+  plugin wake started between the open and the end of the mode (at the latest when the post
+  arrives) still finds the lock held, exits 5, and the session is woken for that message only
+  after its next turn ends, while `inbox pending` lists it. With no record of the caller it goes
+  on as `inbox wake` does
+  without one: an inbox not open at the service ends it with 1 and the line that names
+  `inbox open`, one opened on another host is followed. `inbox wake` without the flag does not
+  read the adapter.
+
+What it leaves out: whether anyone looks at the terminal (a message shown in a terminal no one
+watches is `Delivered` all the same, and `inbox pending` lists it until it is read), and a person
+inbox of its own (epic:human-inbox builds on this mode).
+
+The cases are `crates/inbox-cli/tests/terminal_adapter.rs` and
+`crates/inbox-cli/tests/adversary_terminal.rs`, against a real `inbox serve` and stand-ins for
+the order of the rows and the marks and for a row that stays in `Sent`. The bell on a terminal
+runs through a pseudo terminal that `script` of util-linux makes: the crate forbids the unsafe
+code that would open one inside the case. Those cases need `script` of util-linux and Linux
+`/proc`. That the pause is reset is held by no case: only an upper bound of time would see a
+pause that grew, and no case holds one.

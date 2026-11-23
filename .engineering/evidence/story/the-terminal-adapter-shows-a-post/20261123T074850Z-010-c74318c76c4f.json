@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T07:48:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-terminal-adapter-shows-a-post",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 4 (the mutant that keeps the ids of failed marks survives): it only keeps the pause from resetting, which only an upper bound on the wall clock would see, and no case holds one; the design and the story's Decisions name the reset of the pause as held by no case",
+    "review": "review-result:adversary-the-terminal-adapter-shows-a-post-pass-2",
+    "outcome": "no-op"
+  }
+}

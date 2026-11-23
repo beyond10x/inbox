@@ -18,7 +18,7 @@ Numbers from 2026-11-22, ESS 0.97.4, Rust 1.99.1. Case counts are the passed cas
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
 | The HTTP listener | A library: request signatures, the core's read rule on each view answer and its rename of `foreign-message` on each command answer, the wait on `Pending`, the expiry task, the limits; TLS 1.3 with a self-signed certificate and the client's pin check, ended in front of the generated reader; loopback only | 127 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, plain or over TLS against a pinned certificate (`inbox tls new`, `--tls-file`, `--tls-pin`), the outbox file, its epochs file and its file of opened inboxes, the reconnect after a restart of the service, `inbox wake`, exit statuses 0 to 5 | 246 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, plain or over TLS against a pinned certificate (`inbox tls new`, `--tls-file`, `--tls-pin`), the outbox file, its epochs file and its file of opened inboxes, the reconnect after a restart of the service, `inbox wake`, exit statuses 0 to 5. The cases of `inbox wake --follow` on a terminal need `script` of util-linux and Linux `/proc`: a host without them fails them, the case of `terminal_adapter.rs` with a line that names `script` of util-linux | 246 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 119 scenarios: 119 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 119 scenarios: 119 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
 | The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 119 scenarios: 32 passed, 0 failed, 0 error, 87 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](../crates/inbox-conformance/unsupported.tsv), `task conform` |
@@ -184,7 +184,11 @@ The limits are stated on the limits page of the site. Their stories are in
   and a line end in a value of a line of its own (an address, an id, a letter) is shown as
   `\u{a}`; the line and paragraph separators U+2028 and U+2029 are shown as their escapes. 4 unit
   cases of `output.rs` hold it (an option text, a refusal, every member of a line, the 2
-  separators); each fails with its part taken out. `--json` is unchanged.
+  separators); each fails with its part taken out. `--json` is unchanged. The characters that
+  change the direction of text (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) were
+  printed as sent and are shown as their escapes since
+  story:the-terminal-adapter-shows-a-post (adversary pass 1 of it, finding 2); 3 unit cases of
+  `output.rs` hold it.
 - **An argument that is not UTF-8 ended the client with a panic**
   (`story:an-argument-that-is-not-utf-8-is-a-usage-error`; adversary pass 1 of
   `story:the-client-prints-no-control-sequence-of-another-principal`, finding F7). In every

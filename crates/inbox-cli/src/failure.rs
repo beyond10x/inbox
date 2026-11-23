@@ -70,6 +70,9 @@ pub enum Failure {
     /// by `inbox close`), the service refused the reconnect's open, or it is still not open right
     /// after an open that succeeded. Exits as a refusal.
     NotOpen(String),
+    /// `inbox wake --follow`: this host's record of the caller's `inbox open` names another
+    /// adapter than `terminal`. Exits as a refusal, before the lock and before any request.
+    OtherAdapter(String),
     /// The command did its work at the service, and what it took from there is printed, but a
     /// step after it failed: `done` is printed, then `cause` is reported and decides the exit.
     After {
@@ -84,7 +87,10 @@ impl Failure {
     /// The exit status.
     pub fn status(&self) -> i32 {
         match self {
-            Self::Refused { .. } | Self::Unreadable { .. } | Self::NotOpen(_) => REFUSED,
+            Self::Refused { .. }
+            | Self::Unreadable { .. }
+            | Self::NotOpen(_)
+            | Self::OtherAdapter(_) => REFUSED,
             Self::Usage(_) => USAGE,
             Self::Transport(_) | Self::Certificate(_) | Self::Unexpected { .. } => TRANSPORT,
             Self::Local(_) => LOCAL,
@@ -102,9 +108,10 @@ impl Failure {
             Self::Transport(detail)
             | Self::Certificate(detail)
             | Self::Unexpected { detail, .. } => format!("transport: {detail}"),
-            Self::Local(detail) | Self::AnotherWake(detail) | Self::NotOpen(detail) => {
-                detail.clone()
-            }
+            Self::Local(detail)
+            | Self::AnotherWake(detail)
+            | Self::NotOpen(detail)
+            | Self::OtherAdapter(detail) => detail.clone(),
             Self::After { cause, .. } => cause.message(),
         }
     }
@@ -153,7 +160,8 @@ impl Failure {
             | Self::Unexpected { detail, .. }
             | Self::Local(detail)
             | Self::AnotherWake(detail)
-            | Self::NotOpen(detail) => {
+            | Self::NotOpen(detail)
+            | Self::OtherAdapter(detail) => {
                 json::member(out, "error");
                 json::push_text(
                     out,
@@ -164,6 +172,7 @@ impl Failure {
                         }
                         Self::AnotherWake(_) => "another wake",
                         Self::NotOpen(_) => "inbox not open",
+                        Self::OtherAdapter(_) => "another adapter",
                         _ => "local",
                     },
                 );

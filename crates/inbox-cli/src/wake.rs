@@ -38,6 +38,15 @@
 //!   the view) (3), a refusal (1), a local file (4).
 //! - SIGINT and SIGTERM end the wake at once, as their default action does, also when the wake
 //!   was started with them ignored; nothing is written to standard output.
+//! - `inbox wake --follow` is the adapter `terminal` (`docs/design/wake.md`, `## terminal`): the
+//!   same rounds, the same lock and the same failures, but after the marks of a round it waits
+//!   again instead of exiting, so only a signal or a failure ends it. A mark that fails is named
+//!   on standard error, and the next round starts after the pause of a failure ([`pause`]); so
+//!   does a round that got a row the round before marked delivered. The rows of a round are
+//!   followed by one BEL when standard output is a terminal ([`output::try_print_round`]). When
+//!   this host's record of an `inbox open` of the caller names another adapter it ends with 1
+//!   ([`Failure::OtherAdapter`]): at the start, before the lock and before any request, and in
+//!   every round, before the rows of the round are written.
 
 use std::fs::{DirBuilder, File, OpenOptions, TryLockError};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
@@ -100,10 +109,14 @@ fn not_open(failure: &Failure) -> bool {
         if name == "inbox not open" && declared_error(answer).is_none())
 }
 
-/// Runs `inbox wake` for `client` and answers its exit status. Every line it writes to standard
-/// error starts with `inbox wake: `, but the reconnect's own line.
-pub fn run(client: &Client, json: bool) -> i32 {
-    match wake(client, json) {
+/// The adapter `inbox wake --follow` is.
+const TERMINAL: &str = "terminal";
+
+/// Runs `inbox wake` for `client`, with `follow` `inbox wake --follow`, and answers its exit
+/// status. Every line it writes to standard error starts with `inbox wake: `, but the
+/// reconnect's own line.
+pub fn run(client: &Client, json: bool, follow: bool) -> i32 {
+    match wake(client, json, follow) {
         Ok(status) => status,
         Err(failure) => report(&failure, json),
     }
@@ -119,26 +132,95 @@ pub fn report(failure: &Failure, json: bool) -> i32 {
     failure.status()
 }
 
-fn wake(client: &Client, json: bool) -> Result<i32, Failure> {
+fn wake(client: &Client, json: bool, follow: bool) -> Result<i32, Failure> {
     // First of all: a wake whose rows no one would read takes no lock and asks nothing.
     if let Err(error) = output::reaches_a_reader() {
         return Err(Failure::Local(format!(
             "standard output: {error}: nothing is asked of the service"
         )));
     }
+    if follow {
+        terminal_only(client)?;
+    }
     end_on_signal()?;
     let address = client.caller.principal.clone();
     let _lock = lock(client.outbox.path(), &address)?.ok_or_else(|| {
         Failure::AnotherWake(format!("another wake of {address} runs on this host"))
     })?;
-    let (answer, reconnected) = held(client)?;
-    let done = commands::pending_done(&answer);
+    // Rounds in a row of `--follow` in which a mark failed, or that got a row the round before
+    // marked delivered: the row may still be in `Sent`, and the next round may get it again at
+    // once.
+    let mut failed_rounds = 0_u32;
+    // The rows the round before marked delivered, only those: no set grows over a long run.
+    let mut marked: Vec<String> = Vec::new();
+    loop {
+        let (answer, reconnected) = held(client)?;
+        if follow {
+            // The record may have changed since the start: an inbox opened with another adapter
+            // meanwhile gets no row of this round, and the end of the process frees the lock.
+            terminal_only(client)?;
+        }
+        let again = output::rows(&answer).iter().any(|row| {
+            marked
+                .iter()
+                .any(|id| id == output::text(row, "message_id"))
+        });
+        let (first, now_marked) = deliver(client, json, follow, &answer, reconnected.as_deref())?;
+        if !follow {
+            return Ok(first.map_or(0, |failure| failure.status()));
+        }
+        marked = now_marked;
+        if first.is_some() || again {
+            std::thread::sleep(pause(failed_rounds));
+            failed_rounds = failed_rounds.saturating_add(1);
+        } else {
+            failed_rounds = 0;
+        }
+    }
+}
+
+/// `inbox wake --follow` is the adapter `terminal`: when this host's record of an `inbox open`
+/// of the caller names another adapter (the inbox is a Claude Code session's, say), it ends with
+/// [`Failure::OtherAdapter`] and does not take the lock that adapter's wake takes. Without a
+/// record it goes on as `inbox wake` does.
+fn terminal_only(client: &Client) -> Result<(), Failure> {
+    let principal = &client.caller.principal;
+    match client.outbox.opened(principal) {
+        Some(record) if record.adapter != TERMINAL => Err(Failure::OtherAdapter(format!(
+            "{principal} was opened on this host with the adapter {}, and `inbox wake --follow` \
+             is the adapter {TERMINAL}: run `inbox open --adapter {TERMINAL}` to show its \
+             messages in this terminal",
+            record.adapter
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Writes the rows of `answer` (with `--json` its document, with the member `reconnected` when
+/// a reconnect ran) and flushes them, then sends `MarkDelivered` for each row, one after
+/// another; a round of `--follow` rings the bell after its text ([`output::try_print_round`]).
+/// Answers the first mark that failed (each is named in one line on standard error) and the
+/// message ids whose mark succeeded.
+///
+/// # Errors
+///
+/// [`Failure::Local`] when standard output cannot be written: then no mark is sent.
+fn deliver(
+    client: &Client,
+    json: bool,
+    follow: bool,
+    answer: &Value,
+    reconnected: Option<&str>,
+) -> Result<(Option<Failure>, Vec<String>), Failure> {
+    let done = commands::pending_done(answer);
     let written = if json {
-        let document = match &reconnected {
+        let document = match reconnected {
             Some(member) => output::with_member(&done.document, "reconnected", member),
             None => std::borrow::Cow::Borrowed(done.document.as_str()),
         };
         output::try_print_document(&document)
+    } else if follow {
+        output::try_print_round(&done.text)
     } else {
         output::try_print_text(&done.text)
     };
@@ -148,17 +230,21 @@ fn wake(client: &Client, json: bool) -> Result<i32, Failure> {
         )));
     }
     let mut first: Option<Failure> = None;
-    for row in output::rows(&answer) {
+    let mut marked = Vec::new();
+    for row in output::rows(answer) {
         let message_id = output::text(row, "message_id");
-        if let Err(failure) = commands::mark_delivered(client, message_id) {
-            output::warn(&format!(
-                "inbox wake: {message_id} was printed and not marked delivered: {}",
-                failure.message()
-            ));
-            first.get_or_insert(failure);
+        match commands::mark_delivered(client, message_id) {
+            Ok(_) => marked.push(message_id.to_owned()),
+            Err(failure) => {
+                output::warn(&format!(
+                    "inbox wake: {message_id} was printed and not marked delivered: {}",
+                    failure.message()
+                ));
+                first.get_or_insert(failure);
+            }
         }
     }
-    Ok(first.map_or(0, |failure| failure.status()))
+    Ok((first, marked))
 }
 
 /// Reads `Pending` until it has a row in `Sent`, as the module says: answers that answer with its

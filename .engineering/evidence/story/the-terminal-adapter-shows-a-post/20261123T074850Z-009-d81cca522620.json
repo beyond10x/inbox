@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T07:48:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-terminal-adapter-shows-a-post",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 3, pre-existing (a sender's literal text of an escape prints the same bytes as the escaped character, and no document for a user says so): one sentence each in docs/design/wake.md under terminal and in the first-use page; the backslash stays as sent, because escaping it would change text that holds none of these characters",
+    "review": "review-result:adversary-the-terminal-adapter-shows-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}

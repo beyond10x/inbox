@@ -49,7 +49,23 @@ fn print(line: &str) {
 ///
 /// The error of [`reader`] or of the write.
 pub fn try_print_text(text: &str) -> std::io::Result<()> {
-    write_to_reader(&visible(text))
+    write_to_reader(&visible(text), false)
+}
+
+/// The terminal's bell, the client's own byte: [`try_print_round`] writes it after the rows of a
+/// round of `inbox wake --follow`, never through [`visible`], which shows a BEL of another
+/// principal as its escape `\u{7}`.
+const BEL: char = '\u{7}';
+
+/// [`try_print_text`] for a round of `inbox wake --follow`: the same bytes, then one [`BEL`] when
+/// standard output is a terminal, and none when it is not (a pipe or a file gets the text only).
+/// One write, so the bell comes after the text.
+///
+/// # Errors
+///
+/// The error of [`reader`] or of the write.
+pub fn try_print_round(text: &str) -> std::io::Result<()> {
+    write_to_reader(&visible(text), true)
 }
 
 /// [`print_document`], answering whether the document was written, as [`try_print_text`] does.
@@ -58,7 +74,7 @@ pub fn try_print_text(text: &str) -> std::io::Result<()> {
 ///
 /// The error of [`reader`] or of the write.
 pub fn try_print_document(document: &str) -> std::io::Result<()> {
-    write_to_reader(&plain_document(document))
+    write_to_reader(&plain_document(document), false)
 }
 
 /// Whether standard output can reach a reader ([`reader`]); `inbox wake` asks it before its lock
@@ -98,14 +114,24 @@ fn reader() -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 
-/// Writes `line` and a line end through [`reader`], in one `write_all`.
-fn write_to_reader(line: &str) -> std::io::Result<()> {
+/// Writes `line` and a line end through [`reader`], in one `write_all`; with `bell`, then a
+/// [`BEL`] when that is a terminal ([`rings`]).
+fn write_to_reader(line: &str, bell: bool) -> std::io::Result<()> {
     let mut file = reader()?;
-    let mut bytes = String::with_capacity(line.len() + 1);
+    let mut bytes = String::with_capacity(line.len() + 2);
     bytes.push_str(line);
     bytes.push('\n');
+    if bell && rings(&file) {
+        bytes.push(BEL);
+    }
     file.write_all(bytes.as_bytes())?;
     file.flush()
+}
+
+/// Whether the bell is written to `file`: only when it is a terminal.
+fn rings(file: &std::fs::File) -> bool {
+    use std::io::IsTerminal as _;
+    file.is_terminal()
 }
 
 fn print_checked(line: &str) -> std::io::Result<()> {
@@ -116,14 +142,27 @@ fn print_checked(line: &str) -> std::io::Result<()> {
 
 /// `text` with each control character but the line end (C0 with the tab and the carriage
 /// return, DEL, C1), and the Unicode line and paragraph separators (U+2028, U+2029, which a
-/// reader may show as a line end), written as its escape `\u{1b}`: a value another principal or
-/// the service set reaches the terminal as visible text, never as a control sequence or a line
-/// of its own. Text without such characters is unchanged.
+/// reader may show as a line end), and each bidirectional control ([`bidirectional`]), written
+/// as its escape `\u{1b}`: a value another principal or the service set reaches the terminal as
+/// visible text, never as a control sequence, a line of its own or text shown in another order.
+/// Text without such characters is unchanged.
 pub fn visible(text: &str) -> Cow<'_, str> {
     escaped(text, |character| {
         (character.is_control() && character != '\n')
             || matches!(character, '\u{2028}' | '\u{2029}')
+            || bidirectional(character)
     })
+}
+
+/// The bidirectional controls of Unicode, which make a terminal show the text after them in
+/// another order: the Arabic letter mark (U+061C), the left-to-right and right-to-left marks
+/// (U+200E, U+200F), the embeddings, overrides and their end (U+202A to U+202E), and the
+/// isolates and their end (U+2066 to U+2069).
+fn bidirectional(character: char) -> bool {
+    matches!(
+        character,
+        '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
 }
 
 /// `document` with each control character a JSON writer may leave raw inside a string (DEL and
@@ -472,6 +511,54 @@ mod tests {
             text.contains(&format!("  A) Ship\\u{{2028}}{FORGED}")),
             "{text}"
         );
+    }
+
+    /// Every bidirectional control (the Arabic letter mark, the left-to-right and right-to-left
+    /// marks, the embeddings, overrides and their end, the isolates and their end) is shown as
+    /// its escape: a sender cannot reorder what the owner's terminal shows.
+    #[test]
+    fn every_bidirectional_control_is_shown_escaped() {
+        let controls = [
+            '\u{61c}', '\u{200e}', '\u{200f}', '\u{202a}', '\u{202b}', '\u{202c}', '\u{202d}',
+            '\u{202e}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}',
+        ];
+        for control in controls {
+            let text = format!("pay {control}0001 now");
+            assert_eq!(
+                visible(&text),
+                format!("pay \\u{{{:x}}}0001 now", u32::from(control)),
+                "U+{:04X}",
+                u32::from(control)
+            );
+        }
+        let text = shown(&decision("Ship \u{202e}dloH", ""));
+        assert!(text.contains("  A) Ship \\u{202e}dloH"), "{text}");
+        assert!(
+            !text.chars().any(|character| controls.contains(&character)),
+            "{text}"
+        );
+    }
+
+    /// The neighbours of the bidirectional controls are not escaped: the zero width non-joiner
+    /// and joiner, which a script needs, the letters of a right-to-left script, U+202F and
+    /// U+2065.
+    #[test]
+    fn a_character_beside_the_bidirectional_controls_is_printed_as_written() {
+        let plain = "a\u{200c}b\u{200d}c \u{5e9}\u{5dc}\u{5d5}\u{5dd} \u{645}\u{631}\u{62d}\u{628}\u{627} \u{202f}\u{2065}";
+        assert!(matches!(visible(plain), std::borrow::Cow::Borrowed(text) if text == plain));
+    }
+
+    /// `--json` is unchanged: a bidirectional control stays a value of the document as it was
+    /// sent.
+    #[test]
+    fn a_document_keeps_a_bidirectional_control_as_it_was_sent() {
+        let value = json::Value::Object(vec![(
+            "body".to_owned(),
+            json::Value::Text("pay \u{202e}0001".to_owned()),
+        )]);
+        let written = document(&value);
+        assert_eq!(plain_document(&written), written);
+        assert_eq!(json::parse(&written).unwrap(), value);
     }
 
     #[test]

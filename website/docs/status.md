@@ -28,6 +28,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | Every message expires, 24 hours after it was made by default. A decision that names an option for silence is answered with it at `expires`. From `expires` on, by the service's clock, a message takes no answer, no refusal and no read or delivery mark (`Expired`) and stays listed until it is removed, and a post or a reply whose own `expires` has passed is refused (`AlreadyExpired`) | `inbox post --expires` |
 | A message arrives once: a second post with the message id or the dedup key of a stored message of the same sender stores nothing | `inbox post --dedup-key` |
 | Post again after a restart of the service, from the sender's outbox file, and open the owner's inbox again: the next command of each does it by itself. The inbox is opened again only when `inbox open` ran on this host with this version or later; after an upgrade, run `inbox open` once | any client command, `inbox repost` |
+| Show each message in a terminal of its own as it arrives, ring the terminal's bell, and mark the message delivered, until Ctrl-C: the terminal adapter, for an inbox opened with `--adapter terminal` | `inbox wake --follow`, [first use](first-use.md#terminal) |
 
 ### Keys and authority
 
@@ -72,7 +73,7 @@ Each row with a flag is set on `inbox serve`.
 - A persistent backend. Messages are kept in memory, and a restart of the service loses them.
 - A listener outside loopback.
 - A second host.
-- Waking a session of another harness than Claude Code, and showing a message in a terminal: the `metaharness` and `terminal` adapters.
+- Waking a session of another harness than Claude Code: the `metaharness` adapter.
 - A history of handled messages.
 - Use by principals of different operators ([limits](limits.md)).
 - A deployment.

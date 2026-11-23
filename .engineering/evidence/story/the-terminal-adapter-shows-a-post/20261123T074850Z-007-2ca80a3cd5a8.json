@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T07:48:50Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-terminal-adapter-shows-a-post",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 finding 1 (the pass 1 case for the lock runs the plain wake right after the post, with no bound and no wait for the adapter to end: red with a correct product when the adapter is scheduled late, a hang to the 60 s limit under 2 mutants): the case ends the adapter first, by itself, with 1 and without the post in its output, then runs the plain wake with the bound of the file and holds exit 0 and the post; with the check of the round taken out it fails at the bound and does not hang. Changed by the coordinator as the pass says",
+    "review": "review-result:adversary-the-terminal-adapter-shows-a-post-pass-2",
+    "outcome": "fixed"
+  }
+}
