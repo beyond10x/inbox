@@ -24,6 +24,9 @@ Release 0.5.0 is release 0.4.0 with the changes its `CHANGELOG.md` section lists
 the parameter `undelivered=1` of the wait on `Pending`, the Claude Code plugin in
 `adapters/claude-code/`, and a text output that keeps each message to one line that is not
 indented.
+Release 0.6.0 is release 0.5.0 with the changes its `CHANGELOG.md` section lists: `inbox wake
+--follow`, which shows each message in a terminal as it arrives, and a text output that shows
+the characters that change the direction of text as their escapes.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
