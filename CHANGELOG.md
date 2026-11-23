@@ -20,6 +20,29 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   flag of a part of a country is shown with the escapes of its tags. No flag, exit status or
   `--json` output changes.
 
+### Fixed
+
+- A command that has to change the epochs file (`<outbox>.epochs`) or the file of the opened
+  inbox (`<outbox>.opened`) and cannot read it (no permission to read, not UTF-8, over its
+  bound, no regular file) now fails with exit status 4, names the file and the reason in one
+  line on standard error, and leaves the file and the outbox file as they are (but that
+  `inbox repost` still drops the envelopes that expired or were refused for good). Before, it
+  read the file as empty and replaced it with its own entry, losing every other epoch, mark
+  and record. `inbox post` and `inbox close` fail before they send anything; `inbox open` and
+  `inbox repost` fail after the service answered (the inbox is open, the envelopes are
+  posted), `inbox repost` also when a post is answered `408`, `5xx` or `UnknownInbox`. After
+  an `inbox open` that failed so, `inbox close` fails with 4 and sends nothing until the file
+  is repaired or removed. A missing file is read as empty, and a command that only reads these
+  files is unchanged.
+- A change of the outbox file or of `<outbox>.epochs`, and of a key file (`inbox keyfile
+  add-key` and `inbox keyfile add-delegation`), no longer follows a symbolic link or opens a
+  FIFO left at the name of its staged file (`<file>.new`, for a key file `<file>.<pid>.new`),
+  and a change of `<outbox>.opened` no longer opens a FIFO there: the entry is removed and the
+  staged file is created anew with its mode (0600 for the outbox files, the mode of the key file
+  it replaces). Before, a link there was followed: the file became a link to the link's target,
+  whose bytes were overwritten, and a link to the file itself lost every entry of the file; a
+  FIFO there held the command.
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

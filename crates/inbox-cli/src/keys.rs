@@ -583,16 +583,16 @@ fn beside(path: &Path, suffix: &str) -> PathBuf {
 }
 
 /// Replaces the file at `path` with `bytes`: written to a file of this process's own beside it,
-/// given `mode` (the mode of the file it replaces) when there is one, then renamed over it.
+/// `<path>.<pid>.new`, created anew by [`stage`] with `mode` (the mode of the file it replaces) or,
+/// when there is none, 0666 narrowed by the umask (the only callers, `add_key` and
+/// `add_delegation`, write the key file, which holds public keys and signatures and no secret
+/// bytes); then given `mode` exactly (the umask may narrow it at creation), written, synced and
+/// renamed over it. On a failure the staged file is removed.
 fn replace(path: &Path, bytes: &[u8], mode: Option<u32>) -> Result<(), Failure> {
     let shown = path.display();
     let staged = beside(path, &format!(".{}.new", std::process::id()));
     let written = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&staged)?;
+        let mut file = stage(&staged, mode.unwrap_or(0o666))?;
         if let Some(mode) = mode {
             file.set_permissions(fs::Permissions::from_mode(mode))?;
         }
@@ -606,11 +606,91 @@ fn replace(path: &Path, bytes: &[u8], mode: Option<u32>) -> Result<(), Failure> 
     written.map_err(|error| Failure::Local(format!("{shown}: {error}")))
 }
 
+/// Removes what is at `staged` (a file, a link, a FIFO: none of them is opened or followed; a
+/// directory is a failure) and creates a new file there with `mode`, narrowed by the umask.
+fn stage(staged: &Path, mode: u32) -> std::io::Result<File> {
+    if let Err(error) = fs::remove_file(staged)
+        && error.kind() != ErrorKind::NotFound
+    {
+        return Err(error);
+    }
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(staged)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+    use std::process::Command;
+
     use inbox::server::json;
 
-    use super::{seed_from_base64, seed_to_base64};
+    use super::{seed_from_base64, seed_to_base64, stage};
+
+    /// The umask of this process, from `/proc/self/status`.
+    fn umask() -> u32 {
+        let status = fs::read_to_string("/proc/self/status").expect("/proc/self/status is read");
+        let line = status
+            .lines()
+            .find_map(|line| line.strip_prefix("Umask:"))
+            .expect("/proc/self/status names the umask");
+        u32::from_str_radix(line.trim(), 8).expect("the umask is octal")
+    }
+
+    /// `stage` removes what is at the staged place and creates an empty regular file there with
+    /// the mode it is given, narrowed only by the umask: nothing there, a link to another file of
+    /// the directory (removed, its target byte for byte unchanged), a FIFO (removed, not opened)
+    /// and a regular file left behind. A directory there is a failure and is left as it is. The
+    /// row of mode 0000 tells a file created with its mode from one created with 0666 under any
+    /// umask but one that removes every read and write permission.
+    #[test]
+    fn the_staged_file_is_created_anew_with_its_mode() {
+        let dir = std::env::current_exe()
+            .expect("the test binary has a path")
+            .with_file_name(format!("keys-stage-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("the directory is made");
+        let other = dir.join("other");
+        fs::write(&other, b"other bytes\n").unwrap();
+        fs::set_permissions(&other, fs::Permissions::from_mode(0o640)).unwrap();
+        let staged = dir.join("keys.json.1.new");
+        let umask = umask();
+        for (planted, mode) in [
+            ("nothing", 0o000),
+            ("a link", 0o600),
+            ("a FIFO", 0o640),
+            ("a file", 0o600),
+        ] {
+            match planted {
+                "a link" => symlink("other", &staged).unwrap(),
+                "a FIFO" => assert!(
+                    Command::new("mkfifo")
+                        .arg(&staged)
+                        .status()
+                        .expect("mkfifo runs")
+                        .success()
+                ),
+                "a file" => fs::write(&staged, b"left behind").unwrap(),
+                _ => {}
+            }
+            drop(stage(&staged, mode).unwrap_or_else(|error| panic!("{planted}: {error}")));
+            let made = fs::symlink_metadata(&staged).unwrap();
+            assert!(made.file_type().is_file(), "{planted}: {made:?}");
+            assert_eq!(made.len(), 0, "{planted}");
+            assert_eq!(made.mode() & 0o7777, mode & !umask, "{planted}");
+            assert_eq!(fs::read(&other).unwrap(), b"other bytes\n", "{planted}");
+            assert_eq!(fs::metadata(&other).unwrap().mode() & 0o7777, 0o640);
+            fs::remove_file(&staged).unwrap();
+        }
+        fs::create_dir(&staged).unwrap();
+        assert!(stage(&staged, 0o600).is_err(), "a directory is a failure");
+        assert!(fs::symlink_metadata(&staged).unwrap().is_dir());
+        fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// The seed's base64 is the one `json::push_base64` writes (`signing.md`'s encoding), and it
     /// reads back to the same bytes.

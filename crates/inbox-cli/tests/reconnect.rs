@@ -891,57 +891,14 @@ fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
     }
 }
 
-/// The number of the system call `openat` on this architecture, for the fallback of
-/// [`blocked_opening_a_fifo`].
-const OPENAT: &str = if cfg!(target_arch = "x86_64") {
-    "257 "
-} else if cfg!(target_arch = "aarch64") {
-    "56 "
-} else {
-    "no openat number known "
-};
-
-/// Whether the process `pid` is blocked opening the FIFO `fifo`, which has no reader.
-///
-/// First test: `/proc/<pid>/wchan` names `wait_for_partner`, the wait of `fs/pipe.c` for the
-/// other end of a FIFO. It holds on Linux of any architecture whose `wchan` shows symbol names
-/// (a kernel with kallsyms; this host, Linux 6.18 on x86-64, and the forge's x86-64 Ubuntu
-/// runner).
-///
-/// Fallback, for a host whose `wchan` is not readable or shows no name: `/proc/<pid>/syscall`
-/// shows `openat` in progress (number 257 on x86-64, 56 on aarch64; no other architecture), the
-/// same line in 2 reads 50 ms apart (a blocked FIFO open stays; an `openat` on a disk does not),
-/// and no descriptor of the child points at `fifo` yet. It needs ptrace read access to the child
-/// (yama `ptrace_scope` 1 or lower; this test is its parent).
-fn blocked_opening_a_fifo(pid: u32, fifo: &Path) -> bool {
-    if fs::read_to_string(format!("/proc/{pid}/wchan"))
-        .is_ok_and(|wchan| wchan == "wait_for_partner")
-    {
-        return true;
-    }
-    let syscall = || fs::read_to_string(format!("/proc/{pid}/syscall")).ok();
-    let Some(first) = syscall().filter(|line| line.starts_with(OPENAT)) else {
-        return false;
-    };
-    std::thread::sleep(Duration::from_millis(50));
-    if syscall().as_ref() != Some(&first) {
-        return false;
-    }
-    let target = fs::canonicalize(fifo).unwrap_or_else(|_| fifo.to_owned());
-    !fs::read_dir(format!("/proc/{pid}/fd"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .any(|entry| fs::read_link(entry.path()).is_ok_and(|link| link == target))
-}
-
 /// `inbox open` writes the record of the opened inbox only while it holds `<outbox>.lock`: with
 /// the lock held by this test it waits for it (as `/proc/locks` says) and the file stays
-/// unwritten until the lock is released; and while it is held up writing the staged file (a
-/// FIFO without a reader in its place), `/proc/locks` names it as the holder of the lock.
+/// unwritten until the lock is released. A FIFO at the place of the staged file is left as it is
+/// while the open waits for the lock, and is removed, not opened, once the open holds it. The
+/// case no longer holds that the lock is held until the staged file is renamed over the record.
 #[test]
 fn the_record_of_the_opened_inbox_is_written_under_the_lock() {
-    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
     use std::process::Stdio;
 
     let world = World::new("reconnect-lock");
@@ -974,33 +931,40 @@ fn the_record_of_the_opened_inbox_is_written_under_the_lock() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(opened(&outbox).len(), 1);
 
+    // A FIFO without a reader at the place of the staged file: the open leaves it alone while it
+    // waits for the lock, then removes it under the lock and writes its staged file anew; it is
+    // not opened, so the open is not held up by it (story:an-unreadable-epochs-file-keeps-its-
+    // other-lines, round 3: `replace` follows nothing at `<file>.new`).
     let staged = beside(&outbox, ".opened.new");
     let made = std::process::Command::new("mkfifo")
         .arg(&staged)
         .status()
         .expect("mkfifo runs");
     assert!(made.success(), "{made:?}");
-    let mut child = world
+    held.lock().expect("the lock again");
+    let child = world
         .client_command("bob", &["open", "--adapter", "slack"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("the binary starts");
     let pid = child.id();
-    let started = std::time::Instant::now();
-    while !blocked_opening_a_fifo(pid, &staged) && started.elapsed() < support::STAND_IN_WAIT {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let blocked = blocked_opening_a_fifo(pid, &staged);
-    let (holders, _) = flocks(inode);
-    let _ = child.kill();
-    let _ = child.wait();
-    fs::remove_file(&staged).expect("the FIFO is removed");
-    assert!(blocked, "the open did not reach the staged file");
+    wait_for("the second open waits for the lock", || {
+        flocks(inode).1.contains(&pid)
+    });
+    let kept = fs::symlink_metadata(&staged).map(|meta| meta.file_type().is_fifo());
+    held.unlock().expect("the lock is released");
+    let output = child.wait_with_output().expect("the open ends");
     assert!(
-        holders.contains(&pid),
-        "the open wrote the staged file without the lock: holders {holders:?}, not {pid}"
+        matches!(kept, Ok(true)),
+        "the staged file's place changed before the open held the lock: {kept:?}"
     );
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        fs::symlink_metadata(&staged).is_err(),
+        "the FIFO at the staged file's place is left"
+    );
+    assert_eq!(opened(&outbox).len(), 1);
 }
 
 /// A typed `inbox repost` at a new start before the owner opened again: each kept envelope is

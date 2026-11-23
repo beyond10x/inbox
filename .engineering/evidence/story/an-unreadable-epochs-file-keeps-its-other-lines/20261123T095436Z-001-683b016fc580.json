@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (3 lines name the file in a run that ends with 4): the coordinator decided one line; Outbox holds the files a change failed on and the warning of kept, the read paths say nothing about a failed file; the adversary's case names_it_in_one_line is green, and a read-only inbox outbox warns as in release 0.6.0 (a new case)",
+    "review": "review-result:adversary-unreadable-epochs-pass-1",
+    "outcome": "fixed"
+  }
+}

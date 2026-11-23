@@ -174,6 +174,12 @@ is kept with its id and the reason for the operator:
 The verifier holds only the entries left. It reads no clock and drops no entry for being lapsed:
 lapse is decided at the instant of each check.
 
+`inbox keyfile add-key` and `inbox keyfile add-delegation` change the key file under an exclusive
+lock of `<file>.lock`: they remove whatever is at `<file>.<pid>.new` (a link there is not
+followed, a directory there is a failure), create that file anew with the mode of the key file
+they replace (0666 narrowed by the umask for a new key file, which holds no secret bytes), write
+the whole file to it and rename it over the key file.
+
 ## Instants
 
 Every check takes the instant as an argument; the library reads no clock.

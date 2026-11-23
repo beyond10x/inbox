@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (inbox repost over an unreadable epochs file exits 1, not 4, when a post is answered 408, 5xx or UnknownInbox): the failed mark_unsent is the run's local failure in repost_each, exit 4 after the report; the adversary's case a_repost_answered_503_over_an_unreadable_epochs_file_exits_4 is green and red against the mutant",
+    "review": "review-result:adversary-unreadable-epochs-pass-1",
+    "outcome": "fixed"
+  }
+}

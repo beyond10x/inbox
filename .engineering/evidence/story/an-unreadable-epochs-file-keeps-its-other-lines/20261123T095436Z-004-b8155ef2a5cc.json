@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (the row of crates/inbox-cli/ in AGENTS.md names 1 of the 3 files): the parenthesis names a change of any of the 3 files, exit 4 and the one line",
+    "review": "review-result:adversary-unreadable-epochs-pass-1",
+    "outcome": "fixed"
+  }
+}

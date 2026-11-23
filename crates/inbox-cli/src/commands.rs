@@ -377,10 +377,9 @@ pub fn outbox(client: &Client) -> Result<Done, Failure> {
         "outbox",
         &format!("sender={}", query_value(&client.caller.principal)),
     )?;
-    let unreadable = client
-        .outbox
-        .kept(&client.caller.principal, now())?
-        .unreadable;
+    let kept = client.outbox.kept(&client.caller.principal, now());
+    client.outbox.speak();
+    let unreadable = kept?.unreadable;
     let mut done = view_done(&answer);
     if let Value::Object(mut members) = answer {
         members.push(("unreadable".to_owned(), unreadable_value(&unreadable)));
@@ -789,7 +788,8 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
 /// a run ended between two posts keeps the epochs of the posts that arrived. A final refusal
 /// ([`final_refusal`]) drops the envelope; the other refusals keep it. Exits as a refusal,
 /// naming the first, when any envelope did not arrive, and with an unreadable entry, naming each
-/// line of the outbox file that does not read as an envelope; a transport failure ends the run.
+/// line of the outbox file that does not read as an envelope; a transport failure ends the run
+/// and decides its exit (3), and a local failure before it is named in one line.
 /// A local failure (the outbox file or the epochs file cannot be changed) ends no post:
 /// every envelope is posted, the report is printed, and the first local failure decides the
 /// exit (4).
@@ -884,8 +884,21 @@ impl Reposted {
 
 /// The posts of `repost`: at the epoch `known` when the caller knows it (a reconnect, from the
 /// answer that started it), else at the epoch the service is asked for when a kept envelope
-/// records one. The envelope `skip` (the one the command itself posted) is left alone.
+/// records one. The envelope `skip` (the one the command itself posted) is left alone. The word
+/// on an epochs file the read of the kept envelopes took as holding nothing is written at the
+/// end ([`Outbox::speak`]), and not when a change of that file failed in the run.
 fn repost_at(
+    client: &Client,
+    known: Option<Epoch>,
+    skip: Option<&str>,
+) -> Result<Reposted, Failure> {
+    let run = repost_each(client, known, skip);
+    client.outbox.speak();
+    run
+}
+
+/// [`repost_at`] but the word held back.
+fn repost_each(
     client: &Client,
     known: Option<Epoch>,
     skip: Option<&str>,
@@ -912,11 +925,11 @@ fn repost_at(
         let to = entry.envelope.to.0.clone();
         let (outcome, epoch) = client.command_in_epoch("post", &entry.text);
         let not_reached = unsent(&outcome);
-        if entry.epoch.is_none() && not_reached {
-            settle_or_warn(
-                client.outbox.mark_unsent(&message_id, now()),
-                "inbox repost",
-            );
+        if entry.epoch.is_none()
+            && not_reached
+            && let Err(cause) = client.outbox.mark_unsent(&message_id, now())
+        {
+            local.get_or_insert(cause);
         }
         let (arrived, answer, said) = match outcome {
             Ok(answer) => (true, answer, "arrived".to_owned()),
@@ -945,7 +958,14 @@ fn repost_at(
                     (false, answer, said)
                 }
             }
-            Err(other) => return Err(other),
+            // A transport failure ends the run and decides its exit; a local failure before it
+            // is named in one line.
+            Err(other) => {
+                if let Some(cause) = &local {
+                    warn(&format!("inbox repost: {}", cause.message()));
+                }
+                return Err(other);
+            }
         };
         // An arrival records the answer's epoch where the service holds the message. Otherwise
         // (`duplicate-key`: another message holds the key; or an answer without an epoch) the

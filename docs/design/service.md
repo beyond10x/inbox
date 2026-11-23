@@ -134,9 +134,33 @@ error; it writes only what the same answer to a typed command writes (a repost r
 unsent, one refused for good loses the mark), so the next command tries again. Without `--json` the command's own
 lines are written before the reconnect starts; with `--json` its one document is written once
 the reconnect ended, with the member `reconnected`. A file beside the outbox file that is no
-regular file or is over its bound is read as holding nothing, named in one line on standard
-error, and blocks no command. Two commands that do it at once post a message id twice, and the
-service answers the second `duplicate`.
+regular file or is over its bound is read as holding nothing by a command that only reads it,
+named in one line on standard error, and blocks no command. Two commands that do it at once
+post a message id twice, and the service answers the second `duplicate`.
+
+A command that has to change the epochs file or `<outbox>.opened` and cannot read it (no
+permission to read, not UTF-8, over its bound, no regular file) changes neither that file nor
+the outbox file (but that `inbox repost` drops from the outbox file, in the same run, the
+envelopes that expired and those the service refused for good), names the file and the reason
+in one line on standard error and exits 4, as a change of an unreadable outbox file does: the
+other entries of the file are not lost to a file written with the change's own entry only. That line is the only one of the run that names the
+file: the warning "read as holding nothing" of a read of the same file in the same run is not
+written (the read of the kept envelopes of `inbox repost` before the failure, held back until
+its posts are done; the reconnect's read after it). A command that only reads the file warns as
+before. `inbox post` and `inbox close` change it before their request and send nothing. `inbox
+open` changes it only after the service answered: the service has opened the inbox, the outcome
+is printed, and the record is not written; until the file is repaired or removed, `inbox close`
+then ends with 4 and sends nothing, so the inbox stays open. `inbox repost` changes it only
+after each answer to a post (an epoch recorded, a mark taken off, or a mark written for an
+answer `408`, `5xx` or `UnknownInbox`): every kept envelope (the unreadable file gives none of
+them an epoch) is posted and its answer reported, none is recorded, and the command exits 4
+after the report; a failure in transport ends the run with 3 as before, and a local failure
+before it is named in one line. The reconnect's open changes it after the service opened the
+inbox, a failed step that leaves the command's own exit status; its repost does not start from
+an unreadable epochs file, which marks no envelope unsent. A file that does not exist is read
+as empty. A line of the file that is UTF-8 but is no entry (another form, or a message id or an
+inbox named twice) gives no epoch or record and is left out when the file is written again, as
+before.
 
 The value is not made from the `Clock` of `Config` (a clock a test sets does not move between two
 starts) and carries no time and no secret. It is written in the one function that writes the head

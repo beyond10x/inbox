@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (the story's cases accept more than one line that names the path): wrong() asks for exactly one line that names the path and carries the reason",
+    "review": "review-result:adversary-unreadable-epochs-pass-1",
+    "outcome": "fixed"
+  }
+}

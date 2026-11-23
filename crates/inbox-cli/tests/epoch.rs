@@ -220,25 +220,35 @@ fn after_a_restart_repost_posts_once_and_then_nothing() {
     assert_eq!(ids(&pending), std::slice::from_ref(&message_id));
 }
 
+/// An unreadable epochs file gives no epoch: a command that only reads it fails not, and a
+/// `repost`, which then posts the envelope again, fails with 4 when it has to record the epoch
+/// and leaves the file as it was (story:an-unreadable-epochs-file-keeps-its-other-lines; the
+/// 4 states of the file in `tests/unreadable_beside.rs`).
 #[test]
-fn an_unreadable_epochs_file_gives_no_epoch_and_fails_no_command() {
+fn an_unreadable_epochs_file_gives_no_epoch_and_is_not_replaced() {
     let world = World::new("epoch-unreadable");
     world.client("bob", &["open"]).ok();
-    let message_id = post_a_note(&world, "unreadable");
+    post_a_note(&world, "unreadable");
     let path = epochs_file(&world.outbox("alice"));
 
     // Bytes that are not UTF-8.
-    fs::write(&path, [0xff, 0xfe, b'\t', 0x80, b'\n']).expect("written");
-    assert_eq!(repost_once(&world, &message_id), "duplicate");
-    repost_nothing(&world);
+    let unreadable = [0xff, 0xfe, b'\t', 0x80, b'\n'];
+    fs::write(&path, unreadable).expect("written");
+    world.client("alice", &["outbox", "--json"]).ok();
+    let run = world.client("alice", &["repost", "--json"]);
+    assert_eq!(run.status, support::LOCAL, "{run:#?}");
+    let entries = reposted(run.json().member("done").expect("the report under `done`"));
+    assert_eq!(entries.len(), 1, "{run:#?}");
+    assert_eq!(outcome(&entries[0]), "duplicate", "{run:#?}");
+    assert_eq!(fs::read(&path).expect("the file"), unreadable);
 
     // A file its owner may not read.
     fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).expect("chmod");
     world.client("alice", &["outbox", "--json"]).ok();
-    assert_eq!(repost_once(&world, &message_id), "duplicate");
-    let mode = fs::metadata(&path).expect("replaced").permissions().mode();
-    assert_eq!(mode & 0o777, 0o600, "the file was replaced");
-    repost_nothing(&world);
+    let run = world.client("alice", &["repost"]);
+    assert_eq!(run.status, support::LOCAL, "{run:#?}");
+    let mode = fs::metadata(&path).expect("the file").permissions().mode();
+    assert_eq!(mode & 0o777, 0o000, "the file was replaced");
 }
 
 #[test]

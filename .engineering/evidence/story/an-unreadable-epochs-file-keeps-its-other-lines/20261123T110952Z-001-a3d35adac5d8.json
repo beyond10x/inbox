@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T11:09:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (the design and the changelog say a failed change leaves the outbox file as it is, and inbox repost drops an envelope refused for good in the same run): docs/design/service.md, CHANGELOG.md and the row of AGENTS.md name the exception; the adversary's red case is turned into a_failed_repost_drops_the_envelope_refused_for_good_and_keeps_the_one_that_arrived",
+    "review": "review-result:adversary-unreadable-epochs-pass-2",
+    "outcome": "fixed"
+  }
+}

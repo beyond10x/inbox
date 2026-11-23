@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (the over-bound case ran up to 6.92 s at a load average of about 100): the over-bound row compares inode, mode, kind, length and blocks of a sparse file, and the 2 cases are split one per command; 20 runs at a load average of 75 to 100: no case over 3.46 s",
+    "review": "review-result:adversary-unreadable-epochs-pass-1",
+    "outcome": "fixed"
+  }
+}

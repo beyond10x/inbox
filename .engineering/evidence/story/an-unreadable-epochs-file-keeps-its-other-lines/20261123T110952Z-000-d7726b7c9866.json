@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T11:09:52Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-unreadable-epochs-file-keeps-its-other-lines",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (replace opens <path>.new with create and truncate, follows a link planted there and renames the link over the file, so every entry is lost): the coordinator decided that replace removes what is at <path>.new and creates the staged file with create_new and mode 0600; the adversary's red case is turned into a_stale_entry_at_a_staged_file_is_removed_not_followed (8 rows: the epochs file and the outbox file, each with a link to itself, a link to another file, a FIFO and a regular file), red against 3 mutants",
+    "review": "review-result:adversary-unreadable-epochs-pass-2",
+    "outcome": "fixed"
+  }
+}

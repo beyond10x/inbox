@@ -84,7 +84,12 @@ is delivered a second time in 3 cases:
 - A service that sends no `Inbox-Epoch` header (an older one) gives the client nothing to
   compare: every `repost` posts every kept envelope.
 - An epochs file (`<outbox>.epochs`) that is lost or unreadable, or a line of it that is
-  malformed or doubled, makes `repost` post the envelopes concerned.
+  malformed or doubled, makes `repost` post the envelopes concerned. A command that has to
+  change an epochs file it cannot read, or the file of the opened inbox (`<outbox>.opened`),
+  exits 4, names the file in one line and leaves it as it is: `inbox post` and `inbox close`
+  before they send anything, `inbox repost` and `inbox open` after the service answered. After
+  an `inbox open` that ended so, the inbox is open, and `inbox close` ends with 4 and sends
+  nothing until the file is repaired or removed.
 
 A message the service still holds is answered `duplicate` and changes nothing.
 

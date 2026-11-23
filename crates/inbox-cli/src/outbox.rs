@@ -5,7 +5,9 @@
 //! `PostMessage`, signature included); nothing secret. Every change runs under an exclusive
 //! lock of a file beside it (`<outbox>.lock`), reads the whole file, and replaces it with a
 //! file written beside it and renamed over it, so two `inbox` processes that write at once
-//! lose no entry and a reader never sees half a file.
+//! lose no entry and a reader never sees half a file. The file written beside it is created
+//! anew, after whatever was at its place is removed: a link there is not followed
+//! ([`replace`]).
 //!
 //! The epochs file beside it (`<outbox>.epochs`) records, per kept envelope whose post the
 //! service said arrived, the epoch of the start that said so ([`Epoch`], the answer's
@@ -19,9 +21,12 @@
 //! before the outbox file where both change, so an interruption between the two leaves a mark
 //! of an envelope the outbox file does not keep, which nothing posts and the next write of the
 //! epochs file drops.
-//! Reading it never fails a command: a missing or unreadable file, a line of another form and
-//! the lines of a message id named twice give the envelopes concerned no epoch. Each time it is
-//! written it holds the entries of the envelopes the outbox file keeps and no other.
+//! Reading it fails no command that only reads it: a missing or unreadable file, a line of
+//! another form and the lines of a message id named twice give the envelopes concerned no
+//! epoch. Each time it is written it holds the entries of the envelopes the outbox file keeps
+//! and no other. A change of it that cannot read it (no permission, not UTF-8, over its bound,
+//! no regular file) fails with [`Failure::Local`] before any write: written with the change's
+//! own entry only, it would lose every other entry. A missing file is read as empty.
 //!
 //! The file of the opened inbox beside it (`<outbox>.opened`) records, per inbox its owner
 //! opened with `inbox open` on this host, the adapter it opened it with and the epoch of the
@@ -29,14 +34,18 @@
 //! "epoch":…}`, `epoch` left out when that answer named none. A reconnect reads it to open the
 //! inbox again ([`Outbox::due`]); `inbox close` removes the line before it sends the close and
 //! puts it back when the close did not happen. It is changed under the same lock and replaced
-//! the same way. Reading it never fails a command either: a missing or unreadable file, a line
-//! of another form and an inbox named twice give the inboxes concerned no record, so nothing is
-//! opened for them.
+//! the same way. Reading it fails no command that only reads it either: a missing or unreadable
+//! file, a line of another form and an inbox named twice give the inboxes concerned no record,
+//! so nothing is opened for them. A change of it that cannot read it fails as a change of the
+//! epochs file does, and a missing file is read as empty.
 //!
-//! No read of these files blocks or fails a command that only reads them ([`read_or_nothing`]):
-//! each is opened without blocking, read only when it is a regular file, and only up to a bound;
-//! anything else holds nothing, and one line on standard error names it.
+//! No read of these files blocks or fails a command that only reads them
+//! ([`Outbox::read_or_nothing`]): each is opened without blocking, read only when it is a
+//! regular file, and only up to a bound; anything else holds nothing, and one line on standard
+//! error names it, but not in a run that failed to change that file: there the failure is the
+//! one line that names it.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, DirBuilder, File, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -118,9 +127,16 @@ pub enum Recorded {
 }
 
 /// The outbox file.
+///
+/// A run names a file beside it that it fails to change in one line, the failure: it keeps the
+/// files a change failed on (`failed`), and a read of such a file in the same run says nothing.
+/// The word of the read of [`Outbox::kept`] waits in `held` until [`Outbox::speak`], so that a
+/// change failing after it in the same run (`repost`) drops it.
 #[derive(Debug)]
 pub struct Outbox {
     path: PathBuf,
+    failed: RefCell<HashSet<PathBuf>>,
+    held: RefCell<Vec<(PathBuf, String)>>,
 }
 
 impl Outbox {
@@ -149,7 +165,46 @@ impl Outbox {
                     )
                 })?,
         };
-        Ok(Self { path })
+        Ok(Self {
+            path,
+            failed: RefCell::default(),
+            held: RefCell::default(),
+        })
+    }
+
+    /// Writes the words held back by [`Outbox::kept`], each one line on standard error, but
+    /// those of a file a change failed on in this run.
+    pub fn speak(&self) {
+        let failed = self.failed.borrow();
+        for (path, line) in self.held.borrow_mut().drain(..) {
+            if !failed.contains(&path) {
+                crate::output::warn(&line);
+            }
+        }
+    }
+
+    /// The failure of a change of the file at `path`, which could not be read for `why`; the
+    /// file is kept as one this run failed on.
+    fn unreadable(&self, path: &Path, why: &Unread) -> Failure {
+        self.failed.borrow_mut().insert(path.to_owned());
+        Failure::Local(format!("{}: {why}", path.display()))
+    }
+
+    /// The text of the file at `path` for a read that never fails a command: [`read_bounded`],
+    /// and nothing when it cannot be read, with the word of [`held_nothing`] on standard error,
+    /// but none on a file a change failed on in this run (its failure names it).
+    fn read_or_nothing(&self, path: &Path, most: u64) -> String {
+        match read_bounded(path, most) {
+            Ok(text) => text.unwrap_or_default(),
+            Err(why) => {
+                if let Some(line) = held_nothing(path, &why)
+                    && !self.failed.borrow().contains(path)
+                {
+                    crate::output::warn(&line);
+                }
+                String::new()
+            }
+        }
     }
 
     /// The path of the file.
@@ -166,7 +221,8 @@ impl Outbox {
     ///
     /// # Errors
     ///
-    /// [`Failure::Local`] when the outbox file cannot be read or written.
+    /// [`Failure::Local`] when the outbox file cannot be read or written, or the epochs file
+    /// cannot be read: then nothing is written and the envelope is not kept.
     pub fn keep(&self, text: &str, now: Instant) -> Result<(), Failure> {
         let unmarked = self.change_both(now, true, |lines, epochs| {
             lines.push(text.to_owned());
@@ -245,7 +301,8 @@ impl Outbox {
 
     /// The envelopes kept for `from` that have not expired at `now`, in the order they were
     /// posted, each with the epoch the epochs file records for it, and every line of the file
-    /// that does not read as an envelope; drops what expired.
+    /// that does not read as an envelope; drops what expired. The word on an epochs file it
+    /// reads as holding nothing waits for [`Outbox::speak`].
     ///
     /// # Errors
     ///
@@ -274,23 +331,22 @@ impl Outbox {
     /// says nothing of starts none: a version before the mark kept it, or the service refused it
     /// for a reason of its own (`413`), or answered `duplicate-key`. Read without the lock (each
     /// file is replaced whole, so a reader sees one version of it) and never fails nor blocks
-    /// ([`read_or_nothing`]). The steps themselves read under the lock again.
+    /// ([`Outbox::read_or_nothing`]). The steps themselves read under the lock again.
     pub fn due(&self, principal: &str, current: &Epoch, now: Instant, own: Option<&str>) -> Due {
-        let open = Records::parse(&read_or_nothing(
-            &beside(&self.path, ".opened"),
-            MOST_OPENED_BYTES,
-        ))
+        let open = Records::parse(
+            &self.read_or_nothing(&beside(&self.path, ".opened"), MOST_OPENED_BYTES),
+        )
         .of(principal)
         .filter(|record| record.epoch.as_ref() != Some(current))
         .cloned();
-        let text = read_or_nothing(&self.path, MOST_BYTES);
+        let text = self.read_or_nothing(&self.path, MOST_BYTES);
         let lines: Vec<String> = text.lines().map(str::to_owned).collect();
         let kept: Vec<Kept> = of_sender(&unexpired(&lines, now), principal)
             .into_iter()
             .filter(|kept| Some(kept.envelope.message_id.0.as_str()) != own)
             .collect();
         let repost = !kept.is_empty() && {
-            let epochs_text = read_or_nothing(&beside(&self.path, ".epochs"), MOST_BYTES);
+            let epochs_text = self.read_or_nothing(&beside(&self.path, ".epochs"), MOST_BYTES);
             let epochs = Epochs::parse(epoch_lines(&epochs_text));
             kept.iter().any(|kept| {
                 let id = &kept.envelope.message_id.0;
@@ -306,12 +362,9 @@ impl Outbox {
     /// The record of the inbox `inbox` in the file of the opened inbox, if it holds one; read as
     /// [`Outbox::due`] reads it.
     pub fn opened(&self, inbox: &str) -> Option<Opened> {
-        Records::parse(&read_or_nothing(
-            &beside(&self.path, ".opened"),
-            MOST_OPENED_BYTES,
-        ))
-        .of(inbox)
-        .cloned()
+        Records::parse(&self.read_or_nothing(&beside(&self.path, ".opened"), MOST_OPENED_BYTES))
+            .of(inbox)
+            .cloned()
     }
 
     /// Removes the record of `inbox` from the file of the opened inbox and hands it back: its
@@ -320,7 +373,7 @@ impl Outbox {
     ///
     /// # Errors
     ///
-    /// [`Failure::Local`] when the file cannot be written.
+    /// [`Failure::Local`] when the file cannot be read (it is left as it is) or written.
     pub fn take_opened(&self, inbox: &str) -> Result<Option<Opened>, Failure> {
         let mut taken = None;
         self.change_opened(|records| {
@@ -335,7 +388,7 @@ impl Outbox {
     ///
     /// # Errors
     ///
-    /// [`Failure::Local`] when the file cannot be written.
+    /// [`Failure::Local`] when the file cannot be read (it is left as it is) or written.
     pub fn put_back_opened(&self, inbox: &str, record: Opened) -> Result<(), Failure> {
         self.change_opened(|records| {
             if records.of(inbox).is_none() {
@@ -353,7 +406,7 @@ impl Outbox {
     ///
     /// # Errors
     ///
-    /// [`Failure::Local`] when the file cannot be written.
+    /// [`Failure::Local`] when the file cannot be read (it is left as it is) or written.
     pub fn record_opened(
         &self,
         inbox: &str,
@@ -388,12 +441,17 @@ impl Outbox {
     }
 
     /// Runs `change` over the records of the file of the opened inbox under the lock, and
-    /// replaces the file when a record changed.
+    /// replaces the file when a record changed. A file that cannot be read fails it before
+    /// `change` runs, and nothing is written; a missing one is read as empty.
     fn change_opened(&self, change: impl FnOnce(&mut Records)) -> Result<(), Failure> {
         let path = beside(&self.path, ".opened");
         let local = |error: std::io::Error| Failure::Local(format!("{}: {error}", path.display()));
         let lock = self.lock()?;
-        let mut records = Records::parse(&read_or_nothing(&path, MOST_OPENED_BYTES));
+        let text = match read_bounded(&path, MOST_OPENED_BYTES) {
+            Ok(text) => text.unwrap_or_default(),
+            Err(why) => return Err(self.unreadable(&path, &why)),
+        };
+        let mut records = Records::parse(&text);
         change(&mut records);
         if records.changed {
             replace(&path, &records.lines()).map_err(local)?;
@@ -431,8 +489,10 @@ impl Outbox {
     /// Runs `change` over the lines of the file and, when `with_epochs`, what the epochs file
     /// says, under the lock, after dropping every envelope whose `expires` is at or before `now`;
     /// writes the epochs file again when `change` changed it, then the file when its lines
-    /// changed (also when the epochs file could not be written). Without `with_epochs` the epochs file is neither read nor written. A line that
-    /// does not read as an envelope is kept as it is.
+    /// changed (also when the epochs file could not be written). Without `with_epochs` the
+    /// epochs file is neither read nor written. With it, an epochs file that cannot be read is
+    /// read as holding nothing when `change` asks no change of it, and fails the change before
+    /// any write when it asks one. A line that does not read as an envelope is kept as it is.
     fn change(
         &self,
         now: Instant,
@@ -464,12 +524,23 @@ impl Outbox {
         let before: Vec<String> = text.lines().map(str::to_owned).collect();
         let mut lines = unexpired(&before, now);
         let epochs_path = beside(&self.path, ".epochs");
-        let mut epochs = if with_epochs {
-            Epochs::parse(epoch_lines(&read_or_nothing(&epochs_path, MOST_BYTES)))
+        let (mut epochs, unread) = if with_epochs {
+            match read_bounded(&epochs_path, MOST_BYTES) {
+                Ok(text) => (Epochs::parse(epoch_lines(&text.unwrap_or_default())), None),
+                Err(why) => (Epochs::unread(), Some(why)),
+            }
         } else {
-            Epochs::default()
+            (Epochs::default(), None)
         };
         change(&mut lines, &mut epochs);
+        if let Some(why) = unread {
+            if epochs.changed {
+                return Err(self.unreadable(&epochs_path, &why));
+            }
+            if let Some(line) = held_nothing(&epochs_path, &why) {
+                self.held.borrow_mut().push((epochs_path.clone(), line));
+            }
+        }
         let epochs_failed = if epochs.changed {
             replace(&epochs_path, &epochs.lines(&lines))
                 .err()
@@ -487,7 +558,8 @@ impl Outbox {
 
 /// The most bytes a read takes of the outbox file and of the epochs file: 64 MiB, room for
 /// some 160 envelopes of the longest body or tens of thousands of short ones. A file over it is
-/// not read in part: the outbox file is a local failure, the epochs file holds nothing.
+/// not read in part: the outbox file is a local failure, and so is the epochs file to a change
+/// of it; to a read it holds nothing.
 const MOST_BYTES: u64 = 64 * 1024 * 1024;
 /// The most bytes a read takes of the file of the opened inbox: a line per inbox.
 const MOST_OPENED_BYTES: u64 = 1024 * 1024;
@@ -546,32 +618,30 @@ fn read_bounded(path: &Path, most: u64) -> Result<Option<String>, Unread> {
         .map_err(|_| Unread::NotUtf8)
 }
 
-/// The text of the file at `path` for a read that never fails a command: [`read_bounded`], and
-/// nothing when it cannot be read. A file that is no regular file or holds more than `most`
-/// bytes is named in one line on standard error; a missing file, one its owner may not read and
-/// one that is not UTF-8 hold nothing without a word, as before.
-fn read_or_nothing(path: &Path, most: u64) -> String {
-    match read_bounded(path, most) {
-        Ok(text) => text.unwrap_or_default(),
-        Err(why @ (Unread::NotRegular | Unread::OverBound(_))) => {
-            crate::output::warn(&format!(
-                "inbox: {}: {why}; read as holding nothing",
-                path.display()
-            ));
-            String::new()
-        }
-        Err(Unread::Io(_) | Unread::NotUtf8) => String::new(),
-    }
+/// The word on the file at `path` that was not read for `why` and is read as holding nothing:
+/// one line for a file that is no regular file or holds more than its bound; none for a
+/// missing file, one its owner may not read and one that is not UTF-8, as before.
+fn held_nothing(path: &Path, why: &Unread) -> Option<String> {
+    matches!(why, Unread::NotRegular | Unread::OverBound(_))
+        .then(|| format!("inbox: {}: {why}; read as holding nothing", path.display()))
 }
 
 /// Replaces the file at `path` with `lines`, each ended by a newline: written to `<path>.new`
-/// (mode 0600) and renamed over it.
+/// and renamed over it. What is at `<path>.new` already (a file an interrupted run left, a link,
+/// a FIFO) is removed, not followed nor opened, and the staged file is created anew with mode
+/// 0600 (`O_CREAT | O_EXCL`, which follows no link); a directory there is a failure. Every
+/// change of the outbox file, the epochs file and the file of the opened inbox writes through
+/// here.
 fn replace(path: &Path, lines: &[String]) -> std::io::Result<()> {
     let staged = beside(path, ".new");
+    if let Err(error) = fs::remove_file(&staged)
+        && error.kind() != ErrorKind::NotFound
+    {
+        return Err(error);
+    }
     let mut file: File = OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .mode(0o600)
         .open(&staged)?;
     let mut out = String::new();
@@ -674,15 +744,25 @@ const UNSENT: &str = "none";
 /// What the epochs file says: the epoch of each message id one line of the form
 /// `<message id>\t<32 lower-case hex digits>` names, and the message ids one line
 /// `<message id>\tnone` marks unsent. A message id that two lines name, whatever their form, has
-/// neither.
+/// neither. Of a file that could not be read ([`Epochs::unread`]) it says nothing, and every
+/// change asked of it counts as a change, so that [`Outbox::change_both`] fails it.
 #[derive(Debug, Default)]
 struct Epochs {
     recorded: HashMap<String, Epoch>,
     unsent: HashSet<String>,
     changed: bool,
+    unread: bool,
 }
 
 impl Epochs {
+    /// What a file that could not be read says: nothing.
+    fn unread() -> Self {
+        Self {
+            unread: true,
+            ..Self::default()
+        }
+    }
+
     /// Reads the file's lines ([`epoch_lines`]) in one pass.
     fn parse<'a>(lines: impl Iterator<Item = EpochLine<'a>>) -> Self {
         let mut named: HashMap<LineId<'a>, (usize, &'a str)> = HashMap::new();
@@ -710,6 +790,7 @@ impl Epochs {
             recorded,
             unsent,
             changed: false,
+            unread: false,
         }
     }
 
@@ -733,7 +814,7 @@ impl Epochs {
 
     fn clear_unsent(&mut self, message_id: &str) {
         step();
-        if self.unsent.remove(message_id) {
+        if self.unsent.remove(message_id) || self.unread {
             self.changed = true;
         }
     }
@@ -742,7 +823,9 @@ impl Epochs {
     /// new start is told by the epoch.
     fn mark_unsent(&mut self, message_id: &str) {
         step();
-        if !self.recorded.contains_key(message_id) && self.unsent.insert(message_id.to_owned()) {
+        if (!self.recorded.contains_key(message_id) && self.unsent.insert(message_id.to_owned()))
+            || self.unread
+        {
             self.changed = true;
         }
     }
