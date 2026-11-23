@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T10:04:15Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-character-a-reader-cannot-see-is-shown-as-its-escape",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (the first-use page says the escapes mean 2 texts that differ cannot look the same, which a typed escape disproves): the sentence says that no such character is hidden in a line; the rule for a typed escape is the one of release 0.6.0 and is written under Decisions",
+    "review": "review-result:adversary-unseen-characters-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T10:04:15Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-character-a-reader-cannot-see-is-shown-as-its-escape",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (docs/checks.md says 10 unit cases, the change adds 11): it says 12, with the sweep case of finding 4",
+    "review": "review-result:adversary-unseen-characters-pass-1",
+    "outcome": "fixed"
+  }
+}

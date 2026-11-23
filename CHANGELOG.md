@@ -8,6 +8,18 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Changed
+
+- A message's text no longer reaches a terminal with characters it does not show. `pending`,
+  `wait`, `wake`, `outbox`, `collect`, `thread`, `replies` and the lines on standard error that
+  repeat text of the service show the characters that take no width on a terminal (the soft
+  hyphen U+00AD, U+180E, the zero width space U+200B, U+2060 to U+2064, U+206A to U+206F,
+  U+FEFF, U+FFF9 to U+FFFB and the tag characters U+E0000 to U+E007F) as their escapes, such as
+  `\u{200b}`; before, they were printed as sent, so 2 texts that differ looked the same. The
+  joiners U+200C and U+200D, U+034F and the variation selectors are printed as sent, and the
+  flag of a part of a country is shown with the escapes of its tags. No flag, exit status or
+  `--json` output changes.
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

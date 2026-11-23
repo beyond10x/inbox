@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T10:04:15Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-character-a-reader-cannot-see-is-shown-as-its-escape",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (docs/checks.md says the whole list was named by the implementor's round 2 of the earlier story): it says which part was named there and that the other 3 ranges were added when the story was accepted",
+    "review": "review-result:adversary-unseen-characters-pass-1",
+    "outcome": "fixed"
+  }
+}

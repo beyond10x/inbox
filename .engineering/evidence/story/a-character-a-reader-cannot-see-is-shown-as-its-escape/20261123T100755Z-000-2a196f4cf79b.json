@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T10:07:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-character-a-reader-cannot-see-is-shown-as-its-escape",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

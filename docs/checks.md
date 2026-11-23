@@ -188,7 +188,22 @@ The limits are stated on the limits page of the site. Their stories are in
   change the direction of text (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) were
   printed as sent and are shown as their escapes since
   story:the-terminal-adapter-shows-a-post (adversary pass 1 of it, finding 2); 3 unit cases of
-  `output.rs` hold it.
+  `output.rs` hold it. The characters a terminal shows with no width (U+00AD, U+180E, U+200B,
+  U+2060 to U+2064, U+206A to U+206F, U+FEFF, U+FFF9 to U+FFFB, U+E0000 to U+E007F; U+00AD,
+  U+200B, U+2060 to U+2064, U+FEFF and the tag characters named by the implementor's round 2 of
+  that story, the other 3 added when the story was accepted) were printed as sent, so a line
+  held text a reader did not see, and are shown as their escapes since
+  story:a-character-a-reader-cannot-see-is-shown-as-its-escape (`output::unseen`). The joiners
+  U+200C and U+200D, U+034F and the variation selectors stay printed as sent: scripts and emoji
+  sequences need them. 12 unit cases of `output.rs` hold it (one per range or character with the
+  characters beside it, the joiners and variation selectors printed as sent, a text without such
+  a character borrowed, the `--json` document unchanged), each red with its range taken out,
+  with the joiners or the variation selectors added, or with the set applied to `--json`, and a
+  sweep of every scalar value, red with any other character added to the set (adversary pass 1
+  of the story, finding 4); and
+  one case of `crates/inbox-cli/tests/control_sequences.rs` holds `pending`, `wait`, `wake`,
+  `outbox`, `thread`, `replies` and `collect` with a body, an option text, a reply and a refusal
+  reason holding U+200B and a tag character, and `outbox --json` with the values as sent.
 - **An argument that is not UTF-8 ended the client with a panic**
   (`story:an-argument-that-is-not-utf-8-is-a-usage-error`; adversary pass 1 of
   `story:the-client-prints-no-control-sequence-of-another-principal`, finding F7). In every

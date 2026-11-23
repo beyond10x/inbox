@@ -231,6 +231,126 @@ fn with_json_no_control_character_is_raw_and_the_value_is_unchanged() {
     );
 }
 
+/// A text with a zero width space (U+200B) and a tag character (U+E0031), which a terminal shows
+/// with no width, prefixed by the member that carries it.
+fn unseen(member: &str) -> String {
+    format!("{member} pay\u{200b}0001\u{e0031}now")
+}
+
+/// What a terminal shows of [`unseen`]: each of the 2 characters as its escape.
+fn unseen_shown(member: &str) -> String {
+    format!("{member} pay\\u{{200b}}0001\\u{{e0031}}now")
+}
+
+/// A sender sets every member the text printer shows of a message (a body, an option text, a
+/// reply, a refusal reason) to a text with U+200B and a tag character: `pending`, `wait` and
+/// `wake` of the recipient, and `outbox`, `thread`, `replies` (the answered decision: a refused
+/// request is not among the replies of its thread) and `collect` of the sender show each as its
+/// escape and print neither raw. With `--json` the values are the ones sent, raw.
+#[test]
+fn a_character_a_reader_cannot_see_is_shown_as_its_escape_by_every_command() {
+    let world = World::new("unseen-commands");
+    world.client("bob", &["open"]).ok();
+    let decision_body = unseen("body");
+    let option = format!("A={}", unseen("option"));
+    let decision = text(
+        &world
+            .client(
+                "alice",
+                &[
+                    "post",
+                    "--to",
+                    BOB,
+                    "--kind",
+                    "decision",
+                    "--option",
+                    &option,
+                    "--option",
+                    "B=plain",
+                    "--body",
+                    &decision_body,
+                    "--json",
+                ],
+            )
+            .ok()
+            .json(),
+        "message_id",
+    );
+    let refused = requested(&world, &unseen("request"));
+    let raw = |output: &str| output.contains('\u{200b}') || output.contains('\u{e0031}');
+    let mut wrong = Vec::new();
+    let mut check = |what: &str, output: &str, members: &[&str]| {
+        if raw(output) {
+            wrong.push(format!("{what} printed U+200B or U+E0031 raw: {output:?}"));
+        }
+        for member in members {
+            if !output.contains(&unseen_shown(member)) {
+                wrong.push(format!(
+                    "{what} does not show the {member} escaped: {output:?}"
+                ));
+            }
+        }
+    };
+    let received = ["body", "option", "request"];
+    let wait = world.client("bob", &["wait", "--seconds", "1"]).ok();
+    check("wait", &wait.stdout, &received);
+    let pending = world.client("bob", &["pending"]).ok();
+    check("pending", &pending.stdout, &received);
+    let wake = world.client("bob", &["wake"]).ok();
+    check("wake", &wake.stdout, &received);
+
+    world
+        .client(
+            "bob",
+            &[
+                "answer",
+                &decision,
+                "--option",
+                "A",
+                "--body",
+                &unseen("reply"),
+            ],
+        )
+        .ok();
+    world
+        .client("bob", &["refuse", &refused, "--reason", &unseen("reason")])
+        .ok();
+    let answered = ["body", "option", "reply"];
+    let refusal = ["request", "reason"];
+    let outbox_json = world.client("alice", &["outbox", "--json"]).ok();
+    let outbox = world.client("alice", &["outbox"]).ok();
+    check(
+        "outbox",
+        &outbox.stdout,
+        &["body", "option", "reply", "request", "reason"],
+    );
+    let replies = world.client("alice", &["replies", &decision]).ok();
+    check("replies", &replies.stdout, &answered);
+    for (id, members) in [(&decision, &answered[..]), (&refused, &refusal[..])] {
+        let thread = world.client("alice", &["thread", id]).ok();
+        check(&format!("thread {id}"), &thread.stdout, members);
+        let collected = world.client("alice", &["collect", id]).ok();
+        check(&format!("collect {id}"), &collected.stdout, members);
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+
+    let rows = rows(&outbox_json.json());
+    let row = |id: &str| {
+        rows.iter()
+            .find(|row| text(row, "message_id") == id)
+            .cloned()
+            .unwrap_or(Value::Null)
+    };
+    let answered_row = row(&decision);
+    assert_eq!(text(&answered_row, "body"), unseen("body"));
+    assert_eq!(
+        text(answered_row.member("reply").unwrap_or(&Value::Null), "body"),
+        unseen("reply")
+    );
+    assert_eq!(text(&row(&refused), "refusal"), unseen("reason"));
+    assert!(raw(&outbox_json.stdout), "{:?}", outbox_json.stdout);
+}
+
 /// A body without control characters, with text outside ASCII, an empty line and a line end at
 /// its end, is printed byte for byte as before: each line indented by 4 spaces.
 #[test]

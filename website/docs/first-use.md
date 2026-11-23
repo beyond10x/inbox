@@ -111,7 +111,14 @@ for a carriage return and `\u{9}` for a tab, and so are the line separator `\u{2
 paragraph separator `\u{2029}`, so that text cannot clear your screen, move the cursor, set the
 window title or write over a line. The characters that change the direction of text (U+061C,
 U+200E, U+200F, U+202A to U+202E and U+2066 to U+2069) are shown as their escapes too, such as
-`\u{202e}`, so that text cannot reorder what a line shows. Each message is one line that is not indented, its head line,
+`\u{202e}`, so that text cannot reorder what a line shows. So are the characters a terminal
+shows with no width (the soft hyphen U+00AD, U+180E, the zero width space U+200B, U+2060 to
+U+2064, U+206A to U+206F, U+FEFF, U+FFF9 to U+FFFB and the tag characters U+E0000 to U+E007F),
+such as `\u{200b}`, so that no such character is hidden in a line. The joiners U+200C and
+U+200D, the combining grapheme joiner U+034F and the variation selectors (U+FE00 to U+FE0F and
+U+E0100 to U+E01EF) are printed as sent, because scripts and emoji sequences need them, and the
+flag of a part of a country, an emoji tag sequence, is shown as a black flag followed by the
+escapes of its tags. Each message is one line that is not indented, its head line,
 and every other line of it starts with at least 2 spaces: a line end in a body, an option or a
 refusal reason starts an indented line, and a line end in a value of a line of its own, such as
 an address, is shown as `\u{a}`. So a sender cannot write a line that reads as the head line of

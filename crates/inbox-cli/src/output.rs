@@ -142,15 +142,17 @@ fn print_checked(line: &str) -> std::io::Result<()> {
 
 /// `text` with each control character but the line end (C0 with the tab and the carriage
 /// return, DEL, C1), and the Unicode line and paragraph separators (U+2028, U+2029, which a
-/// reader may show as a line end), and each bidirectional control ([`bidirectional`]), written
-/// as its escape `\u{1b}`: a value another principal or the service set reaches the terminal as
-/// visible text, never as a control sequence, a line of its own or text shown in another order.
+/// reader may show as a line end), each bidirectional control ([`bidirectional`]) and each
+/// character a reader cannot see ([`unseen`]), written as its escape `\u{1b}`: a value another
+/// principal or the service set reaches the terminal as visible text, never as a control
+/// sequence, a line of its own, text shown in another order or text that is there and not seen.
 /// Text without such characters is unchanged.
 pub fn visible(text: &str) -> Cow<'_, str> {
     escaped(text, |character| {
         (character.is_control() && character != '\n')
             || matches!(character, '\u{2028}' | '\u{2029}')
             || bidirectional(character)
+            || unseen(character)
     })
 }
 
@@ -162,6 +164,29 @@ fn bidirectional(character: char) -> bool {
     matches!(
         character,
         '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
+/// Format characters a terminal shows with no width, so 2 texts that differ look the same and a
+/// text carries what a person does not see: the soft hyphen (U+00AD), the Mongolian vowel
+/// separator (U+180E), the zero width space (U+200B), the word joiner and the invisible
+/// operators (U+2060 to U+2064), the deprecated format characters (U+206A to U+206F), the zero
+/// width no-break space or byte order mark (U+FEFF), the interlinear annotation characters
+/// (U+FFF9 to U+FFFB) and the tag characters (U+E0000 to U+E007F). Not among them, printed as
+/// sent because scripts and emoji sequences need them: the joiners (U+200C, U+200D), the
+/// combining grapheme joiner (U+034F) and the variation selectors (U+FE00 to U+FE0F, U+E0100 to
+/// U+E01EF).
+fn unseen(character: char) -> bool {
+    matches!(
+        character,
+        '\u{ad}'
+            | '\u{180e}'
+            | '\u{200b}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{206a}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{e0000}'..='\u{e007f}'
     )
 }
 
@@ -367,6 +392,8 @@ fn indent(out: &mut String, body: &str) {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use inbox::server::json;
 
     use super::{document, plain_document, rows_text, visible};
@@ -559,6 +586,201 @@ mod tests {
         let written = document(&value);
         assert_eq!(plain_document(&written), written);
         assert_eq!(json::parse(&written).unwrap(), value);
+    }
+
+    /// Each of `characters` between 2 letters is shown as its escape, named by its code point
+    /// when it is not.
+    fn each_shown_escaped(characters: impl IntoIterator<Item = char>) {
+        for character in characters {
+            assert_eq!(
+                visible(&format!("a{character}b")),
+                format!("a\\u{{{:x}}}b", u32::from(character)),
+                "U+{:04X}",
+                u32::from(character)
+            );
+        }
+    }
+
+    /// Each of `characters` between 2 letters is printed as written: the text is borrowed, not
+    /// copied.
+    fn each_printed_as_written(characters: impl IntoIterator<Item = char>) {
+        for character in characters {
+            let text = format!("a{character}b");
+            assert!(
+                matches!(visible(&text), Cow::Borrowed(shown) if std::ptr::eq(shown, text.as_str())),
+                "U+{:04X}",
+                u32::from(character)
+            );
+        }
+    }
+
+    /// The soft hyphen (U+00AD) is shown as its escape; U+00AC and U+00AE beside it are not.
+    #[test]
+    fn the_soft_hyphen_is_shown_escaped() {
+        each_shown_escaped(['\u{ad}']);
+        each_printed_as_written(['\u{ac}', '\u{ae}']);
+    }
+
+    /// The Mongolian vowel separator (U+180E) is shown as its escape; U+180D and U+180F beside it
+    /// are not.
+    #[test]
+    fn the_mongolian_vowel_separator_is_shown_escaped() {
+        each_shown_escaped(['\u{180e}']);
+        each_printed_as_written(['\u{180d}', '\u{180f}']);
+    }
+
+    /// The zero width space (U+200B) is shown as its escape, also in an option text; U+200A and
+    /// the zero width non-joiner U+200C beside it are not.
+    #[test]
+    fn the_zero_width_space_is_shown_escaped() {
+        each_shown_escaped(['\u{200b}']);
+        each_printed_as_written(['\u{200a}', '\u{200c}']);
+        let text = shown(&decision("Ship\u{200b}\u{200b}now", ""));
+        assert!(text.contains("  A) Ship\\u{200b}\\u{200b}now"), "{text}");
+    }
+
+    /// The word joiner and the invisible operators (U+2060 to U+2064) are shown as their
+    /// escapes; U+205F before them and U+2065 after them are not.
+    #[test]
+    fn the_word_joiner_and_the_invisible_operators_are_shown_escaped() {
+        each_shown_escaped('\u{2060}'..='\u{2064}');
+        each_printed_as_written(['\u{205f}', '\u{2065}']);
+    }
+
+    /// The deprecated format characters (U+206A to U+206F) are shown as their escapes; U+2070
+    /// after them is not (U+2069 before them is a bidirectional control).
+    #[test]
+    fn the_deprecated_format_characters_are_shown_escaped() {
+        each_shown_escaped('\u{206a}'..='\u{206f}');
+        each_printed_as_written(['\u{2070}']);
+    }
+
+    /// The zero width no-break space (U+FEFF, the byte order mark) is shown as its escape, also
+    /// at the start of a text; U+FEFE and U+FF00 beside it are not.
+    #[test]
+    fn the_zero_width_no_break_space_is_shown_escaped() {
+        each_shown_escaped(['\u{feff}']);
+        assert_eq!(visible("\u{feff}Ship"), "\\u{feff}Ship");
+        each_printed_as_written(['\u{fefe}', '\u{ff00}']);
+    }
+
+    /// The interlinear annotation characters (U+FFF9 to U+FFFB) are shown as their escapes;
+    /// U+FFF8 and U+FFFC beside them are not.
+    #[test]
+    fn the_interlinear_annotation_characters_are_shown_escaped() {
+        each_shown_escaped('\u{fff9}'..='\u{fffb}');
+        each_printed_as_written(['\u{fff8}', '\u{fffc}']);
+    }
+
+    /// The tag characters (U+E0000 to U+E007F) are shown as their escapes, so the flag of a part
+    /// of a country (an emoji tag sequence) is shown as its black flag and the escapes of its
+    /// tags; U+DFFFF and U+E0080 beside them are not.
+    #[test]
+    fn the_tag_characters_are_shown_escaped() {
+        each_shown_escaped('\u{e0000}'..='\u{e007f}');
+        each_printed_as_written(['\u{dffff}', '\u{e0080}']);
+        assert_eq!(
+            visible("\u{1f3f4}\u{e0067}\u{e0062}\u{e0073}\u{e0063}\u{e0074}\u{e007f}"),
+            "\u{1f3f4}\\u{e0067}\\u{e0062}\\u{e0073}\\u{e0063}\\u{e0074}\\u{e007f}"
+        );
+    }
+
+    /// The joiners (U+200C, U+200D), the combining grapheme joiner (U+034F) and the variation
+    /// selectors (U+FE00 to U+FE0F, U+E0100 to U+E01EF) are printed as sent: a Persian word with
+    /// the zero width non-joiner between 2 of its letters, an emoji sequence with the zero width
+    /// joiner and U+FE0F.
+    #[test]
+    fn the_joiners_and_the_variation_selectors_are_printed_as_sent() {
+        for plain in [
+            "\u{645}\u{6cc}\u{200c}\u{62e}\u{648}\u{627}\u{647}\u{645}",
+            "\u{1f3f3}\u{fe0f}\u{200d}\u{1f308}",
+            "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}",
+        ] {
+            assert!(
+                matches!(visible(plain), Cow::Borrowed(text) if std::ptr::eq(text, plain)),
+                "{plain:?}"
+            );
+        }
+        each_printed_as_written(['\u{200c}', '\u{200d}', '\u{34f}']);
+        each_printed_as_written('\u{fe00}'..='\u{fe0f}');
+        each_printed_as_written('\u{e0100}'..='\u{e01ef}');
+    }
+
+    /// A text without a character `visible` escapes, with the neighbours of each range it
+    /// escapes, is borrowed, not copied.
+    #[test]
+    fn a_text_without_an_escaped_character_is_borrowed() {
+        let plain = "Grüße \u{ac}\u{ae} \u{180d}\u{180f} \u{200a}\u{200c}\u{200d} \u{205f}\u{2065}\u{2070} \u{fefe}\u{ff00} \u{fff8}\u{fffc} \u{dffff}\u{e0080} \u{1f3f3}\u{fe0f}\u{200d}\u{1f308} 世界";
+        assert!(matches!(visible(plain), Cow::Borrowed(text) if std::ptr::eq(text, plain)));
+    }
+
+    /// `--json` is unchanged: each character of the ranges `visible` shows as their escapes
+    /// beside the control characters (U+00AD, U+180E, U+200B, U+2060 to U+206F, U+FEFF, U+FFF9
+    /// to U+FFFB, U+E0000 to U+E007F) stays in the document raw, as it was sent.
+    #[test]
+    fn a_document_keeps_a_character_text_shows_escaped_as_it_was_sent() {
+        let sent: String = ['\u{ad}', '\u{180e}', '\u{200b}', '\u{feff}']
+            .into_iter()
+            .chain('\u{2060}'..='\u{206f}')
+            .chain('\u{fff9}'..='\u{fffb}')
+            .chain('\u{e0000}'..='\u{e007f}')
+            .collect();
+        let value = json::Value::Object(vec![("body".to_owned(), json::Value::Text(sent.clone()))]);
+        let written = document(&value);
+        assert!(written.contains(&sent), "{written:?}");
+        assert!(matches!(plain_document(&written), Cow::Borrowed(text) if text == written));
+        assert_eq!(json::parse(&written).unwrap(), value);
+    }
+
+    /// Every scalar value from U+0000 to U+10FFFF between 2 letters: `visible` shows it as its
+    /// escape exactly when release 0.6.0 did (a control character but the line end, U+2028,
+    /// U+2029, a bidirectional control) or it is in the list the story decided (U+00AD, U+180E,
+    /// U+200B, U+2060 to U+2064, U+206A to U+206F, U+FEFF, U+FFF9 to U+FFFB, U+E0000 to
+    /// U+E007F), and prints it as sent, borrowed, otherwise.
+    #[test]
+    fn every_scalar_value_is_escaped_exactly_when_0_6_0_or_the_decided_list_escapes_it() {
+        let released = |character: char| {
+            (character.is_control() && character != '\n')
+                || matches!(character, '\u{2028}' | '\u{2029}')
+                || matches!(
+                    character,
+                    '\u{61c}'
+                        | '\u{200e}'
+                        | '\u{200f}'
+                        | '\u{202a}'..='\u{202e}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+        };
+        let decided = |character: char| {
+            matches!(
+                u32::from(character),
+                0xad | 0x180e
+                    | 0x200b
+                    | 0x2060..=0x2064
+                    | 0x206a..=0x206f
+                    | 0xfeff
+                    | 0xfff9..=0xfffb
+                    | 0xe0000..=0xe007f
+            )
+        };
+        let mut wrong = Vec::new();
+        for character in '\0'..=char::MAX {
+            let text = format!("a{character}b");
+            let shown = visible(&text);
+            let escaped = matches!(shown, Cow::Owned(_));
+            let expected = released(character) || decided(character);
+            if escaped != expected {
+                wrong.push(format!("U+{:04X} escaped {escaped}", u32::from(character)));
+            } else if escaped {
+                let want = format!("a\\u{{{:x}}}b", u32::from(character));
+                if shown != want {
+                    wrong.push(format!("U+{:04X} shown {shown:?}", u32::from(character)));
+                }
+            } else if !matches!(shown, Cow::Borrowed(kept) if std::ptr::eq(kept, text.as_str())) {
+                wrong.push(format!("U+{:04X} not borrowed", u32::from(character)));
+            }
+        }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 
     #[test]
