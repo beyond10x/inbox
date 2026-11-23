@@ -518,8 +518,11 @@ fn inbox_wait_and_inbox_pending_ask_without_undelivered() {
     assert!(waited.stdout.contains(&id(1)), "{waited:#?}");
 }
 
-/// A closed standard output (the harness is gone) ends the wake when it writes the rows: no
-/// `MarkDelivered` is sent, and it exits 4, a local file that cannot be written.
+/// A closed standard output (the harness is gone) ends the wake: no `MarkDelivered` is sent, and
+/// it exits 4, a local file that cannot be written, with one line. It may notice before its
+/// first read, while it waits (the watch of its reader) or when it writes the rows; which one
+/// depends on when the pipe closes, so it sent 0, 1 or 2 reads: never a mark, and never a third
+/// read.
 #[test]
 fn a_closed_standard_output_ends_the_wake_without_a_mark() {
     let dir = bob_only("wake-closed");
@@ -549,7 +552,69 @@ fn a_closed_standard_output_ends_the_wake_without_a_mark() {
     let (_, ran) = started.finish();
     let requests = stand_in.requests();
     assert_eq!(ran.status, LOCAL, "{ran:#?} {requests:#?}");
-    assert_eq!(requests.len(), 1, "no mark: {requests:#?}");
+    assert!(
+        requests.iter().all(Request::is_pending),
+        "no mark: {requests:#?}"
+    );
+    assert!(requests.len() <= 2, "a needless read: {requests:#?}");
+    assert_eq!(ran.stderr.lines().count(), 1, "{ran:#?}");
+}
+
+/// The watch of the reader does not cut a round of `--follow`: the reader closes the pipe while
+/// the first of 2 marks waits at the service, and the wake still sends both marks before it
+/// ends with 4. The service holds that mark until the wake has ended or 1.5 s passed (3 looks
+/// of the watch), so a watch that ended the process inside the round leaves 1 mark.
+#[test]
+fn a_reader_that_closes_during_the_marks_of_a_round_does_not_cut_the_round() {
+    let dir = bob_only("wake-round-not-cut");
+    let answer = pending(&[row(1, "Sent", "first"), row(2, "Sent", "second")]);
+    let marking = Arc::new(AtomicBool::new(false));
+    let release = Arc::new(AtomicBool::new(false));
+    let (seen, held) = (Arc::clone(&marking), Arc::clone(&release));
+    let reads = AtomicUsize::new(0);
+    let stand_in = StandIn::start(
+        None,
+        Box::new(move |_, request| {
+            if request.is_pending() {
+                if reads.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Some((200, answer.clone()))
+                } else {
+                    Some((200, pending(&[])))
+                }
+            } else {
+                if !seen.swap(true, Ordering::SeqCst) {
+                    wait_for("the case released the first mark", || {
+                        held.load(Ordering::SeqCst)
+                    });
+                }
+                Some((200, DELIVERED.to_owned()))
+            }
+        }),
+    );
+    let mut started = Started::spawn(&mut wake(
+        &dir.path,
+        &stand_in.url,
+        "bob",
+        &dir.join("bob.outbox"),
+        &["--follow"],
+    ));
+    wait_for("the first mark arrived", || marking.load(Ordering::SeqCst));
+    drop(started.child().stdout.take());
+    let closed = Instant::now();
+    while closed.elapsed() < Duration::from_millis(1500)
+        && started.child().try_wait().expect("asked").is_none()
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    release.store(true, Ordering::SeqCst);
+    let (_, ran) = started.finish();
+    let requests = stand_in.requests();
+    assert_eq!(ran.status, LOCAL, "{ran:#?} {requests:#?}");
+    assert_eq!(
+        requests.iter().filter(|request| request.is_mark()).count(),
+        2,
+        "the round was cut: {requests:#?}"
+    );
     assert_eq!(ran.stderr.lines().count(), 1, "{ran:#?}");
 }
 

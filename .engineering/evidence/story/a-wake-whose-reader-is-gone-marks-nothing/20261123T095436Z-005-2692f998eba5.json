@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (the hook's read loop is quadratic in the size of the rows): the loop appends each line to a file of mode 600 beside the FIFO through one descriptor; 2 MB took 1.7 s and 8 MB 6.4 s at a load average of about 113 (53.8 s and over 300 s before), and the limits page names the 6.4 s",
+    "review": "review-result:adversary-wake-reader-gone-pass-1",
+    "outcome": "fixed"
+  }
+}

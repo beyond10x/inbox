@@ -39,8 +39,8 @@ const INPUT: &str = r#"{"session_id":"case","transcript_path":"transcript.jsonl"
 const ROWS: &str = "m-1 request Delivered from agent:case/other to agent:case/session thread t-1 expires 2026-11-24T00:00:00Z\n    Which build is green?\nm-2 note Delivered from agent:case/other to agent:case/session thread t-2 expires 2026-11-24T00:00:00Z\n    No such file or directory\n";
 
 /// The utilities the script and the stand-in run, linked into the case's `PATH`.
-const UTILITIES: [&str; 10] = [
-    "cat", "cut", "grep", "mkdir", "od", "rm", "sed", "sleep", "tr", "wc",
+const UTILITIES: [&str; 12] = [
+    "cat", "cut", "grep", "mkdir", "mkfifo", "od", "ps", "rm", "sed", "sleep", "tr", "wc",
 ];
 
 /// The most the script writes to standard error, as `docs/design/wake.md` states it.
@@ -242,6 +242,42 @@ impl Session {
     fn run(&self) -> Hook {
         let child = self.start();
         self.finish(child)
+    }
+
+    /// The hook started through `<shell> -c <wrapper>` (the wrapper ends with `exec "$0" "$1"`),
+    /// in the session's environment, with pipes for its standard output and standard error: a
+    /// limit the wrapper sets on files holds no file of the case.
+    fn output_under(&self, wrapper: &str) -> std::process::Output {
+        let mut command = Command::new(hook_shell());
+        command
+            .args([
+                "-c",
+                wrapper,
+                hook_shell().to_str().unwrap(),
+                script().to_str().unwrap(),
+            ])
+            .current_dir(&self.dir)
+            .env_clear()
+            .env("PATH", &self.bin)
+            .env("TMPDIR", &self.tmp)
+            .env("CLAUDE_PLUGIN_ROOT", plugin())
+            .env("CLAUDE_PROJECT_DIR", &self.dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        for (name, value) in &self.vars {
+            if let Some(value) = value {
+                command.env(name, value);
+            }
+        }
+        command.output().unwrap()
+    }
+
+    /// Writes `text` as the stand-in `inbox`.
+    fn stand_in_text(&self, text: &str) {
+        let path = self.bin.join("inbox");
+        fs::write(&path, text).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     fn run_command(&self, command: Command) -> Hook {
@@ -453,6 +489,109 @@ fn a_sender_cannot_write_a_line_of_the_frame() {
             .filter(|line| line.starts_with("inbox "))
             .collect();
         assert_eq!(plugin.len(), 2, "{plugin:?}");
+    });
+}
+
+/// The rows are handed on byte for byte, a last line without a line end included: between the
+/// begin line and the end line stand the bytes the wake wrote, and nothing else.
+#[test]
+fn rows_without_a_last_line_end_are_handed_on_byte_for_byte() {
+    each_shell(|| {
+        let session = Session::new("last-line", Some("claude_code"));
+        let rows = format!(
+            "{ROWS}m-3 note Delivered from agent:case/other to agent:case/session thread t-3 expires 2026-11-24T00:00:00Z\n    the last line, without a line end"
+        );
+        session.printing_rows(&rows, 0);
+        let hook = session.run();
+        assert_eq!(hook.code, Some(2), "{}", hook.stderr);
+        let (begin, rest) = hook.stderr.split_once('\n').unwrap();
+        assert!(begin.contains("3 message(s) follow"), "{begin}");
+        let mark = begin
+            .strip_prefix("inbox ")
+            .and_then(|rest| rest.split_once(": "))
+            .map(|(mark, _)| mark)
+            .unwrap();
+        let inside = rest
+            .strip_suffix(&format!("inbox {mark}: end\n"))
+            .unwrap_or_else(|| panic!("no end line last: {}", hook.stderr));
+        assert_eq!(inside, rows);
+        assert!(session.left_nothing());
+    });
+}
+
+/// A `$TMPDIR` that takes no byte (a full disk, a quota; here a file size limit of 0 with SIGXFSZ
+/// ignored, which fails a write as ENOSPC does, while an empty file is still made): the hook
+/// proves that its file `text` takes a byte before it starts a wake, so it exits 1 with its line
+/// and no wake ever ran, and nothing is marked.
+#[test]
+fn a_tmpdir_that_takes_no_byte_starts_no_wake() {
+    each_shell(|| {
+        let session = Session::new("no-byte", Some("claude_code"));
+        let dir = session.dir.to_str().unwrap().to_owned();
+        session.stand_in_text(&format!(
+            "#!/bin/sh\n: > '{dir}/ran'\nprintf 'm-1 note Delivered\\n    Hello.\\n' && : > '{dir}/marked'\n"
+        ));
+        let output =
+            session.output_under("trap '' XFSZ; ulimit -f 0; exec \"$0\" \"$1\" < /dev/null");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        assert!(
+            stderr.starts_with(
+                "inbox plugin: the pipe or the file for the output of `inbox wake` cannot be made"
+            ),
+            "{stderr}"
+        );
+        assert!(
+            session.read("ran").is_none(),
+            "a wake was started though the file of its rows takes no byte"
+        );
+        assert!(session.left_nothing());
+    });
+}
+
+/// A write of a row to the file `text` that fails after the probe (the disk filled meanwhile;
+/// here a file size limit below the rows): the hook reads no more, closes its end of the FIFO,
+/// ends the wake and exits 1 with one line that names the file and says nothing is handed on; no
+/// frame. The stand-in marks its first round (the open limit: that round was written and
+/// checked), ignores SIGTERM, and writes a second round once the hook ended it: with the FIFO
+/// closed that write fails, so the second round is not marked.
+#[test]
+fn a_row_that_cannot_be_kept_ends_the_wake_and_hands_on_no_frame() {
+    each_shell(|| {
+        let session = Session::new("row-not-kept", Some("claude_code"));
+        let dir = session.dir.to_str().unwrap().to_owned();
+        let body =
+            "    a body line of the case that is long enough to fill the file soon\\n".repeat(60);
+        let rows = format!("m-1 note Delivered from agent:case/other\\n{body}");
+        session.stand_in_text(&format!(
+            "#!/bin/sh\ngot=\ntrap 'got=yes' TERM\n\
+             printf '{rows}' && : > '{dir}/marked'\n\
+             n=0\nwhile [ -z \"$got\" ] && [ $n -lt 200 ]; do sleep 0.05; n=$((n + 1)); done\n\
+             printf '{rows}' && : > '{dir}/marked-2'\n"
+        ));
+        let output =
+            session.output_under("trap '' XFSZ; ulimit -f 1; exec \"$0\" \"$1\" < /dev/null");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        assert!(
+            stderr.starts_with("inbox plugin: the rows of `inbox wake` could not be written to ")
+                && stderr.contains(&format!("{}/inbox-claude-code.", session.tmp.display()))
+                && stderr.contains("/text")
+                && stderr.contains("no message is handed on"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains("a body line"), "a frame: {stderr}");
+        assert!(
+            output.stdout.is_empty(),
+            "the line of a frame on standard output"
+        );
+        assert!(
+            session.read("marked-2").is_none(),
+            "the wake marked a round after the hook could not keep a row: its FIFO was not closed"
+        );
+        assert!(session.left_nothing());
     });
 }
 
@@ -821,6 +960,55 @@ fn a_signal_to_the_hook_ends_its_wake() {
             assert_eq!(ended.stderr, "", "{signal}");
             assert!(session.left_nothing(), "{signal}");
         }
+    });
+}
+
+/// The watch of the harness ends only a hook whose parent changed: a hook whose harness (this
+/// case) is alive is still running, with its wake, after the watch looked once. A stand-in `ps`
+/// logs each run and answers as the real one; the case waits for its first run and 500 ms more.
+#[test]
+fn a_hook_whose_harness_is_alive_outlives_the_first_look_of_its_watch() {
+    each_shell(|| {
+        let session = Session::new("harness-alive", Some("claude_code"));
+        session.stand_in("exec sleep 30");
+        let ps = session.bin.join("ps");
+        fs::remove_file(&ps).unwrap();
+        fs::write(
+            &ps,
+            format!(
+                "#!/bin/sh\nprintf 'run\\n' >> '{}'\nexec '{}' \"$@\"\n",
+                session.dir.join("ps-runs").display(),
+                found("ps").display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&ps, fs::Permissions::from_mode(0o755)).unwrap();
+        let mut hook = session.start();
+        let wake = session.pid_in("started");
+        let start = Instant::now();
+        while session.read("ps-runs").is_none() {
+            assert!(start.elapsed() < HANG, "the watch never ran `ps`");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_millis(500));
+        let hook_alive = hook.try_wait().unwrap().is_none();
+        let wake_alive = alive(&wake);
+        Command::new("kill")
+            .args(["-TERM", &hook.id().to_string()])
+            .status()
+            .unwrap();
+        let ended = session.finish(hook);
+        session.end_stand_in();
+        assert!(
+            hook_alive,
+            "the watch ended a hook whose harness is alive: {}{}",
+            ended.stdout, ended.stderr
+        );
+        assert!(
+            wake_alive,
+            "the wake of a hook whose harness is alive ended"
+        );
+        assert!(session.left_nothing());
     });
 }
 

@@ -205,7 +205,9 @@ pin. The messages are printed before they are marked delivered; when a mark fail
 are still printed, one line on standard error names the failure, and it exits with its status
 (1 or 3). When its standard output is `/dev/null` or was closed, it exits 4 at once, before it
 sends anything. When it cannot write its standard output (the reader is gone, or it is open only
-for reading), it marks nothing and exits 4. A second `inbox wake` of the same inbox with the same
+for reading), it marks nothing and exits 4; when its standard output is a pipe whose reader
+closes while it waits, it ends with 4 within about a second, without a message to arrive, and
+marks nothing. A second `inbox wake` of the same inbox with the same
 outbox file on the same host exits 5 and sends nothing. Ctrl-C or SIGTERM ends it at once, with
 nothing printed, also when it was started with them ignored.
 
@@ -250,11 +252,12 @@ that reaches its time limit is canceled and its output discarded; a post that ar
 wakes the session only after one of its turns ends, and `inbox pending` lists what arrived in
 between.
 
-When Claude Code ends without ending the plugin's hook first, such as in a crash, or the hook
-alone is killed with SIGKILL, its `inbox wake` keeps running. It then marks the next message
-delivered though no session reads it: `inbox pending` still lists the message, and while that
-`inbox wake` runs the plugin wakes no session of that inbox with the same outbox file on this
-host. End that process (with SIGTERM,
+The plugin reads what `inbox wake` prints itself, through a pipe: when the hook is killed in any
+way, its `inbox wake` ends without marking a message. When Claude Code ends without ending the
+plugin's hook first, such as in a crash, the hook notices within seconds that it has another
+parent process and ends its wait. That holds as long as Claude Code started the hook itself,
+which is not checked; otherwise such a wait keeps running and marks the next message though no
+session reads it, and `inbox pending` still lists the message. End that process (with SIGTERM,
 for example); the next turn that ends starts a new wait.
 
 ### metaharness

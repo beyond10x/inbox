@@ -77,14 +77,56 @@ pub fn try_print_document(document: &str) -> std::io::Result<()> {
     write_to_reader(&plain_document(document), false)
 }
 
-/// Whether standard output can reach a reader ([`reader`]); `inbox wake` asks it before its lock
-/// and its first request, and again before it writes its rows.
+/// Whether standard output can reach a reader ([`reader`]), and, when it is a pipe or a FIFO,
+/// whether that still has a reader ([`reader_gone`]); `inbox wake` asks it before its lock and
+/// its first request, and again after it wrote the rows of a round and before their first mark.
 ///
 /// # Errors
 ///
-/// The error of [`reader`].
+/// The error of [`reader`], or [`NO_READER`] for a pipe or a FIFO without a reader.
 pub fn reaches_a_reader() -> std::io::Result<()> {
-    reader().map(drop)
+    let file = reader()?;
+    if is_a_pipe(&file) && reader_gone(&file) {
+        return Err(std::io::Error::other(NO_READER));
+    }
+    Ok(())
+}
+
+/// What a pipe or a FIFO is whose reading end is closed.
+pub const NO_READER: &str = "it is a pipe or a FIFO whose reader is gone";
+
+/// A duplicate of descriptor 1 when it is a pipe or a FIFO that can reach a reader ([`reader`]):
+/// the one kind of standard output whose reader `inbox wake` watches ([`reader_gone`]). `None`
+/// for a terminal, a regular file, `/dev/null`, a socket, or a closed descriptor.
+pub fn pipe() -> Option<std::fs::File> {
+    reader().ok().filter(is_a_pipe)
+}
+
+/// Whether `file` is a pipe or a FIFO (both are `S_IFIFO`).
+fn is_a_pipe(file: &std::fs::File) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    file.metadata()
+        .is_ok_and(|found| found.file_type().is_fifo())
+}
+
+/// Whether the reading end of `pipe`, a pipe or a FIFO, is closed, asked without writing a byte:
+/// the standard library copies from an empty pipe that has no writer into it. On Linux that copy
+/// is a `splice(2)`, which answers `EPIPE` when the pipe has no reader, and else finds the empty
+/// source at its end and moves nothing. Where the copy is no `splice` (another kernel), it reads
+/// the empty source and answers 0: the reader is never seen gone, and only a write of the rows
+/// tells. Any other error is no answer and counts as a reader.
+pub fn reader_gone(pipe: &std::fs::File) -> bool {
+    use std::os::fd::OwnedFd;
+    let Ok((empty, writer)) = std::io::pipe() else {
+        return false;
+    };
+    drop(writer);
+    let mut source = std::fs::File::from(OwnedFd::from(empty));
+    let mut sink = pipe;
+    matches!(
+        std::io::copy(&mut source, &mut sink),
+        Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe
+    )
 }
 
 /// A file made from a duplicate of descriptor 1, when it can reach a reader: descriptor 1 is open

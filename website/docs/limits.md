@@ -51,13 +51,21 @@ record out.
   an interactive session in a terminal, a wait longer than 59 s, a request answered with
   `inbox answer`, more than one message, and TLS. The tests run the plugin against a stand-in
   for Claude Code. No other adapter wakes a session.
-- **A wait whose session is gone marks the next message.** When Claude Code ends without
-  ending the plugin's hook first, such as in a crash, or the hook alone is killed with
-  SIGKILL, its `inbox wake` keeps running. It marks the next message delivered though no
-  session reads it: `inbox pending` still lists the message, and no later wait returns on it.
-  While that `inbox wake` runs, the plugin wakes no session of that inbox with the same
-  outbox file on this host. End that process
-  ([first use](first-use.md#claude_code)).
+- **A reader that ends right after it took the messages leaves them marked.** `inbox wake`
+  whose output is a pipe ends without marking anything when the reader closes the pipe, also
+  while it waits, but messages a reader took and did not show before it ended are marked
+  delivered, and so are messages a reader left unread in the pipe when it closed it right after
+  the wake checked it: `inbox pending` still lists them, and no later wait returns on them. The
+  Claude Code plugin ends its wait within seconds when Claude Code ends without ending the
+  plugin's hook, such as in a crash; a post that arrives in that time, up to 2 s and longer on a
+  busy host, is marked delivered and shown to no session. This holds as long as Claude Code
+  started the hook itself; that it does is not checked, and if it starts the hook through a
+  shell of its own, such a wait keeps running and marks the next message though no session
+  reads it. End that process ([first use](first-use.md#claude_code)). When the plugin's
+  temporary directory fills up while it reads, it says so and stops the wait, and the messages
+  that wait had already taken are marked delivered and shown to no session. The plugin reads the
+  messages of one wake byte by byte: 8 MB of them took 6.4 s on a busy host, so a large
+  backlog wakes the session seconds late.
 - **One backend, in memory.** A restart of the service loses every message and every open
   inbox. The next command of the owner opens its inbox again, and the next command of the
   sender posts its kept envelopes again, by themselves; dedup by `message_id` and `dedup_key`

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T13:36:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a signal while read waits inside a line drops the bytes read so far in one shell and keeps them in another, and the frame can count a fragment): a read the signal cut ends the reading and its line is dropped whole in every shell; whole lines the wake wrote before it ended are still read; the adversary's case is turned into a_signal_inside_a_line_drops_the_cut_line_whole (each shell of the hook and bash under its own name, 2 stand-ins); mutants p4, p5 red",
+    "review": "review-result:adversary-wake-reader-gone-pass-2",
+    "outcome": "fixed"
+  }
+}

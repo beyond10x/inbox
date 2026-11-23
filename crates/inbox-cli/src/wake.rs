@@ -4,11 +4,16 @@
 //! exits. A row in `Delivered` (delivered before, not yet read) or past its `expires` neither ends
 //! a wake nor is printed by it: the service leaves them out of the answer to `undelivered=1`.
 //!
-//! - A standard output that is closed or `/dev/null` ends the wake with 4 first of all, before
-//!   the lock and any request (`output::reaches_a_reader`): no one would take its rows. The rows
-//!   are written through a duplicate of descriptor 1 (`output::try_print_text`), so a standard
-//!   output that cannot be written (the reader gone, open only for reading) ends it with 4 and no
-//!   mark.
+//! - A standard output that is closed or `/dev/null`, or a pipe or a FIFO without a reader, ends
+//!   the wake with 4 first of all, before the lock and any request (`output::reaches_a_reader`):
+//!   no one would take its rows. The rows are written through a duplicate of descriptor 1
+//!   (`output::try_print_text`), so a standard output that cannot be written (the reader gone,
+//!   open only for reading) ends it with 4 and no mark.
+//! - The reader of a pipe or a FIFO is watched while the wake waits ([`Watch`]): a thread looks
+//!   every [`WATCH_PERIOD`], and when the reading end is closed it ends the wake with 4, no mark,
+//!   without a post having to arrive; the end of the process frees the lock. The same check runs
+//!   after the rows of a round are written and before their first mark. A terminal, a regular
+//!   file and a socket are not watched.
 //! - One wake per inbox and outbox file on a host: before its first request it takes an
 //!   exclusive `flock` of a file beside the outbox file, `<outbox>.wake.<16 hex digits>` (the
 //!   64-bit FNV-1a hash of the caller's address), and holds it until the process ends, a kill
@@ -51,6 +56,7 @@
 use std::fs::{DirBuilder, File, OpenOptions, TryLockError};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use inbox::server::json::Value;
@@ -112,11 +118,87 @@ fn not_open(failure: &Failure) -> bool {
 /// The adapter `inbox wake --follow` is.
 const TERMINAL: &str = "terminal";
 
+/// How often the watch of the reader looks whether a pipe or a FIFO on standard output still
+/// has a reader: on an idle host a wake whose reader is gone ends within about this time.
+const WATCH_PERIOD: Duration = Duration::from_millis(500);
+
+/// The name of the thread that watches the reader.
+const WATCH_THREAD: &str = "inbox-reader";
+
+/// The watch of the reader of standard output (`docs/design/wake.md`, "A reader that is gone").
+/// Only a pipe or a FIFO is watched: of these the kernel tells whether a reader holds the other
+/// end ([`output::reader_gone`]). On a terminal, a regular file or a socket no thread runs, and
+/// the wake is as it was before the watch.
+struct Watch {
+    /// A duplicate of descriptor 1 when it is a pipe or a FIFO, else `None`.
+    pipe: Option<File>,
+    /// Held by a round from the write of its rows to its last mark, and by the end of the wake,
+    /// which sets it: the watch ends the process only while it holds it unset, so it cuts no
+    /// round between its rows and its marks, and writes no second line after the wake ended in
+    /// another way.
+    ended: Mutex<bool>,
+}
+
+impl Watch {
+    fn new() -> Self {
+        Self {
+            pipe: output::pipe(),
+            ended: Mutex::new(false),
+        }
+    }
+
+    fn hold(&self) -> MutexGuard<'_, bool> {
+        self.ended.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Starts the thread that looks every [`WATCH_PERIOD`] whether the reader is gone and then
+    /// ends the process as [`report`] ends it with [`no_reader`]: exit 4, no mark. Starts nothing
+    /// when standard output is not a pipe or a FIFO.
+    fn start(self: &Arc<Self>, json: bool) -> Result<(), Failure> {
+        if self.pipe.is_none() {
+            return Ok(());
+        }
+        let watch = Arc::clone(self);
+        std::thread::Builder::new()
+            .name(WATCH_THREAD.to_owned())
+            .spawn(move || watch.watch(json))
+            .map(drop)
+            .map_err(|error| Failure::Local(format!("the watch of the reader: {error}")))
+    }
+
+    fn watch(&self, json: bool) {
+        let Some(pipe) = &self.pipe else {
+            return;
+        };
+        loop {
+            std::thread::sleep(WATCH_PERIOD);
+            if output::reader_gone(pipe) {
+                let ended = self.hold();
+                if *ended {
+                    return;
+                }
+                std::process::exit(report(&no_reader(), json));
+            }
+        }
+    }
+}
+
+/// The failure of a wake whose pipe or FIFO has no reader left.
+fn no_reader() -> Failure {
+    Failure::Local(format!(
+        "standard output: {}: no message is marked delivered",
+        output::NO_READER
+    ))
+}
+
 /// Runs `inbox wake` for `client`, with `follow` `inbox wake --follow`, and answers its exit
 /// status. Every line it writes to standard error starts with `inbox wake: `, but the
 /// reconnect's own line.
 pub fn run(client: &Client, json: bool, follow: bool) -> i32 {
-    match wake(client, json, follow) {
+    let watch = Arc::new(Watch::new());
+    let result = wake(client, json, follow, &watch);
+    *watch.hold() = true;
+    match result {
         Ok(status) => status,
         Err(failure) => report(&failure, json),
     }
@@ -132,7 +214,7 @@ pub fn report(failure: &Failure, json: bool) -> i32 {
     failure.status()
 }
 
-fn wake(client: &Client, json: bool, follow: bool) -> Result<i32, Failure> {
+fn wake(client: &Client, json: bool, follow: bool, watch: &Arc<Watch>) -> Result<i32, Failure> {
     // First of all: a wake whose rows no one would read takes no lock and asks nothing.
     if let Err(error) = output::reaches_a_reader() {
         return Err(Failure::Local(format!(
@@ -143,6 +225,7 @@ fn wake(client: &Client, json: bool, follow: bool) -> Result<i32, Failure> {
         terminal_only(client)?;
     }
     end_on_signal()?;
+    watch.start(json)?;
     let address = client.caller.principal.clone();
     let _lock = lock(client.outbox.path(), &address)?.ok_or_else(|| {
         Failure::AnotherWake(format!("another wake of {address} runs on this host"))
@@ -165,7 +248,8 @@ fn wake(client: &Client, json: bool, follow: bool) -> Result<i32, Failure> {
                 .iter()
                 .any(|id| id == output::text(row, "message_id"))
         });
-        let (first, now_marked) = deliver(client, json, follow, &answer, reconnected.as_deref())?;
+        let (first, now_marked) =
+            deliver(client, json, follow, &answer, reconnected.as_deref(), watch)?;
         if !follow {
             return Ok(first.map_or(0, |failure| failure.status()));
         }
@@ -200,18 +284,22 @@ fn terminal_only(client: &Client) -> Result<(), Failure> {
 /// a reconnect ran) and flushes them, then sends `MarkDelivered` for each row, one after
 /// another; a round of `--follow` rings the bell after its text ([`output::try_print_round`]).
 /// Answers the first mark that failed (each is named in one line on standard error) and the
-/// message ids whose mark succeeded.
+/// message ids whose mark succeeded. It holds `watch` from the write to the last mark: the watch
+/// does not end the process in between.
 ///
 /// # Errors
 ///
-/// [`Failure::Local`] when standard output cannot be written: then no mark is sent.
+/// [`Failure::Local`] when standard output cannot be written, or is a pipe or a FIFO whose reader
+/// is gone once the rows are written: then no mark is sent.
 fn deliver(
     client: &Client,
     json: bool,
     follow: bool,
     answer: &Value,
     reconnected: Option<&str>,
+    watch: &Watch,
 ) -> Result<(Option<Failure>, Vec<String>), Failure> {
+    let mut round = watch.hold();
     let done = commands::pending_done(answer);
     let written = if json {
         let document = match reconnected {
@@ -225,9 +313,21 @@ fn deliver(
         output::try_print_text(&done.text)
     };
     if let Err(error) = written {
+        *round = true;
         return Err(Failure::Local(format!(
             "standard output: {error}: no message is marked delivered"
         )));
+    }
+    // The reader may have closed the pipe after the rows went in: they are not marked.
+    if let Err(error) = output::reaches_a_reader() {
+        *round = true;
+        return Err(Failure::Local(format!(
+            "standard output: {error}: no message is marked delivered"
+        )));
+    }
+    if !follow {
+        // The wake ends after these marks, whatever the reader does meanwhile.
+        *round = true;
     }
     let mut first: Option<Failure> = None;
     let mut marked = Vec::new();

@@ -42,6 +42,21 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   it replaces). Before, a link there was followed: the file became a link to the link's target,
   whose bytes were overwritten, and a link to the file itself lost every entry of the file; a
   FIFO there held the command.
+- `inbox wake` whose standard output is a pipe or a FIFO now ends with exit status 4 and marks
+  nothing when its reader is gone: while it waits (within about a second, on Linux), and once
+  more after the rows are written and before the first mark. Before, it noticed only at its
+  next write, so a wake left behind kept the lock and marked the next message delivered though
+  nobody read it. The Claude Code plugin reads the wake through a FIFO in the hook's own shell
+  and watches its parent process: a hook killed with SIGKILL, or Claude Code gone without
+  ending the hook, no longer leaves a wake that marks the next message; it keeps the rows in a
+  file as it reads them, so its time grows with their size, not with its square; when that
+  file takes no byte it starts no wait and says so, when a row cannot be kept there it stops
+  the wait, says so and shows nothing, and a line a signal cut is left out whole. Still open, on
+  the limits page: a reader that took the messages and ended before it showed them, or closed
+  the pipe with them unread right after the wake's check, leaves them marked; a post in the up
+  to 2 s before the plugin notices that Claude Code is gone is marked and shown to no session;
+  the messages of a wait that ended because a row could not be kept are marked and shown to
+  no session; and it is not checked that Claude Code is the hook's parent process.
 
 ## [0.6.0] - 2026-11-23
 

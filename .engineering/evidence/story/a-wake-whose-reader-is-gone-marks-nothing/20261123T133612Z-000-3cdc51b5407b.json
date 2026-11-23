@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T13:36:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a write to the file text that fails is not checked, so the wake marks rows the hook dropped): the hook writes one byte to the file before the wake starts and starts no wake when that fails (case a_tmpdir_that_takes_no_byte_starts_no_wake); every write of a row is checked, and on a failure the hook closes the FIFO, ends the wake and exits 1 with one line and no frame (case a_row_that_cannot_be_kept_ends_the_wake_and_hands_on_no_frame); the adversary's case a_full_tmpdir_does_not_drop_a_row_the_wake_marked is green as written; mutants p1, p2, p3 red; the round the wake had written when the write failed stays marked and is named in docs/design/wake.md and on the limits page",
+    "review": "review-result:adversary-wake-reader-gone-pass-2",
+    "outcome": "fixed"
+  }
+}

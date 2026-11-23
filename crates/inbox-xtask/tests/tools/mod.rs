@@ -5,6 +5,8 @@
 
 mod adversary_claude_code_adapter;
 mod adversary_claude_code_adapter_2;
+mod adversary_claude_code_adapter_3;
+mod adversary_claude_code_adapter_4;
 mod animation;
 mod cargo_config;
 mod claude_code_adapter;

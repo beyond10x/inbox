@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a post in the up to 2 s after the harness is gone is marked and handed to no one, and no document names it): the coordinator decided that the window stays open; docs/design/wake.md and website/docs/limits.md name it, and the adversary's case holds it as a_post_right_after_the_harness_is_gone_is_marked_an_open_limit",
+    "review": "review-result:adversary-wake-reader-gone-pass-1",
+    "outcome": "fixed"
+  }
+}

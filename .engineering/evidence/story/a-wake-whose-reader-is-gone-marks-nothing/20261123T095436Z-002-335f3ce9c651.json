@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the design says a round whose reader went away after its rows were written sends no mark): wake.md says the check runs once per round, and What stays open and the limits page name a reader that closes after the check with the rows unread",
+    "review": "review-result:adversary-wake-reader-gone-pass-1",
+    "outcome": "fixed"
+  }
+}

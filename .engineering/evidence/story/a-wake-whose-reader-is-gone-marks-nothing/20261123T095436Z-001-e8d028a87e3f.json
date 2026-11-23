@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T09:54:36Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-whose-reader-is-gone-marks-nothing",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (mutant m5b, the check after the write removed, survives the story's cases): the adversary's case rows_in_a_full_pipe_whose_reader_closes_unread_are_not_marked is in the tree and kills it",
+    "review": "review-result:adversary-wake-reader-gone-pass-1",
+    "outcome": "fixed"
+  }
+}

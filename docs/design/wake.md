@@ -109,11 +109,58 @@ and its rows are marked.
   stay in `Sent` for the next wake.
 - A standard output that no one reads, `/dev/null` or closed when the wake started (`inbox wake
   >&-`: the standard library's start of the program puts `/dev/null` in place of a closed
-  descriptor 1, where a write succeeds and reaches no one), ends the wake with exit 4 and one
-  line before anything else: it takes no lock and sends no request, so it neither blocks a
-  working wake of the inbox (exit 5) nor holds a read for rows no one would get. The same check
-  (`output::reaches_a_reader`) runs again before the rows are written: the reader may be gone by
-  then.
+  descriptor 1, where a write succeeds and reaches no one), or a pipe or a FIFO whose reading
+  end is closed already, ends the wake with exit 4 and one line before anything else: it takes
+  no lock and sends no request, so it neither blocks a working wake of the inbox (exit 5) nor
+  holds a read for rows no one would get. The same check (`output::reaches_a_reader`) runs
+  again, once, after the rows of a round are written and before their first mark: rows written
+  into a pipe whose reader closed before that check are not marked (exit 4, the line below).
+
+### A reader that is gone
+
+A wake whose standard output is a pipe or a FIFO watches its reader while it waits, with or
+without `--follow` (story:a-wake-whose-reader-is-gone-marks-nothing). A thread of its own
+(`inbox-reader`) looks every 500 ms (`WATCH_PERIOD` of `src/wake.rs`) whether the other end
+still has a reader. When the reading end is closed, the wake ends with exit 4 and one line,
+`inbox wake: standard output: it is a pipe or a FIFO whose reader is gone: no message is marked
+delivered` (with `--json` also the document of that failure, to a pipe no one reads): it marks
+nothing, it does not need a post to arrive first, and the end of the process frees its lock, so
+the next wake of the inbox takes it. A post that arrives after it stays in `Sent`, and the next
+wake returns on it. On an idle host the wake notices within 500 ms and the time the kernel takes
+to run the thread; on a loaded host it may take longer, and no case holds a time.
+
+- The watch does not cut a round: from the write of a round's rows to its last mark it waits,
+  and it ends the process only between rounds. A wake that ended in another way first (its marks
+  sent without `--follow`, a failure) is not ended by it a second time, so it writes one line at
+  most. The check after the write (above) runs once per round: a reader that closes during the
+  write makes the write fail, and one that closes before the check is found gone (exit 4, no
+  mark either way); a reader that closes after the check, with the rows still unread in the
+  pipe, gets every mark of that round.
+- How it asks. `poll(2)` would tell it (an error or a hang-up for a write end without a reader),
+  but needs either unsafe code, which the workspace forbids (`unsafe_code = "forbid"`), or a
+  crate `Cargo.lock` does not hold (rustix, nix, mio). The watch asks the kernel through the
+  standard library instead, without writing a byte: it copies from an empty pipe of its own that
+  has no writer into a duplicate of descriptor 1 (`std::io::copy`, `output::reader_gone`). On
+  Linux the standard library makes that copy with `splice(2)`, which answers `EPIPE` when the
+  pipe has no reader and otherwise finds its source empty and without a writer, and moves
+  nothing. Where the copy is no `splice` (another kernel), it reads the empty source and answers
+  0: the reader is never seen gone, and only the write of the rows tells (exit 4, no mark). The
+  cases of `crates/inbox-cli/tests/reader_gone.rs` fail when the check no longer sees a reader
+  go.
+- Only a pipe or a FIFO is watched (`S_IFIFO`, `output::pipe`). On a terminal, a regular file,
+  `/dev/null` or a socket no thread runs and the wake is as before: a regular file has no reader
+  to lose, a terminal that is closed sends SIGHUP, and a socket that is closed makes the write
+  of the rows fail.
+- What stays open: a reader that took the rows from the pipe and died before it showed them, and
+  a reader that closed after the check of its round with the rows unread. The write succeeded and
+  the check found the reader, so the rows are marked, and no later wake returns on them; `inbox
+  pending` lists them. In the `claude_code` hook a post that arrives between the end of the
+  harness and the next look of the hook's watch (up to 2 s and one `ps`, longer on a loaded
+  host) is marked and handed to no one (`claude_code` below), and so are the rows of a round the
+  wake had written and checked when the hook's write of them to its file failed. The reader
+  acknowledges nothing: a
+  wake that waited for a word of its reader before each mark would close these windows, and
+  would change what every adapter does.
 
 A message stays in `Pending` until its owner reads it (`inbox read`, which moves it to `Read`),
 answers or refuses it. A wake started again while a delivered message is unread does not return
@@ -153,8 +200,8 @@ on a connection of its own, and a message they both read is marked once and answ
 | Any other answer that is neither a success nor a refusal: a `3xx`, a `4xx` without `refused`, a whole answer whose body is not JSON (it fills its `Content-Length`, or has neither a `Content-Length` nor a chunked `Transfer-Encoding` and ends with its connection, as a `404` page of another server may), a `2xx` whose body is not the view (no `rows`) | exits 3 with one line |
 | Wrong usage (an `INBOX_URL` outside loopback, a pin beside `http://`, …) | exits 2 before the lock and before any request |
 | Any other refusal of a read (`401`, `400`, a declared error) | exits 1 |
-| A standard output no one reads (`/dev/null`, closed) | exits 4 first of all: no lock, no request |
-| A local file it cannot use (the lock file, the key file), or a standard output it cannot write | exits 4 |
+| A standard output no one reads (`/dev/null`, closed, a pipe or a FIFO without a reader) | exits 4 first of all: no lock, no request |
+| A local file it cannot use (the lock file, the key file), a standard output it cannot write, or a pipe or a FIFO whose reader is gone while it waits | exits 4, no mark |
 
 The pause before a try again starts at 100 ms and doubles after each failure in a row, up to
 30 s (`wake::pause`); an answer resets it. One line on standard error names the first failure of
@@ -197,8 +244,8 @@ A Claude Code plugin in this repository, `adapters/claude-code/`, that the opera
   `"timeout": 604800` and the command `${CLAUDE_PLUGIN_ROOT}/scripts/wake.sh` in exec form
   (`"args": []`);
 - `scripts/wake.sh`: the hook's script, POSIX shell (dash runs it), which runs the `inbox`
-  binary found on `PATH` and no other program but `cat`, `cut`, `grep`, `mkdir`, `od`, `rm`,
-  `sed`, `tr` and `wc`.
+  binary found on `PATH` and no other program but `cat`, `cut`, `grep`, `mkdir`, `mkfifo`, `od`,
+  `ps`, `rm`, `sed`, `sleep`, `tr` and `wc`.
 
 The loop: a turn of the session ends, Claude Code starts the hook in the background, the script
 runs `inbox wake` until it exits, and when the wake printed rows the script writes them to
@@ -233,8 +280,53 @@ Then it makes the mark of the run and a directory, and when either fails it exit
 - the directory of the rows: `$TMPDIR/inbox-claude-code.<process id>` (`/tmp` without `TMPDIR`),
   made with `mkdir -m 700` under `umask 077`; when that name exists already (a directory, a file
   or a symbolic link: another user's, or one a killed hook left), the next one,
-  `….<process id>.1` up to `.99`, and never a name the script did not make itself. The rows file
-  in it has mode 0600. The script removes the directory when it exits, unless it is killed.
+  `….<process id>.1` up to `.99`, and never a name the script did not make itself. In it the
+  script makes the FIFO `rows` with `mkfifo -m 600` and the file `text`, into which it writes one
+  byte and empties it again, as an empty file is made also on a full disk or past a quota (no
+  FIFO, or a file that takes no byte: exit 1, one line, no wake). The script removes the
+  directory when it exits, unless it is killed.
+
+The wake writes its rows into that FIFO, and the script's own shell reads them, line by line with
+its `read`, as the wake writes them; no other process holds the reading end (descriptor 4 of the
+shell, closed for every child). The shell appends each line to the file `text` through a
+descriptor it opens once (6), whole lines and a last line without a line end as it came, and the
+frame below is made from that file: the time grows with the size of the rows, not with its
+square. Each write to the file is checked: when one fails, the shell reads no more, closes its
+end of the FIFO at once (the wake, its reader gone, marks no later round), ends the wake, hands
+on no frame and exits 1 with one line that names the file. `read` takes
+one byte from a pipe per system call; under bash on a host with a load of about 110, 2 MB of
+rows took 1.7 s and 8 MB 6.4 s. The shell opens the FIFO for reading and writing first
+(descriptor 5, which waits for no other end), then for reading (descriptor 4, at once, as a
+writer exists), and starts the wake with the FIFO as its standard output and descriptors 4 and 5
+closed; the wake holds descriptor 5 as a writer until it has opened its own end, and the shell
+closes descriptor 5 once the wake started. So the shell reads to the end of the wake's output and
+no further, and a wake that dies before it opened the FIFO ends the read too. Then it waits for
+the wake's exit status. A hook ended in any way, SIGKILL included, closes the reading end with
+its process: its wake has no reader, and ends by the rule of "A reader that is gone" above
+(exit 4 within 500 ms on an idle host, no mark, the lock freed). A signal to the hook ends the
+wake (the trap below). A signal that cuts a `read` of the shell inside a line ends the reading,
+and that line is dropped whole, whatever bytes of it the shell kept (bash run as `sh` drops
+them and ends the `read` at once; bash by its own name and zsh go on with the `read` to the end
+of the wake's output and keep a cut last line, which is dropped), so the frame holds whole lines
+and counts only head lines it holds whole. The wake, ended before it marked that round, marks
+none of it, and the message comes again. Whole lines the wake wrote before it ended are read on
+and handed on, as they may be marked.
+
+The harness. The script reads its parent process id at its start (`$PPID`, the harness that
+started it) and starts a watch: a child that holds no descriptor of the hook (standard input,
+output and error `/dev/null`, descriptor 3 closed, started before the FIFO is opened) and looks
+every 2 s with `ps -o ppid= -p <hook>` which process is the hook's parent. When the harness is
+gone without a signal to the hook (it crashed, or was killed with SIGKILL), the kernel gives the
+hook another parent, the id differs, and the watch sends the hook SIGTERM, which ends it as
+below: its wake is ended, and a hook without rows exits 0 and writes nothing. So the hook
+notices a harness that is gone within 2 s and the time of one `ps` on an idle host, without a
+line written to the harness. A post that arrives in that time is read by the hook, which is still
+alive, marked delivered and handed to no one: an open limit ("What stays open" above). The watch ends by itself when the hook is gone (`ps` finds no such
+process), and the script ends it when it exits. Without `ps` on `PATH` there is no watch. That
+real Claude Code is the hook's parent process is not verified by any case here: a harness that
+starts the hook through a shell of its own leaves that shell as the parent, and a harness that
+is gone then changes nothing the watch sees. A process id used again within those 2 s by
+another process is not told apart.
 
 ### The frame
 
@@ -300,15 +392,17 @@ standard output):
 |---|---|
 | 0 with rows | exits 2: the frame on standard error, its one line on standard output |
 | 1 or 3 with rows (a mark failed) | exits 2: the frame and the note line |
-| 4 with rows (a write of the rows failed part way, such as on a full `$TMPDIR`) | exits 2: the frame with what was written, and the note line |
+| 4 with rows (the reader of its output was gone after it wrote rows: does not happen while the hook reads it) | exits 2: the frame with what was read, and the note line |
 | 128 + n with rows (the wake ended by a signal that was not the hook's) | exits 2: the frame and the note line |
 | 2 or 5 with rows | does not happen (both exit before a request); it would be the frame and the note line |
 | 0 without rows | does not happen (the wake exits 0 only after it printed rows); exits 0 and prints nothing |
 | 5 without rows (another wake of the inbox runs) | exits 0 and prints nothing |
 | 1, 2, 3 or 4 without rows | exits 1 with one line on standard error: the status, what it means, and to run `inbox wake` in a terminal with the same variables. The session is not woken. For 2 the line names wrong usage: this `inbox` may have no `wake` command (it is older than the plugin, as a release before `wake` was added; clap refuses the command with 2), or `INBOX_URL` is not a loopback `http://` or `https://` URL, or the pin does not go with it. The script does not ask `inbox` whether it has `wake`: that is one more process each turn for the text of a line |
 | 128 + n without rows | exits 1 with one line: the wake ended by a signal or by a failure of its own. The session is not woken |
-| `inbox` not on `PATH`, no mark, no directory | exits 1 with one line that says so; no wake is started |
-| the hook ended by SIGTERM, SIGINT or SIGHUP | sends SIGTERM to the wake, waits for its end; rows the wake printed before it ended are handed on in the frame without the note line (exit 2), else it exits 0 with nothing printed |
+| `inbox` not on `PATH`, no mark, no directory, no FIFO, or a file of the rows that takes no byte | exits 1 with one line that says so; no wake is started |
+| a write of a row to the file `text` failed (a full disk, a quota) | reads no more, closes its end of the FIFO, sends SIGTERM to the wake and waits for its end; no frame; exits 1 with one line that names the file. The wake marks no later round; the rows of a round it had written and checked are marked and not handed on (open) |
+| the hook ended by SIGTERM, SIGINT or SIGHUP, or its harness gone (its watch sends it SIGTERM) | sends SIGTERM to the wake, reads on the whole lines the wake wrote before it ended and waits for its end; they are handed on in the frame without the note line (exit 2), a line the signal cut inside a `read` ends the reading and is dropped whole, and so is a last line without a line end; else it exits 0 with nothing printed |
+| the hook ended by SIGKILL | nothing: the wake finds the FIFO without a reader and ends by itself with 4, no mark |
 
 Rows the wake printed are handed on whatever its exit status, because it may have marked them
 delivered, and a wake does not return on a message it delivered before. A failure without rows
@@ -335,32 +429,13 @@ has not delivered. That Claude Code takes the value 604800 as it is, and how it 
 its timeout or at the end of the session (which signal, to the script alone or to its process
 group), is not verified. When a headless session ended because its standard input was closed,
 no `inbox wake` was left (seen once, below). SIGTERM, SIGINT or SIGHUP to the script ends the
-wake (the cases hold it).
-
-### A wake whose reader is gone: an open limit
-
-2 ways leave a wake that hands what it prints to no one (story:a-wake-whose-reader-is-gone-marks-nothing):
-
-- the harness is gone without a signal to the hook: Claude Code crashed or was killed with
-  SIGKILL, so nothing reads the hook's standard error any more;
-- the hook alone is ended by SIGKILL (whether the harness's timeout does that is not verified).
-
-The wake writes its rows to a regular file, so its write succeeds whether or not the hook is
-still there to read the file. It lives on, and on the next post it writes the rows, marks the
-message delivered and exits; no one reads them. The message stays in `Delivered`:
-`inbox pending` lists it, and no later wake returns on it. Until it ends, an orphaned wake also
-holds the lock of the wake, so the hooks of later turns of a new session of the inbox end with 0
-(status 5) and do not wake it. The cases
-`a_hook_killed_with_sigkill_leaves_a_wake_that_marks_the_post_an_open_limit` and
-`a_harness_that_is_gone_gets_the_post_marked_delivered_an_open_limit`
-(`crates/inbox-xtask/tests/tools/adversary_claude_code_adapter.rs`) hold it as it is today and
-turn when the wake notices that its reader is gone.
-
-How the operator sees it: `inbox pending` lists a message in `Delivered` that the session did not
-read, and a process `inbox wake` runs with no Claude Code session above it (its parent is gone,
-or is a `wake.sh` whose parent is gone). What to do: end that process (SIGTERM ends it at once);
-the next turn that ends starts a new wake, and the session reads the message with
-`inbox pending`.
+wake; SIGKILL to the script leaves a wake that ends by itself without a mark; a harness that is
+gone ends the hook through its watch. The cases hold all 3:
+`a_hook_killed_with_sigkill_leaves_no_wake_that_marks_a_post` and
+`a_harness_that_is_gone_gets_no_post_marked_delivered`
+(`crates/inbox-xtask/tests/tools/adversary_claude_code_adapter.rs`) against a stand-in `inbox`,
+and `reader_gone::a_hook_ended_by_sigkill_leaves_a_wake_that_ends_without_marking` of
+`inbox-cli` against the built one.
 
 ### Seen on a real session, not verified, and the operator's check
 

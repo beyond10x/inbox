@@ -23,8 +23,8 @@ const DECISION_TAIL: &str = "  B) Hold\n";
 
 const ROWS: &str = "m-1 note Delivered from agent:case/other to agent:case/session thread t-1 expires 2026-11-24T00:00:00Z\n    Hello.\n";
 
-const UTILITIES: [&str; 11] = [
-    "cat", "cut", "grep", "mkdir", "od", "rm", "sed", "sleep", "stat", "tr", "wc",
+const UTILITIES: [&str; 13] = [
+    "cat", "cut", "grep", "mkdir", "mkfifo", "od", "ps", "rm", "sed", "sleep", "stat", "tr", "wc",
 ];
 
 fn script() -> PathBuf {
@@ -274,7 +274,7 @@ fn one_message_reads_as_one_message_to_the_session() {
 }
 
 #[test]
-fn a_hook_killed_with_sigkill_leaves_a_wake_that_marks_the_post_an_open_limit() {
+fn a_hook_killed_with_sigkill_leaves_no_wake_that_marks_a_post() {
     each_shell(|| {
         let session = Session::new("sigkill");
         session.waiting_for_a_post();
@@ -286,34 +286,48 @@ fn a_hook_killed_with_sigkill_leaves_a_wake_that_marks_the_post_an_open_limit() 
         session.ended(&wake);
         let marked = session.dir.join("marked").exists();
         session.end_stand_in();
-        // Turns when the wake notices a gone reader: story:a-wake-whose-reader-is-gone-marks-nothing.
         assert!(
-            marked,
-            "the wake no longer marks a post its killed hook does not read: turn this case"
+            !marked,
+            "the wake outlived its hook, wrote the post to a file no one reads and marked it delivered"
         );
     });
 }
 
 #[test]
-fn a_harness_that_is_gone_gets_the_post_marked_delivered_an_open_limit() {
+fn a_harness_that_is_gone_gets_no_post_marked_delivered() {
     each_shell(|| {
         let session = Session::new("harness-gone");
         session.waiting_for_a_post();
-        let mut command = session.command(&hook_shell(), &[script().to_str().unwrap()]);
+        // The harness: a process that starts the hook as its child, as Claude Code does.
+        let shell = hook_shell();
+        let mut command = session.command(
+            &shell,
+            &[
+                "-c",
+                "\"$0\" \"$1\" < /dev/null & printf '%s\\n' \"$!\" > hook; wait",
+                shell.to_str().unwrap(),
+                script().to_str().unwrap(),
+            ],
+        );
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
-        let mut hook = session.start_with(command);
+        let mut harness = session.start_with(command);
+        let hook = session.pid_in("hook");
+        let wake = session.pid_in("started");
         // Claude Code ended (a crash, an OOM kill) and sent the hook no signal: no reader is left.
-        drop(hook.stdout.take());
-        drop(hook.stderr.take());
-        session.pid_in("started");
+        drop(harness.stdout.take());
+        drop(harness.stderr.take());
+        harness.kill().unwrap();
+        let _ = harness.wait();
+        // The post comes once the wake ended, or after a hang.
+        session.ended(&wake);
         fs::write(session.dir.join("post"), "").unwrap();
-        let _ = session.wait(hook);
+        session.ended(&hook);
+        session.ended(&wake);
         let marked = session.dir.join("marked").exists();
         session.end_stand_in();
-        // Turns when the wake notices a gone reader: story:a-wake-whose-reader-is-gone-marks-nothing.
         assert!(
-            marked,
-            "the wake no longer marks a post a gone harness does not read: turn this case"
+            !marked,
+            "the post was marked delivered and handed to no one: no later wake returns on it"
         );
     });
 }

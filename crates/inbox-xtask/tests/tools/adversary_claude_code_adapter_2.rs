@@ -10,8 +10,8 @@ use std::process::{Command, Stdio};
 
 use super::{each_shell, hook_shell, hook_shell_name, repository, scratch};
 
-const UTILITIES: [&str; 10] = [
-    "cat", "cut", "grep", "mkdir", "od", "rm", "sed", "tr", "wc", "ln",
+const UTILITIES: [&str; 13] = [
+    "cat", "cut", "grep", "mkdir", "mkfifo", "od", "ps", "rm", "sed", "sleep", "tr", "wc", "ln",
 ];
 
 /// The head line of a message as the printer writes it, with the sender `from`.
