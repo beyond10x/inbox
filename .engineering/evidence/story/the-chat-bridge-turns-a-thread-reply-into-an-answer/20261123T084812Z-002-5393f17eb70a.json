@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "parallel-safety finding 2 (the depends_on edge to the delegation story is unconditional while the body says it holds only under option B): the thread-reply story depends on the own-key story, the blocker blocks all 3, and the Scope says which edge is removed and which is added on answer A",
+    "review": "review-result:stage-4-parallel-safety-round-1",
+    "outcome": "fixed"
+  }
+}

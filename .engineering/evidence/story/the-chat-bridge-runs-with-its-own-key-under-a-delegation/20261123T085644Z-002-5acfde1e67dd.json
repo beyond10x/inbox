@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:56:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "parallel-safety finding 1, blocker (check 6 reads a behaviour of the thread-reply story, which is built later): fixed by the same change as design finding 1; the behaviour is built by the own-key story, and the decomposer read every check of the 7 stories for a read of a later story's behaviour and found none",
+    "review": "review-result:stage-4-parallel-safety-round-2",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 9 (check 2 cannot fail under the default Open 4 B): a forwarder in front of the service records the requests and must see one read although the stand-in lists the reaction at 2 more polls",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}

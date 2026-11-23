@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:56:44Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "design finding 2 (the Scope claims main.rs for the flags of the key and of the delegation id): the main.rs line says the story adds no flag, only the help text of inbox bridge on thread replies; the flags belong to the own-key story (its Open 1 A and its new Open 3, one flag or two, default one flag --for on every client command)",
+    "review": "review-result:stage-4-design-round-2",
+    "outcome": "fixed"
+  }
+}

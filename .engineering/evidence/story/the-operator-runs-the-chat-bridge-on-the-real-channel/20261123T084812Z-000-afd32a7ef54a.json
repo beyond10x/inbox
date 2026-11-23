@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-operator-runs-the-chat-bridge-on-the-real-channel",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "scope finding 1 (no story claims that the bridge replaces a per-session poller of the chat channel): the operator-run story says under Not in this set that nothing in the repository names the poller, and holds it as Open 3 with the default that the operator retires it outside this repository after the recorded run",
+    "review": "review-result:stage-4-scope-round-1",
+    "outcome": "fixed"
+  }
+}

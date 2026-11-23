@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 5 (check 4 names no input and no expected text): the case posts a body that holds the provider's channel mention, its literal-block delimiter, ESC and U+202E, and fails when the delimiter arrives unescaped, the mention is outside the block or a control character arrives raw",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}

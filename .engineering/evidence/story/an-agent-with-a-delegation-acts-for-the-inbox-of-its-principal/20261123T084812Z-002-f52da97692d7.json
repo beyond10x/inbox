@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 7 (no check moves a message by the agent's MarkDelivered or MarkRead): check 2 moves Sent to Delivered, check 3 moves to Read and removes a note, check 4 holds the 4 requests to 401 without a live delegation",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}

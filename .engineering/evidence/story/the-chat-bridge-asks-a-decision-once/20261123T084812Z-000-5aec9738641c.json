@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "scope finding 2 (the thread line on silence and the line for an expired message are more than the epic asks): the Outcome calls the line an addition, the acceptance rests on one chat post, the line's check holds only under Open 2 A, and Open 2 names C as the epic's letter; the operator-run story asks for the line only under that option",
+    "review": "review-result:stage-4-scope-round-1",
+    "outcome": "fixed"
+  }
+}

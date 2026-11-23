@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 4, blocker (check 1 extends the document in ess/ with UNMAPPED markers): fixed as in the posts story, the markers stay in docs/design/bridge.md",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}

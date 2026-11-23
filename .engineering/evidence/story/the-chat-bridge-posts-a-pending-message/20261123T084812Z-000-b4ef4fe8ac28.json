@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T08:48:12Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "acceptance finding 1, blocker (check 1 puts UNMAPPED markers under ess/, which task spec refuses): the nouns are drafted in docs/design/bridge.md with their markers; a relation enters ess/ only once its Open item is answered, without a marker; the check is that grep finds no UNMAPPED under ess and task spec exits 0; the marker tied to no Open item is tied to Open 1 of the asks-once story",
+    "review": "review-result:stage-4-acceptance-round-1",
+    "outcome": "fixed"
+  }
+}
