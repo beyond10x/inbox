@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-23
+
 ### Added
 
 - `inbox wake` waits until the caller's own inbox has a message not yet delivered and not past its

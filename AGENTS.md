@@ -20,6 +20,10 @@ Release 0.4.0 is release 0.3.1 with the changes its `CHANGELOG.md` section lists
 loopback address with a pinned certificate, the client that opens its inbox again and reposts
 by itself after a restart of the service, and a message past its deadline that takes no read
 mark and ends no wait.
+Release 0.5.0 is release 0.4.0 with the changes its `CHANGELOG.md` section lists: `inbox wake`,
+the parameter `undelivered=1` of the wait on `Pending`, the Claude Code plugin in
+`adapters/claude-code/`, and a text output that keeps each message to one line that is not
+indented.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
