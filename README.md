@@ -23,8 +23,8 @@ Available:
 - An HTTP API: one `POST` per command and one `GET` per view.
 
 Missing: a persistent backend, a second host, a binary to download, and any deployment. A
-Claude Code plugin wakes an idle session on a message; it is not checked on a real session
-yet.
+Claude Code plugin wakes an idle session on a message; it was run on one real headless
+session, and not yet on an interactive one.
 
 Every feature, what is missing and what is planned:
 [features](https://beyond10x.github.io/inbox/docs/status).

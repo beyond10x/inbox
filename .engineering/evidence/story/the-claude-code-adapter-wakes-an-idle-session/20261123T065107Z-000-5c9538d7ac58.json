@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T06:51:07Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-claude-code-adapter-wakes-an-idle-session",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "the operator's check of docs/design/wake.md on one real headless session of Claude Code 2.1.330 (claude -p, stream-json, model claude-haiku-5-5, the plugin by --plugin-dir, plain HTTP on loopback): idle 59 s; a note posted by a second principal ended the Stop hook with exit 2; first event of the model 2.0 s after the post; the session ran inbox read and its turn ended 4.9 s after the post; inbox pending empty after it; the hook started again; no inbox wake left after the session ended. Not seen: an interactive session, inbox answer, more than 1 message, TLS"
+  }
+}

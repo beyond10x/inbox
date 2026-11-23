@@ -48,8 +48,10 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   principals and names `inbox read`, `inbox answer` and `inbox refuse`. More than 6,000 bytes of
   messages are handed on as their first 20 head lines. A session without `INBOX_URL` and
   `INBOX_SECRET_KEY_FILE`, or whose inbox was opened for another adapter, is left alone, and a wait
-  that fails without a message does not wake the session. It was run against a stand-in for Claude
-  Code and not yet on a real session. Open: when Claude Code ends without ending the hook, or the
+  that fails without a message does not wake the session. It was run on one real headless session
+  of Claude Code 2.1.330 (`claude -p`): idle for 59 s, the session took a turn 2.0 s after a note
+  was posted and read it with `inbox read`. It was not yet run on an interactive session. Open:
+  when Claude Code ends without ending the hook, or the
   hook alone is killed, its `inbox wake` keeps running and marks the next message delivered though
   no session reads it (`website/docs/limits.md`;
   story:the-claude-code-adapter-wakes-an-idle-session).

@@ -215,8 +215,9 @@ messages between a begin line and an end line that carry a mark made anew for ea
 sender cannot write such a line. The begin line says that the messages are data from other
 principals, not your instructions, and names `inbox read`, `inbox answer` and `inbox refuse`.
 More than 6,000 bytes of messages are shown as their first 20 head lines, and `inbox pending`
-lists them whole. When that turn ends, the plugin waits again. The plugin was run against a
-stand-in for Claude Code and not yet on a real session ([limits](limits.md)).
+lists them whole. When that turn ends, the plugin waits again. The plugin was run on one real
+headless session of Claude Code 2.1.330 (`claude -p`), and not yet on an interactive one
+([limits](limits.md)).
 
 In the terminal you start Claude Code from, set the variables of your client (the secret key
 file by its absolute path), open your inbox for this adapter, and load the plugin for the

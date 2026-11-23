@@ -44,10 +44,13 @@ record out.
 
 - **Loopback only.**
 - **No second host.**
-- **The Claude Code plugin is not checked on a real session yet.** It was run against a
-  stand-in for Claude Code. That Claude Code starts the plugin's hook when a turn ends, wakes
-  an idle session on it and shows the session the messages is taken from the pages of Claude
-  Code, and has not been seen on a real session. No other adapter wakes a session.
+- **The Claude Code plugin was run on one real session, a headless one.** On Claude Code
+  2.1.330 (`claude -p` with its input and output as `stream-json`), a session that stood idle
+  for 59 s took a turn 2.0 s after a note was posted to its inbox, read the note with
+  `inbox read`, and the plugin waited again when that turn ended. Not seen on a real session:
+  an interactive session in a terminal, a wait longer than 59 s, a request answered with
+  `inbox answer`, more than one message, and TLS. The tests run the plugin against a stand-in
+  for Claude Code. No other adapter wakes a session.
 - **A wait whose session is gone marks the next message.** When Claude Code ends without
   ending the plugin's hook first, such as in a crash, or the hook alone is killed with
   SIGKILL, its `inbox wake` keeps running. It marks the next message delivered though no

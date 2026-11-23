@@ -333,8 +333,9 @@ session is woken again only after its next turn ends (a turn the operator starts
 starts a new wake; `inbox pending` lists the posts in between, and the next wake prints those it
 has not delivered. That Claude Code takes the value 604800 as it is, and how it ends the hook at
 its timeout or at the end of the session (which signal, to the script alone or to its process
-group), is not verified. SIGTERM, SIGINT or SIGHUP to the script ends the wake (the cases hold
-it).
+group), is not verified. When a headless session ended because its standard input was closed,
+no `inbox wake` was left (seen once, below). SIGTERM, SIGINT or SIGHUP to the script ends the
+wake (the cases hold it).
 
 ### A wake whose reader is gone: an open limit
 
@@ -361,16 +362,39 @@ or is a `wake.sh` whose parent is gone). What to do: end that process (SIGTERM e
 the next turn that ends starts a new wake, and the session reads the message with
 `inbox pending`.
 
-### Not verified, and the operator's check
+### Seen on a real session, not verified, and the operator's check
 
-Not verified, and held by the operator's check below: that Claude Code 2.1.330 runs a `Stop`
-hook of a plugin's `hooks/hooks.json` with `asyncRewake` in the background (the hooks page lists
-`asyncRewake` among the fields of a command hook and names no event that refuses it; that a
-plugin's hooks file takes it as a settings file does is not stated); that its exit 2 wakes an
-idle session at once and shows the session its standard error (the page says so); and that the
-`Stop` hook fires when the turn the wake started ends (the page: "Runs when the main Claude Code
-agent has finished responding", and not after an interrupt by the user).
-`claude plugin validate adapters/claude-code` (Claude Code 2.1.330) reports
+Seen once, on 2026-11-23, on one real headless session of Claude Code 2.1.330 (`claude -p` with
+`--input-format stream-json` and `--output-format stream-json`, its standard input held open,
+the model `claude-haiku-5-5`, the plugin loaded with `--plugin-dir`, no user settings, the
+session allowed `inbox read` and no other command; `inbox serve` over plain HTTP on a loopback
+address with keys made for the run):
+
+- Claude Code ran the `Stop` hook of the plugin's `hooks/hooks.json` with `asyncRewake` when the
+  first turn ended (its event `hook_started`), and the turn's result came without waiting for
+  the hook;
+- the session then stood idle for 59 s with no event;
+- a note posted by a second principal ended the hook with exit status 2. Its event
+  `hook_response` held the one line of standard output and, as standard error, the frame: the
+  begin line, the head line of the note, its body indented, and the end line with the same mark;
+- the session took a turn with nobody typing: the first event of the model came 2.0 s after the
+  post. It ran `inbox read <message id>`, named the id, the kind and the sender of the note, and
+  its turn ended 4.9 s after the post. `inbox pending` of the session's principal was empty
+  after it;
+- the `Stop` hook started again when that turn ended;
+- when the session's standard input was closed the session ended, and no `inbox wake` process
+  was left on the host.
+
+Not seen in that run, and still not verified: an interactive session (the terminal interface
+of Claude Code); a wait longer than 59 s; a request answered with `inbox answer`; more than one
+message, and messages over 6,000 bytes; TLS; where the line of an exit 1 is shown; the cap of
+hook output; how Claude Code ends the hook (which signal, and to which processes). The
+operator's check below covers the first 3.
+
+What the hooks page says and the run did not contradict: it lists `asyncRewake` among the
+fields of a command hook and names no event that refuses it, and it describes `Stop` as "Runs
+when the main Claude Code agent has finished responding", and not after an interrupt by the
+user. `claude plugin validate adapters/claude-code` (Claude Code 2.1.330) reports
 `Validation passed with warnings`: no version, no author.
 
 The gate holds the plugin against a stand-in harness and a stand-in `inbox`
