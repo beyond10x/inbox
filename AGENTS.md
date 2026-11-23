@@ -27,6 +27,10 @@ indented.
 Release 0.6.0 is release 0.5.0 with the changes its `CHANGELOG.md` section lists: `inbox wake
 --follow`, which shows each message in a terminal as it arrives, and a text output that shows
 the characters that change the direction of text as their escapes.
+Release 0.6.1 is release 0.6.0 with the changes its `CHANGELOG.md` section lists: an `inbox wake`
+that ends with 4 and marks nothing when its reader is gone, a change of a file beside the outbox
+that loses no line and follows no link, a text output that shows the characters of no width as
+their escapes, and ESS 0.98.0.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 

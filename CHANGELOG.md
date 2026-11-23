@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-23
+
 ### Changed
 
 - A message's text no longer reaches a terminal with characters it does not show. `pending`,
