@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-23T18:11:40Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-test-step-holds-its-bound-with-928-cases",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

@@ -1,7 +1,8 @@
 //! Fixtures of the binary's tests: a fresh directory per test, the built `inbox` run in it, a
 //! running `inbox serve` that is ended when it goes out of scope (a failed assertion included),
 //! and a world of an operator key, two client keys and a key file made with the binary itself.
-//! No key material is written into this file: every key is made at run time.
+//! No key material is written into this file: every key is made at run time, the set of
+//! [`keys_only`] once per test run ([`key_set`]).
 
 #![allow(dead_code)]
 
@@ -372,10 +373,86 @@ pub fn serve_refused(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Run {
     spawned.finish()
 }
 
+/// The files of the key set of [`keys_only`]; beside them in the entry, `operator.pub` holds the
+/// operator public key.
+const KEY_SET: [&str; 4] = ["operator.key", "alice.key", "bob.key", "keys.json"];
+
 /// A directory with an operator key and a key file holding the keys of alice and bob, and no
-/// service; answers the operator public key.
+/// service; answers the operator public key. The files are copies of the key set of this test
+/// run ([`key_set`]), each of the directory's own, with the mode the binary gave them.
 pub fn keys_only(name: &str) -> (Dir, String) {
     let dir = Dir::new(name);
+    let set = key_set();
+    for file in KEY_SET {
+        fs::copy(set.join(file), dir.join(file))
+            .unwrap_or_else(|error| panic!("{file} is copied from {}: {error}", set.display()));
+    }
+    let operator_public_key =
+        fs::read_to_string(set.join("operator.pub")).expect("the operator public key is read");
+    (dir, operator_public_key)
+}
+
+/// The key set of this test run: a cache entry under the target's temporary directory,
+/// `key-set/<key>/`, made by the first case that asks for it and read by every other.
+///
+/// Making it starts the binary 5 times (3 `inbox key new`, 2 `inbox keyfile add-key`), each
+/// writing and syncing a file; cargo-nextest runs each case in a process of its own, so a set
+/// made in memory would be made once per case. The key ([`key_set_key`]) names the binary and
+/// this test binary (path, length, modification time, inode) and the day: another build makes
+/// another set, and a set is never older than a day, so its entries (valid 30 days from when
+/// `add-key` ran) are valid for 29 days past any case's start.
+pub fn key_set() -> PathBuf {
+    key_set_in(&Path::new(env!("CARGO_TARGET_TMPDIR")).join("key-set"))
+}
+
+/// The key set under `cache`, made when it is not there. Several processes ask at once: only the
+/// holder of an exclusive lock on `<key>.lock` makes it, in `<key>.partial` (a leftover of a run
+/// that was killed is removed first), and renames that to `<key>`; the others wait on the lock and
+/// then find it. A directory named by the key is complete, because it appears by one rename.
+pub fn key_set_in(cache: &Path) -> PathBuf {
+    let key = key_set_key();
+    let done = cache.join(&key);
+    if done.is_dir() {
+        return done;
+    }
+    fs::create_dir_all(cache).expect("the cache of the key set is created");
+    let lock = File::create(cache.join(format!("{key}.lock"))).expect("the lock file is created");
+    lock.lock().expect("the lock of the key set is taken");
+    if !done.is_dir() {
+        let partial = cache.join(format!("{key}.partial"));
+        let _ = fs::remove_dir_all(&partial);
+        fs::create_dir_all(&partial).expect("the partial key set is created");
+        let operator_public_key = make_keys(&partial);
+        fs::write(partial.join("operator.pub"), operator_public_key)
+            .expect("the operator public key is written");
+        fs::rename(&partial, &done).expect("the key set is complete");
+    }
+    done
+}
+
+/// The name of the key set of this build on this day: the day since the epoch and a hash of the
+/// path, length, modification time and inode of the binary and of this test binary.
+fn key_set_key() -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    use std::os::unix::fs::MetadataExt;
+    let mut hasher = DefaultHasher::new();
+    let this = std::env::current_exe().expect("the test binary is named");
+    for program in [Path::new(BIN), this.as_path()] {
+        let meta = fs::metadata(program).expect("the program is there");
+        program.hash(&mut hasher);
+        (meta.len(), meta.mtime(), meta.mtime_nsec(), meta.ino()).hash(&mut hasher);
+    }
+    let day = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("the clock is after the epoch")
+        .as_secs()
+        / 86_400;
+    format!("{day}-{:016x}", hasher.finish())
+}
+
+/// Makes the key set in `dir` with the binary: the operator key, the keys of alice and bob, and
+/// the key file holding both; answers the operator public key.
+fn make_keys(dir: &Path) -> String {
     let members = [("alice.key", "alice-1", ALICE), ("bob.key", "bob-1", BOB)];
     // The 3 keys are made at once, each by a process of its own; the key file is then written by
     // one `add-key` after the other.
@@ -383,10 +460,10 @@ pub fn keys_only(name: &str) -> (Dir, String) {
         let made: Vec<_> = members
             .iter()
             .map(|(file, key_id, principal)| {
-                scope.spawn(|| key_new(&dir.path, file, Some((key_id, principal))))
+                scope.spawn(|| key_new(dir, file, Some((key_id, principal))))
             })
             .collect();
-        let operator = key_new(&dir.path, "operator.key", None);
+        let operator = key_new(dir, "operator.key", None);
         let keys: Vec<String> = made
             .into_iter()
             .map(|key| key.join().expect("the key is made"))
@@ -394,9 +471,9 @@ pub fn keys_only(name: &str) -> (Dir, String) {
         (operator, keys)
     });
     for ((_, key_id, principal), public_key) in members.iter().zip(&public_keys) {
-        add_key(&dir.path, "operator.key", key_id, principal, public_key);
+        add_key(dir, "operator.key", key_id, principal, public_key);
     }
-    (dir, operator_public_key)
+    operator_public_key
 }
 
 /// `inbox serve` on an ephemeral loopback port over `keys.json` in `dir`.

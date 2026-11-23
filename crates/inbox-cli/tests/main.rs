@@ -32,6 +32,7 @@ mod due_mark;
 mod epoch;
 mod id_taken;
 mod key_file_staged;
+mod key_set;
 mod reader_gone;
 mod reconnect;
 mod support;
