@@ -268,7 +268,12 @@ script writes, in this order:
 So every line the plugin writes after the begin line starts with `inbox <mark>: `, and a sender,
 who cannot know the mark, writes no such line: its text is indented, and a line it copies from an
 earlier run carries another mark. On standard output the script writes one line,
-`inbox: messages arrived in the inbox of this session.`, and never the rows or the mark.
+`inbox: messages arrived in the inbox of this session.`, and never the rows or the mark. The
+script keeps the harness's standard error on descriptor 3 and sends its own descriptor 2 to
+`/dev/null` at its start (`exec 3>&2 2> /dev/null`), writes each of its own lines (the frame,
+each `inbox plugin: …` line) to descriptor 3, and closes it for every child (`3>&-`), so a line
+the shell writes by itself (dash writes `Terminated` when the wake it waits for was ended by a
+signal) or a utility writes never reaches the session, and no child holds the harness's pipe.
 
 The size. The hooks page says plain hook output is capped at 10,000 characters: over the cap
 Claude Code saves the output to a file and hands on its path and the first 2,000 characters,

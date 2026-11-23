@@ -13,7 +13,9 @@ mod gate_paths;
 mod scenarios;
 mod test_step;
 
+use std::cell::RefCell;
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -102,6 +104,69 @@ pub fn xtask(root: &Path, args: &[&str]) -> Run {
 /// `sh <script> <args>` started in `dir`.
 pub fn shell(dir: &Path, script: &Path, args: &[&str]) -> Run {
     finish(Command::new("sh").arg(script).args(args).current_dir(dir))
+}
+
+/// The first file named `name` on the `PATH` of the test.
+pub fn on_path(name: &str) -> Option<PathBuf> {
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
+}
+
+/// The shells the cases of the Claude Code hook run it under: `sh`, and `dash` as well when it is
+/// on `PATH` and is not what `sh` is. The forge's `sh` is dash; a host whose `sh` is another
+/// shell covers dash only with `dash` on `PATH`.
+pub fn hook_shells() -> Vec<PathBuf> {
+    let sh = on_path("sh").expect("sh is not on PATH");
+    let mut shells = vec![sh.clone()];
+    if let Some(dash) = on_path("dash")
+        && fs::canonicalize(&dash).ok() != fs::canonicalize(&sh).ok()
+    {
+        shells.push(dash);
+    }
+    shells
+}
+
+thread_local! {
+    static HOOK_SHELL: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// The shell the running case starts the hook with: the one [`each_shell`] runs it under, else
+/// `sh`.
+pub fn hook_shell() -> PathBuf {
+    HOOK_SHELL
+        .with(|shell| shell.borrow().clone())
+        .unwrap_or_else(|| on_path("sh").expect("sh is not on PATH"))
+}
+
+/// The file name of [`hook_shell`], for the names of a case's own directories.
+pub fn hook_shell_name() -> String {
+    hook_shell()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Runs `case` once under each of [`hook_shells`]; a failure names the shell it failed under.
+pub fn each_shell(case: impl Fn()) {
+    for shell in hook_shells() {
+        HOOK_SHELL.with(|held| *held.borrow_mut() = Some(shell.clone()));
+        let result = panic::catch_unwind(AssertUnwindSafe(&case));
+        HOOK_SHELL.with(|held| *held.borrow_mut() = None);
+        if let Err(payload) = result {
+            let message = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| {
+                    payload
+                        .downcast_ref::<&str>()
+                        .map(|text| (*text).to_owned())
+                })
+                .unwrap_or_default();
+            panic!("under {}: {message}", shell.display());
+        }
+    }
 }
 
 /// `path` with the first `from` replaced by `to`; fails when `from` is not in it.
