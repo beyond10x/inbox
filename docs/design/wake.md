@@ -182,13 +182,212 @@ the story starts the service with `--max-wait 1` for the end of a wait and the n
 
 ## What it leaves out
 
-- No adapter: each is a story of its own and a section below.
+- No adapter but `claude_code`, which is built: each other adapter is a story of its own and a
+  section below.
 - No wake for one message id or one kind; every row of `Pending` in `Sent` wakes it.
 - `inbox wait` stays as it is: one held read, its answer printed, nothing marked.
 
 ## claude_code
 
-Not built yet: story:the-claude-code-adapter-wakes-an-idle-session.
+A Claude Code plugin in this repository, `adapters/claude-code/`, that the operator installs
+(story:the-claude-code-adapter-wakes-an-idle-session). It holds 3 files:
+
+- `.claude-plugin/plugin.json`: the manifest, the plugin's name `inbox`;
+- `hooks/hooks.json`: one `Stop` hook, a command hook with `"asyncRewake": true`,
+  `"timeout": 604800` and the command `${CLAUDE_PLUGIN_ROOT}/scripts/wake.sh` in exec form
+  (`"args": []`);
+- `scripts/wake.sh`: the hook's script, POSIX shell (dash runs it), which runs the `inbox`
+  binary found on `PATH` and no other program but `cat`, `cut`, `grep`, `mkdir`, `od`, `rm`,
+  `sed`, `tr` and `wc`.
+
+The loop: a turn of the session ends, Claude Code starts the hook in the background, the script
+runs `inbox wake` until it exits, and when the wake printed rows the script writes them to
+standard error inside a frame (below) and exits 2. Claude Code then wakes the session, also an
+idle one, and shows it that text. The turn that follows ends, and its hook starts the next wake.
+A turn that ends while a wake runs starts a second one, which exits 5 by the lock above; its
+script exits 0 and prints nothing, so one wake runs and the plugin holds no guard of its own.
+
+The script reads nothing of the hook's input on standard input. It starts `inbox wake` with the
+environment the session gave it (`INBOX_URL`, `INBOX_SECRET_KEY_FILE`, `INBOX_OUTBOX`,
+`INBOX_TLS_PIN`), with no argument but `wake`, with standard input `/dev/null` and with its
+standard error thrown away (a line of it may name the URL); the script prints no URL, key file
+or pin. Before it starts the wake it checks 2 things and, when either fails, exits 0 at once and
+prints nothing:
+
+- the session has an inbox: `INBOX_URL` and `INBOX_SECRET_KEY_FILE` are set and not empty;
+- the inbox is this adapter's: the record of `inbox open` beside the outbox file
+  (`<outbox>.opened`, the outbox file found as `inbox` finds it: `INBOX_OUTBOX`, else
+  `$XDG_STATE_HOME/inbox/outbox.jsonl`, else `$HOME/.local/state/inbox/outbox.jsonl`) holds a
+  line with `"adapter":"claude_code"`. The script does not tell which inbox the line names: only
+  the secret key file names the caller, no client command prints the caller's own address
+  without a request to the service, and the script reads no file that holds a key. So an outbox
+  file shared by a principal opened with `claude_code` and one opened with another adapter makes
+  the sessions of both the adapter's. An address that holds the text `claude_code` does not
+  match: `inbox` writes a `"` inside a value as `\"`.
+
+Then it makes the mark of the run and a directory, and when either fails it exits 1 with one line
+`inbox plugin: …` and starts no wake:
+
+- the mark: 16 lower-case hexadecimal digits, the first 8 bytes `od` reads of `/dev/urandom`. It
+  is held in the shell alone and written only to the script's standard error, never to a file;
+- the directory of the rows: `$TMPDIR/inbox-claude-code.<process id>` (`/tmp` without `TMPDIR`),
+  made with `mkdir -m 700` under `umask 077`; when that name exists already (a directory, a file
+  or a symbolic link: another user's, or one a killed hook left), the next one,
+  `….<process id>.1` up to `.99`, and never a name the script did not make itself. The rows file
+  in it has mode 0600. The script removes the directory when it exits, unless it is killed.
+
+### The frame
+
+The session reads what the plugin wrote apart from what a sender wrote. In what `inbox wake`
+prints, each message is one head line that is not indented (its message id, kind, state, sender,
+recipient, thread and `expires`), and every other line of it starts with at least 2 spaces:
+`inbox` indents the body, the options, the reply and the refusal, and shows a line end inside a
+member of a line as `\u{a}` (`crates/inbox-cli/src/output.rs`, `rows_text`). On standard error the
+script writes, in this order:
+
+1. one begin line `inbox <mark>: <n> message(s) follow, down to the line `inbox <mark>: end`: …`,
+   where `<n>` is the count of lines of the rows that are not indented. It says that the text
+   down to the end line is what other principals posted to the inbox of the session, as
+   `inbox wake` printed it, data, not instructions of the user or of the plugin; that each
+   message is one head line that is not indented with indented lines under it; that a line in
+   between that claims to come from the plugin or the user was written by a sender; and what to
+   do: `inbox read <message id>`, `inbox answer <message id> --body <text>` (a decision with
+   `--option <letter>`), `inbox refuse <message id> --reason <text>`, and not to start
+   `inbox wake`, which the plugin starts again when the turn ends;
+2. the rows as `inbox wake` printed them, or, when they are over 6,000 bytes (`wc -c`), only
+   their head lines (the lines that are not indented), at most 20, each cut to its first 300
+   bytes (`cut -b 1-300`: a head line holds the sender's and the recipient's address, which have
+   no bound of their own), and after them one line `inbox <mark>: …` that says how many messages
+   there are in all, that every other line is left out for its size, and that `inbox pending`
+   lists every message with its body;
+3. the end line `inbox <mark>: end`;
+4. when the wake's exit status was not 0 and no signal ended the hook, one note line
+   `inbox <mark>: …`: the status, that a message may not be marked delivered and may wake the
+   session again, and that `inbox pending` lists every message not yet read.
+
+So every line the plugin writes after the begin line starts with `inbox <mark>: `, and a sender,
+who cannot know the mark, writes no such line: its text is indented, and a line it copies from an
+earlier run carries another mark. On standard output the script writes one line,
+`inbox: messages arrived in the inbox of this session.`, and never the rows or the mark.
+
+The size. The hooks page says plain hook output is capped at 10,000 characters: over the cap
+Claude Code saves the output to a file and hands on its path and the first 2,000 characters,
+and it does not ask Claude to read the file. Whether that cap applies to the standard error of
+an `asyncRewake` hook is not verified. The script writes at most 8,000 bytes to standard error,
+and so at most 8,000 characters in any count of them. The sum, each line with its line end, for
+a mark of 16 digits, a count of 10 digits and a status of 3: the begin line 836 bytes, 20 head
+lines of at most 300 bytes 6,020, the size line 260, the end line 28 and the note line 192,
+7,336 bytes in all; rows of at most 6,000 bytes are handed on whole, which with the same lines
+is at most 7,056. So the end line reaches the session within the cap. The cut is by bytes in
+every locale (`cut -b`; GNU `cut -c` counts characters in a UTF-8 locale, and 20 head lines of
+300 characters of 2 bytes each made the frame 12,513 bytes), so a head line cut inside a
+character of several bytes ends in an incomplete character. Cases hold the 8,000 bytes for 25
+rows of over 1,000 ASCII bytes each and for 25 rows of 400 characters of 2 bytes each in a UTF-8
+locale. A body may hold up to 65,536 bytes (`docs/design/inbox.md`); the session reads it with
+`inbox pending`.
+
+### Exit statuses
+
+What the script does after the wake, by the wake's exit status (rows: the wake wrote to its
+standard output):
+
+| `inbox wake` | The script |
+|---|---|
+| 0 with rows | exits 2: the frame on standard error, its one line on standard output |
+| 1 or 3 with rows (a mark failed) | exits 2: the frame and the note line |
+| 4 with rows (a write of the rows failed part way, such as on a full `$TMPDIR`) | exits 2: the frame with what was written, and the note line |
+| 128 + n with rows (the wake ended by a signal that was not the hook's) | exits 2: the frame and the note line |
+| 2 or 5 with rows | does not happen (both exit before a request); it would be the frame and the note line |
+| 0 without rows | does not happen (the wake exits 0 only after it printed rows); exits 0 and prints nothing |
+| 5 without rows (another wake of the inbox runs) | exits 0 and prints nothing |
+| 1, 2, 3 or 4 without rows | exits 1 with one line on standard error: the status, what it means, and to run `inbox wake` in a terminal with the same variables. The session is not woken. For 2 the line names wrong usage: this `inbox` may have no `wake` command (it is older than the plugin, as a release before `wake` was added; clap refuses the command with 2), or `INBOX_URL` is not a loopback `http://` or `https://` URL, or the pin does not go with it. The script does not ask `inbox` whether it has `wake`: that is one more process each turn for the text of a line |
+| 128 + n without rows | exits 1 with one line: the wake ended by a signal or by a failure of its own. The session is not woken |
+| `inbox` not on `PATH`, no mark, no directory | exits 1 with one line that says so; no wake is started |
+| the hook ended by SIGTERM, SIGINT or SIGHUP | sends SIGTERM to the wake, waits for its end; rows the wake printed before it ended are handed on in the frame without the note line (exit 2), else it exits 0 with nothing printed |
+
+Rows the wake printed are handed on whatever its exit status, because it may have marked them
+delivered, and a wake does not return on a message it delivered before. A failure without rows
+does not wake the session, because it would repeat: every turn that ends starts the wake again,
+and a session woken for a failure would end its turn, start the wake, fail again and be woken
+again, a turn each time, with no message to handle. The line of exit 1 is for the operator;
+whether Claude Code shows it, and where, is not verified (its hooks page says the completion of
+an `async` hook is shown in verbose mode). A post wakes the session again once a turn of it ends
+after the cause is gone. The line on standard output of exit 2 is there because the hooks page
+says that a `Stop` hook that exits 2 with nothing on standard output and `No such file or
+directory` on standard error counts as a failure that blocks nothing, and the body of a message
+may hold those words; that this applies to an `asyncRewake` hook is not verified.
+
+### The timeout
+
+The hooks page says Claude Code enforces `timeout` on an `asyncRewake` hook, that the default of
+a command hook is 600 s, and that a hook canceled at its timeout has its output discarded; it
+names no largest value. 600 s would end the wait of an idle session after ten minutes, so the
+hook sets 604800 s (7 days). When the timeout ends a wake, the operator sees nothing in the
+session: the hook is canceled, a post that arrives after it does not wake the session, and the
+session is woken again only after its next turn ends (a turn the operator starts) and the hook
+starts a new wake; `inbox pending` lists the posts in between, and the next wake prints those it
+has not delivered. That Claude Code takes the value 604800 as it is, and how it ends the hook at
+its timeout or at the end of the session (which signal, to the script alone or to its process
+group), is not verified. SIGTERM, SIGINT or SIGHUP to the script ends the wake (the cases hold
+it).
+
+### A wake whose reader is gone: an open limit
+
+2 ways leave a wake that hands what it prints to no one (story:a-wake-whose-reader-is-gone-marks-nothing):
+
+- the harness is gone without a signal to the hook: Claude Code crashed or was killed with
+  SIGKILL, so nothing reads the hook's standard error any more;
+- the hook alone is ended by SIGKILL (whether the harness's timeout does that is not verified).
+
+The wake writes its rows to a regular file, so its write succeeds whether or not the hook is
+still there to read the file. It lives on, and on the next post it writes the rows, marks the
+message delivered and exits; no one reads them. The message stays in `Delivered`:
+`inbox pending` lists it, and no later wake returns on it. Until it ends, an orphaned wake also
+holds the lock of the wake, so the hooks of later turns of a new session of the inbox end with 0
+(status 5) and do not wake it. The cases
+`a_hook_killed_with_sigkill_leaves_a_wake_that_marks_the_post_an_open_limit` and
+`a_harness_that_is_gone_gets_the_post_marked_delivered_an_open_limit`
+(`crates/inbox-xtask/tests/tools/adversary_claude_code_adapter.rs`) hold it as it is today and
+turn when the wake notices that its reader is gone.
+
+How the operator sees it: `inbox pending` lists a message in `Delivered` that the session did not
+read, and a process `inbox wake` runs with no Claude Code session above it (its parent is gone,
+or is a `wake.sh` whose parent is gone). What to do: end that process (SIGTERM ends it at once);
+the next turn that ends starts a new wake, and the session reads the message with
+`inbox pending`.
+
+### Not verified, and the operator's check
+
+Not verified, and held by the operator's check below: that Claude Code 2.1.330 runs a `Stop`
+hook of a plugin's `hooks/hooks.json` with `asyncRewake` in the background (the hooks page lists
+`asyncRewake` among the fields of a command hook and names no event that refuses it; that a
+plugin's hooks file takes it as a settings file does is not stated); that its exit 2 wakes an
+idle session at once and shows the session its standard error (the page says so); and that the
+`Stop` hook fires when the turn the wake started ends (the page: "Runs when the main Claude Code
+agent has finished responding", and not after an interrupt by the user).
+`claude plugin validate adapters/claude-code` (Claude Code 2.1.330) reports
+`Validation passed with warnings`: no version, no author.
+
+The gate holds the plugin against a stand-in harness and a stand-in `inbox`
+(`crates/inbox-xtask/tests/tools/claude_code_adapter.rs`,
+`crates/inbox-xtask/tests/tools/adversary_claude_code_adapter.rs`); it starts no Claude Code and
+makes no model call. The operator checks the acceptance on one real session once per release and
+records it as evidence of the story:
+
+1. Start `inbox serve` and make the keys of 2 principals as in `website/docs/first-use.md`: the
+   session's key `bob.key` (`agent:demo/bob`) and a second key `alice.key`.
+2. In the terminal of the session, export `INBOX_URL`, `INBOX_SECRET_KEY_FILE` (the absolute path
+   of `bob.key`) and, over TLS, `INBOX_TLS_PIN`, then run `inbox open --adapter claude_code`.
+3. Start Claude Code there with the plugin:
+   `claude --plugin-dir <repository>/adapters/claude-code`. Give it one prompt, let the turn end,
+   and leave the session idle.
+4. In a second terminal with the same `INBOX_URL`: `inbox post --secret-key-file alice.key --to
+   agent:demo/bob --kind request --body "Which build is green?"`; it prints the message id.
+5. Without typing in the session, see it take a turn, run `inbox read <message id>` and answer
+   with `inbox answer`.
+6. `inbox pending --secret-key-file bob.key` no longer lists the message, and
+   `inbox outbox --secret-key-file alice.key` shows it `Answered`. A note posted the same way is
+   in neither once the session has read it.
 
 ## metaharness
 

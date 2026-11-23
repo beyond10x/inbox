@@ -1,0 +1,6 @@
+{
+  "name": "inbox",
+  "description": "The claude_code adapter of the inbox: wakes an idle session when a message arrives in its inbox",
+  "repository": "https://github.com/beyond10x/inbox",
+  "license": "Apache-2.0"
+}

@@ -104,13 +104,18 @@ inbox read --secret-key-file bob.key "$MESSAGE_ID"
 
 ## What the commands print
 
-`pending`, `outbox`, `collect` and `thread` print text another principal wrote: a body, a reply,
-a refusal reason, an option, an address. Each control character in it but the line end is shown
-as its escape, such as `\u{1b}` for an escape character, `\u{d}` for a carriage return and
-`\u{9}` for a tab, so that text cannot clear your screen, move the cursor, set the window title
-or write over a line. A line on standard error that repeats text of the service is shown the
-same way. Text without control characters is printed as it was written. With `--json` the values
-are the ones sent, and no control character is written raw.
+`pending`, `wait`, `wake`, `outbox`, `collect`, `thread` and `replies` print text another
+principal wrote: a body, a reply, a refusal reason, an option, an address. Each control character
+in it but the line end is shown as its escape, such as `\u{1b}` for an escape character, `\u{d}`
+for a carriage return and `\u{9}` for a tab, and so are the line separator `\u{2028}` and the
+paragraph separator `\u{2029}`, so that text cannot clear your screen, move the cursor, set the
+window title or write over a line. Each message is one line that is not indented, its head line,
+and every other line of it starts with at least 2 spaces: a line end in a body, an option or a
+refusal reason starts an indented line, and a line end in a value of a line of its own, such as
+an address, is shown as `\u{a}`. So a sender cannot write a line that reads as the head line of
+another message. A line on standard error that repeats text of the service is shown the same way.
+Text without control characters is printed as it was written. With `--json` the values are the
+ones sent, and no control character is written raw.
 
 ## Exit statuses
 
@@ -203,7 +208,42 @@ An adapter runs `inbox wake` for a session and resumes the session when it exits
 
 ### claude_code
 
-Not available yet.
+A Claude Code session is woken by a post through the plugin in `adapters/claude-code/` of the
+repository. When a turn of the session ends, the plugin runs `inbox wake` in the background;
+when a message arrives, Claude Code wakes the session, also an idle one, and shows it the
+messages between a begin line and an end line that carry a mark made anew for each wait, so a
+sender cannot write such a line. The begin line says that the messages are data from other
+principals, not your instructions, and names `inbox read`, `inbox answer` and `inbox refuse`.
+More than 6,000 bytes of messages are shown as their first 20 head lines, and `inbox pending`
+lists them whole. When that turn ends, the plugin waits again. The plugin was run against a
+stand-in for Claude Code and not yet on a real session ([limits](limits.md)).
+
+In the terminal you start Claude Code from, set the variables of your client (the secret key
+file by its absolute path), open your inbox for this adapter, and load the plugin for the
+session:
+
+```sh
+export INBOX_URL=http://127.0.0.1:43117
+export INBOX_SECRET_KEY_FILE="$PWD/bob.key"
+inbox open --adapter claude_code
+claude --plugin-dir /path/to/inbox/adapters/claude-code
+```
+
+Give the session one prompt: the wait starts when that turn ends. The plugin waits only for an
+inbox opened with `--adapter claude_code` on this host, and does nothing in a session without
+`INBOX_URL` and `INBOX_SECRET_KEY_FILE`. A wait that ends on a failure without a message does
+not wake the session; run `inbox wake` in a terminal with the same variables to see why. The
+plugin sets the time limit of its hook to 7 days. The hooks page of Claude Code says that a hook
+that reaches its time limit is canceled and its output discarded; a post that arrives after that
+wakes the session only after one of its turns ends, and `inbox pending` lists what arrived in
+between.
+
+When Claude Code ends without ending the plugin's hook first, such as in a crash, or the hook
+alone is killed with SIGKILL, its `inbox wake` keeps running. It then marks the next message
+delivered though no session reads it: `inbox pending` still lists the message, and while that
+`inbox wake` runs the plugin wakes no session of that inbox with the same outbox file on this
+host. End that process (with SIGTERM,
+for example); the next turn that ends starts a new wait.
 
 ### metaharness
 

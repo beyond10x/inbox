@@ -43,7 +43,18 @@ record out.
 ## The service
 
 - **Loopback only.**
-- **No second host**, and no adapter yet that wakes an idle session: `inbox wake` returns on a message, and nothing resumes a session with it.
+- **No second host.**
+- **The Claude Code plugin is not checked on a real session yet.** It was run against a
+  stand-in for Claude Code. That Claude Code starts the plugin's hook when a turn ends, wakes
+  an idle session on it and shows the session the messages is taken from the pages of Claude
+  Code, and has not been seen on a real session. No other adapter wakes a session.
+- **A wait whose session is gone marks the next message.** When Claude Code ends without
+  ending the plugin's hook first, such as in a crash, or the hook alone is killed with
+  SIGKILL, its `inbox wake` keeps running. It marks the next message delivered though no
+  session reads it: `inbox pending` still lists the message, and no later wait returns on it.
+  While that `inbox wake` runs, the plugin wakes no session of that inbox with the same
+  outbox file on this host. End that process
+  ([first use](first-use.md#claude_code)).
 - **One backend, in memory.** A restart of the service loses every message and every open
   inbox. The next command of the owner opens its inbox again, and the next command of the
   sender posts its kept envelopes again, by themselves; dedup by `message_id` and `dedup_key`

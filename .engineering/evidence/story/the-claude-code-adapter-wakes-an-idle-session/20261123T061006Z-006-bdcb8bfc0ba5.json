@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T06:10:06Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-claude-code-adapter-wakes-an-idle-session",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 7 (the exit-status table leaves out 4 and 128+n with rows): the table of docs/design/wake.md has the rows; adversary_claude_code_adapter::rows_printed_before_a_signal_are_handed_on_without_a_note and claude_code_adapter::a_mark_that_failed_still_wakes_the_session_with_the_rows hold 1, 3, 4 and 143 with rows",
+    "review": "review-result:adversary-the-claude-code-adapter-wakes-an-idle-session-pass-1",
+    "outcome": "fixed"
+  }
+}

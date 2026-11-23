@@ -18,14 +18,14 @@ Numbers from 2026-11-22, ESS 0.97.4, Rust 1.99.1. Case counts are the passed cas
 | The verifier | Ed25519 signatures over RFC 8785 canonical JSON for envelopes, key file entries and requests; the key ring | 63 cases | [`crates/inbox-verify/`](../crates/inbox-verify), [`docs/design/signing.md`](../docs/design/signing.md) |
 | The backend test kit | The checks every backend passes: the 2 storage ports and the command section | 29 cases | [`crates/inbox-backend-testkit/`](../crates/inbox-backend-testkit) |
 | The HTTP listener | A library: request signatures, the core's read rule on each view answer and its rename of `foreign-message` on each command answer, the wait on `Pending`, the expiry task, the limits; TLS 1.3 with a self-signed certificate and the client's pin check, ended in front of the generated reader; loopback only | 127 cases, none ignored | [`crates/inbox-server/`](../crates/inbox-server), [`docs/design/service.md`](../docs/design/service.md) |
-| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, plain or over TLS against a pinned certificate (`inbox tls new`, `--tls-file`, `--tls-pin`), the outbox file, its epochs file and its file of opened inboxes, the reconnect after a restart of the service, `inbox wake`, exit statuses 0 to 5 | 241 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
+| The binary `inbox` | `inbox serve` starts the listener over the in-memory backend on a loopback address; the other commands are the client: signed requests, plain or over TLS against a pinned certificate (`inbox tls new`, `--tls-file`, `--tls-pin`), the outbox file, its epochs file and its file of opened inboxes, the reconnect after a restart of the service, `inbox wake`, exit statuses 0 to 5 | 246 cases, none ignored | [`crates/inbox-cli/`](../crates/inbox-cli), [first use](https://beyond10x.github.io/inbox/docs/first-use) |
 | Conformance, interpreted | The suite ESS synthesizes from `ess/`, run on ESS's interpreted target | 119 scenarios: 119 passed, 0 failed, 0 error, 0 unsupported | `task conform-interpreted` |
 | The conformance gate | The same suite run against the core in process, the report written by ESS and held to the suite | 119 scenarios: 119 passed, 0 failed, 0 error, 0 unsupported; `conformance_status: passed` | [`crates/inbox-conformance/`](../crates/inbox-conformance), `task conform` |
 | The service over HTTP | The same suite against a running `inbox serve`, a fresh one per scenario; every request and envelope signed, each answer held to the HTTP status of the generated contract | 119 scenarios: 32 passed, 0 failed, 0 error, 87 unsupported, each listed with its reasons; `conformance_status: failed` (see below) | [`unsupported.tsv`](../crates/inbox-conformance/unsupported.tsv), `task conform` |
 | Acceptance | 3 checks against the built binary: a signed request and its reply between 2 keys; a read note and an expired request in no view; a repost after a restart, and a second repost that posts nothing | 3 passed | [`tests/acceptance/`](../tests/acceptance), `task acceptance` |
 | The conformance runner | Reads the suite, runs it against both targets, holds each report | 89 cases, 1 ignored | [`crates/inbox-conformance/`](../crates/inbox-conformance) |
 | Declared coverage | Every refusal of the specification is claimed by an authored scenario; `task check` fails on one that is not | 98 refused generated scenarios, 98 covered; the suite reports `conformance_status: passed` on the interpreted target | `task coverage` |
-| Repository tasks | The drift check of the generated crate, the scenario checks, the animation writer, the words of the end-user pages, the path decision of the CI job, the test step and the build settings of `.cargo/config.toml`. The cases of the drift check read one synthesis of `ess/` per run of `task test`; the 2 that change `ess/` run their own | 80 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
+| Repository tasks | The drift check of the generated crate, the scenario checks, the animation writer, the words of the end-user pages, the path decision of the CI job, the test step, the build settings of `.cargo/config.toml` and the Claude Code plugin `adapters/claude-code/` (against a stand-in `inbox` and harness). The cases of the drift check read one synthesis of `ess/` per run of `task test`; the 2 that change `ess/` run their own | 111 cases | [`crates/inbox-xtask/`](../crates/inbox-xtask) |
 
 ## What wave 8 added
 
@@ -176,8 +176,15 @@ The limits are stated on the limits page of the site. Their stories are in
   printer the cases of `collect`, `pending`, `outbox` and `thread` fail; out of the line on
   standard error, its case; out of the JSON printer, the `--json` case; with a carriage return
   before a line end dropped again, the `outbox` case. The stored message, the signature check
-  and the service are unchanged. The part that stays: a line end in such a value is printed
-  as a line end, so a value can still start a line that looks like one of the client's own.
+  and the service are unchanged. The part that stayed, closed by
+  story:the-claude-code-adapter-wakes-an-idle-session (adversary pass 1 of it, finding F1): a
+  line end in such a value was printed as a line end, so a value could start a line that looks
+  like one of the client's own. Now each message is one line that is not indented, its head
+  line: a line end in an option text or a refusal reason starts a line indented as a body is,
+  and a line end in a value of a line of its own (an address, an id, a letter) is shown as
+  `\u{a}`; the line and paragraph separators U+2028 and U+2029 are shown as their escapes. 4 unit
+  cases of `output.rs` hold it (an option text, a refusal, every member of a line, the 2
+  separators); each fails with its part taken out. `--json` is unchanged.
 - **An argument that is not UTF-8 ended the client with a panic**
   (`story:an-argument-that-is-not-utf-8-is-a-usage-error`; adversary pass 1 of
   `story:the-client-prints-no-control-sequence-of-another-principal`, finding F7). In every

@@ -13,7 +13,7 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 - `inbox wake` waits until the caller's own inbox has a message not yet delivered and not past its
   `expires`, across the end of a wait and a restart of the service, prints those messages as `inbox
   pending` does (`--json`: one document), then marks each delivered with `MarkDelivered` and exits
-  0. It is the command a wake adapter runs; no adapter is included yet. The messages are written
+  0. It is the command a wake adapter runs. The messages are written
   and flushed before the first mark; a mark that fails (such as `Expired` for a message that turned
   due in between) is named on standard error and sets the exit status (1 or 3). A message already
   delivered and not yet read neither ends the wait nor is printed; `inbox pending` lists it. A wake
@@ -40,6 +40,33 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   `409 {"refused": "inbox not open"}`, and a close ends a held one with it. Any other value is
   `400 {"refused": "undelivered is not 1"}`. Without the parameter every answer is as before;
   `inbox wait` and `inbox pending` do not send it (`docs/design/service.md`, "The wait").
+- A Claude Code plugin, `adapters/claude-code/`, wakes an idle session when a message arrives in
+  its inbox (`inbox open --adapter claude_code`, `claude --plugin-dir`): a `Stop` hook with
+  `asyncRewake` runs `inbox wake` when a turn ends and hands the messages to the session between a
+  begin line and an end line that carry a mark made for each run, with their count, so a sender
+  cannot write a line of the plugin. The begin line says that the messages are data of other
+  principals and names `inbox read`, `inbox answer` and `inbox refuse`. More than 6,000 bytes of
+  messages are handed on as their first 20 head lines. A session without `INBOX_URL` and
+  `INBOX_SECRET_KEY_FILE`, or whose inbox was opened for another adapter, is left alone, and a wait
+  that fails without a message does not wake the session. It was run against a stand-in for Claude
+  Code and not yet on a real session. Open: when Claude Code ends without ending the hook, or the
+  hook alone is killed, its `inbox wake` keeps running and marks the next message delivered though
+  no session reads it (`website/docs/limits.md`;
+  story:the-claude-code-adapter-wakes-an-idle-session).
+
+### Changed
+
+- An answer of the service that is not JSON is named with its status in the `transport:` line of
+  every command (`the answer with the status 404 is not JSON: …`). The exit status stays 3.
+
+### Security
+
+- The text output of `pending`, `wait`, `wake`, `outbox`, `collect`, `thread` and `replies` keeps
+  each message to one line that is not indented, whatever its sender wrote. Before, a line end in
+  the text of a decision option or in a refusal reason started a line at the left edge, so a sender
+  could make one message read as 2, or as a message of another principal. Now such a line is
+  indented under its text, a line end in an address or another value of a line is shown as `\u{a}`,
+  and the separators U+2028 and U+2029 are shown as their escapes. `--json` is unchanged.
 
 ## [0.4.0] - 2026-11-23
 

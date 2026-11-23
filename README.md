@@ -22,8 +22,9 @@ Available:
 - Ed25519 keys, one key file signed by the operator key, and delegations.
 - An HTTP API: one `POST` per command and one `GET` per view.
 
-Missing: a persistent backend, a second host, wake-up of an idle session, a binary to
-download, and any deployment.
+Missing: a persistent backend, a second host, a binary to download, and any deployment. A
+Claude Code plugin wakes an idle session on a message; it is not checked on a real session
+yet.
 
 Every feature, what is missing and what is planned:
 [features](https://beyond10x.github.io/inbox/docs/status).

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T06:10:06Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-claude-code-adapter-wakes-an-idle-session",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 finding 9 (loosening the adapter grep to claude_code survives): claude_code_adapter::a_record_whose_address_names_claude_code_opened_for_another_adapter_starts_no_wake",
+    "review": "review-result:adversary-the-claude-code-adapter-wakes-an-idle-session-pass-1",
+    "outcome": "fixed"
+  }
+}

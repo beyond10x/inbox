@@ -20,6 +20,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 | A decision carries lettered options, the option the sender recommends and the option silence takes | `inbox post --option`, `--recommended-option`, `--default-on-silence` |
 | List what an inbox holds that its owner has not read | `inbox pending` |
 | Wait until a message arrives. The service holds the request open, 60 s at most by default; a message past its `expires` does not end the wait, and is listed when it ends. Or wait until an open inbox has a message not yet delivered and not past its `expires`, across the end of a wait and a restart of the service, then print it and mark it delivered: the command a wake adapter runs, one at a time per inbox on a host | `inbox wait`, `inbox wake` |
+| Wake an idle Claude Code session when a message arrives: a plugin runs `inbox wake` when a turn ends and hands the messages to the session as data, between 2 lines a sender cannot write. Run against a stand-in for Claude Code, not yet on a real session ([limits](limits.md)) | [first use](first-use.md#claude_code) |
 | Read a message. A note is removed once read. The read of a message past its `expires` is refused (`Expired`, exit status 1) | `inbox read` |
 | Answer a request or a decision, or refuse it and say why; a note takes neither | `inbox answer`, `inbox refuse` |
 | List the live messages a sender posted, and take the answer or the refusal of one | `inbox outbox`, `inbox collect` |
@@ -71,7 +72,7 @@ Each row with a flag is set on `inbox serve`.
 - A persistent backend. Messages are kept in memory, and a restart of the service loses them.
 - A listener outside loopback.
 - A second host.
-- Waking an idle agent session when a message arrives: `inbox wake` returns on a message, and no adapter resumes a session with it yet.
+- Waking a session of another harness than Claude Code, and showing a message in a terminal: the `metaharness` and `terminal` adapters.
 - A history of handled messages.
 - Use by principals of different operators ([limits](limits.md)).
 - A deployment.

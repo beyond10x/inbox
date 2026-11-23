@@ -10,6 +10,7 @@ mod adversary_collect_record;
 mod adversary_collect_record_2;
 mod adversary_control_sequences;
 mod adversary_deadline;
+mod adversary_printer;
 mod adversary_reconnect;
 mod adversary_reconnect_2;
 mod adversary_reconnect_3;

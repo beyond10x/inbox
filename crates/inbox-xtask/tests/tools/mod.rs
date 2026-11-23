@@ -1,10 +1,13 @@
 //! The repository's tools that are not synthesis: the scenario checks, the animation writer, the
 //! words of the end-user pages, the path decision of the CI job, the test step of the gate and
-//! the build settings of `.cargo/config.toml`.
+//! the build settings of `.cargo/config.toml`, and the hook of the Claude Code plugin.
 //! Each case runs the binary (or the shell script) on a copy of the parts of the tree it reads.
 
+mod adversary_claude_code_adapter;
+mod adversary_claude_code_adapter_2;
 mod animation;
 mod cargo_config;
+mod claude_code_adapter;
 mod docs_words;
 mod gate_paths;
 mod scenarios;

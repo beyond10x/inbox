@@ -1,0 +1,18 @@
+{
+  "description": "Keeps inbox wake running after each turn and wakes the session with the messages it printed",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/wake.sh",
+            "args": [],
+            "asyncRewake": true,
+            "timeout": 604800
+          }
+        ]
+      }
+    ]
+  }
+}
