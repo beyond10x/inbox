@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:54:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (switching off the guard that parks a thread after the first 401 leaves every case green; the window is too short for a deterministic case): no case, as the finding says. docs/design/bridge.md, The key of the bridge, says what holds: the client of the rounds and the client of the poll both end the process on the first 401, a thread that starts a request after it waits for the end and sends nothing, and a request another thread started at the same instant is not held back",
+    "review": "review-result:adversary-bridge-own-key-pass-1",
+    "outcome": "no-op"
+  }
+}

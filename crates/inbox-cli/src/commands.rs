@@ -3,6 +3,8 @@
 
 use std::cell::RefCell;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use inbox::messaging::{
@@ -51,7 +53,17 @@ pub struct Client {
     /// The address of `--for`: every request carries it in `Inbox-On-Behalf-Of`, signed, and it
     /// is the caller's inbox in this command ([`Client::own_inbox`]).
     acting_for: Option<String>,
+    /// `inbox bridge --for`: what ends the process once the service answered a request `401`
+    /// ([`Client::ending_on_refused_key`]).
+    refused_key: Option<RefusedKey>,
 }
+
+/// What ends a process whose client was answered `401` ([`Client::ending_on_refused_key`]).
+pub type RefusedKey = Arc<dyn Fn() + Send + Sync>;
+
+/// Set once a client that ends on a refused key was answered `401`: no client of the process that
+/// ends on one sends a request after it.
+static KEY_REFUSED: AtomicBool = AtomicBool::new(false);
 
 impl Client {
     /// A client of `service` for `caller`, with its outbox file.
@@ -63,12 +75,27 @@ impl Client {
             seen: RefCell::new(None),
             posted: RefCell::new(None),
             acting_for: None,
+            refused_key: None,
         }
     }
 
     /// This client acting for the inbox at `address` (`--for`), or for its own without it.
     pub fn acting_for(mut self, address: Option<String>) -> Self {
         self.acting_for = address;
+        self
+    }
+
+    /// Whether this client acts for an inbox given with `--for`.
+    pub fn acts_for_another(&self) -> bool {
+        self.acting_for.is_some()
+    }
+
+    /// This client ending the process with `end` once the service answers one of its requests
+    /// `401`, before the answer is read on: `inbox bridge --for`, whose key or delegation the
+    /// service's key file does not hold (`docs/design/bridge.md`, "The key of the bridge"). After
+    /// that answer no client of the process that ends so sends a request.
+    pub fn ending_on_refused_key(mut self, end: RefusedKey) -> Self {
+        self.refused_key = Some(end);
         self
     }
 
@@ -79,7 +106,7 @@ impl Client {
     ///
     /// None in fact: the outbox file is the one this client has.
     pub fn again(&self) -> Result<Self, Failure> {
-        Ok(Self::new(
+        let mut again = Self::new(
             self.service.clone(),
             Caller {
                 key: self.caller.key.clone(),
@@ -88,11 +115,15 @@ impl Client {
             },
             Outbox::locate(Some(self.outbox.path()))?,
         )
-        .acting_for(self.acting_for.clone()))
+        .acting_for(self.acting_for.clone());
+        again.refused_key.clone_from(&self.refused_key);
+        Ok(again)
     }
 
     /// Sends one request and reads its answer, keeping the epoch it named ([`Client::seen`]).
-    /// Every request of the client goes through here.
+    /// Every request of the client goes through here. A client that ends on a refused key
+    /// ([`Client::ending_on_refused_key`]) ends the process on an answer `401`, and sends nothing
+    /// once another such client of the process got one: the thread waits for the end.
     fn exchange(
         &self,
         method: &str,
@@ -100,6 +131,11 @@ impl Client {
         body: &[u8],
         wait: Duration,
     ) -> Result<Reply, Failure> {
+        if self.refused_key.is_some() && KEY_REFUSED.load(Ordering::SeqCst) {
+            loop {
+                std::thread::park();
+            }
+        }
         let sent = self.service.send(
             &self.caller,
             self.acting_for.as_deref(),
@@ -108,6 +144,12 @@ impl Client {
             body,
             wait,
         );
+        if let (Some(end), Ok(reply)) = (&self.refused_key, &sent)
+            && reply.status == 401
+        {
+            KEY_REFUSED.store(true, Ordering::SeqCst);
+            end();
+        }
         *self.seen.borrow_mut() = sent.as_ref().ok().and_then(|reply| reply.epoch.clone());
         sent
     }
@@ -155,10 +197,12 @@ impl Client {
         Ok(self.exchange("GET", &target, b"", Duration::ZERO)?.epoch)
     }
 
-    /// The caller's inbox: the address of `--for`, else the address with the text of its
-    /// principal (decision 5 of `docs/design/inbox.md`), as the service makes the caller's
-    /// `inbox`.
-    fn own_inbox(&self) -> Address {
+    /// The inbox this command acts for, the caller's inbox: the address of `--for`, else the
+    /// address with the text of its principal (decision 5 of `docs/design/inbox.md`), as the
+    /// service makes the caller's `inbox`. The files beside the outbox file that are of one inbox
+    /// are keyed by it: the lock of the wake, the line of `<outbox>.opened`, the record of the
+    /// chat posts.
+    pub fn own_inbox(&self) -> Address {
         Address(
             self.acting_for
                 .clone()
@@ -1120,14 +1164,18 @@ pub enum Reopen {
 pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
     let current = client.seen()?;
     let posted = client.posted.borrow().clone();
-    let due = client
-        .outbox
-        .due(&client.caller.principal, &current, now(), posted.as_deref());
-    // Under `--for` no inbox is opened again: the record is of the caller's own inbox, which is
-    // not the caller's in a request with the header (the service answers its open `not-owner`).
+    // The line of the inbox the command acts for (under `--for` the person's, opened again with
+    // the header), and the envelopes the caller sent.
+    let due = client.outbox.due(
+        &client.own_inbox().0,
+        &client.caller.principal,
+        &current,
+        now(),
+        posted.as_deref(),
+    );
     let open = due
         .open
-        .filter(|_| !matches!(typed, Typed::Open | Typed::Close) && client.acting_for.is_none());
+        .filter(|_| !matches!(typed, Typed::Open | Typed::Close));
     let repost = due.repost && typed != Typed::Repost;
     if open.is_none() && !repost {
         return None;

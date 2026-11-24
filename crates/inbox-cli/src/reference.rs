@@ -18,7 +18,9 @@ own inbox again with the adapter of its last `inbox open` (none after `inbox clo
 the kept envelopes again, as `inbox repost` does; one line on standard error says so, and with \
 `--json` the member `reconnected` of the document. With `--for <address>` a client command acts \
 for the inbox at that address, under a delegation of the caller for its principal that the key \
-file holds; it then opens no inbox again after a new start.";
+file holds; what it keeps on this host for an inbox (the record of `inbox open`, the lock of the \
+wake, the record of the chat posts) is then that inbox's, and after a new start it opens that \
+inbox again, not the caller's own.";
 
 /// The environment variables read outside a flag: name, description, the command that reads it
 /// (every client command when `None`).
@@ -53,7 +55,7 @@ const EXIT_STATUSES: [(i32, &str); 6] = [
     (REFUSED, "The service refused; the output names the error."),
     (
         USAGE,
-        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin, a pin beside an `http://` URL, and an `inbox bridge` without its binding.",
+        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin, a pin beside an `http://` URL, and an `inbox bridge` without its binding or with only one of `--for` and `--authority`.",
     ),
     (
         TRANSPORT,

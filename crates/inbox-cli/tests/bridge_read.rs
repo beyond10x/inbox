@@ -23,7 +23,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use inbox::server::json::{self, Value};
 use inbox_server::{format_instant, format_reading};
-use support::{ALICE, BOB, Service, World, keys_only};
+use support::{ALICE, BOB, Service, Signer, World, keys_only};
 
 /// The chat channel of the binding.
 const CHANNEL: &str = "C0000000001";
@@ -534,20 +534,32 @@ impl Bridge {
 
     /// The bridge of bob bound to the chat channel `channel`, else as [`Bridge::start`].
     fn bound(world: &World, connectors: &Connectors, url: &str, channel: &str) -> Self {
+        Self::bound_signed(world, connectors, url, channel, Signer::Person)
+    }
+
+    /// [`Bridge::bound`] signed by `signer`, with bob's outbox file.
+    fn bound_signed(
+        world: &World,
+        connectors: &Connectors,
+        url: &str,
+        channel: &str,
+        signer: Signer,
+    ) -> Self {
         let stdout = world.dir.join(&format!("bridge-{channel}.out"));
         let stderr = world.dir.join(&format!("bridge-{channel}.err"));
-        let child = world
-            .client_command("bob", &["bridge"])
-            .args([
-                "--chat-channel",
-                channel,
-                "--allowed-chat-user",
-                USER,
-                "--chat-connector",
-                CONNECTOR,
-                "--chat-poll-interval",
-                "1",
-            ])
+        let mut command = world.client_command("bob", &["bridge"]);
+        command.args([
+            "--chat-channel",
+            channel,
+            "--allowed-chat-user",
+            USER,
+            "--chat-connector",
+            CONNECTOR,
+            "--chat-poll-interval",
+            "1",
+        ]);
+        signer.apply(&mut command);
+        let child = command
             .env("PATH", connectors.path())
             .env("INBOX_URL", url)
             .stdout(fs::File::create(&stdout).expect("the stdout file is made"))
@@ -750,11 +762,17 @@ fn read_input_of(channel: &str, oldest: &str) -> Value {
 /// the first invocation of the stand-in is a post.
 #[test]
 fn a_reaction_of_the_allowed_chat_user_reads_a_note_once() {
-    let world = World::new("bridge-read-note");
+    a_reaction_of_the_allowed_chat_user_reads_a_note_once_signed(Signer::Person);
+}
+
+/// The case above, with the bridge signed by `signer`: also run with the bridge's own key in
+/// `bridge_own_key`.
+pub(crate) fn a_reaction_of_the_allowed_chat_user_reads_a_note_once_signed(signer: Signer) {
+    let world = World::signed("bridge-read-note", signer);
     world.client("bob", &["open", "--adapter", "slack"]).ok();
     let connectors = Connectors::new(&world);
     let forwarder = Forwarder::start(&world.service.url);
-    let mut bridge = Bridge::start(&world, &connectors, &forwarder.url());
+    let mut bridge = Bridge::bound_signed(&world, &connectors, &forwarder.url(), CHANNEL, signer);
     wait_for("the bridge reads Pending", || {
         forwarder.asked("GET /messaging/views/pending")
     });

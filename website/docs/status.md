@@ -36,7 +36,8 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 |---|---|
 | Ed25519 key pairs. The secret key file has mode 0600 and is never overwritten | `inbox key new` |
 | One key file the service reads, each entry signed with the operator key | `inbox keyfile add-key` |
-| A delegation: one principal may speak for another, and act for its inbox: read, mark, answer and refuse its messages in its place | `inbox keyfile add-delegation`, `inbox post --on-behalf-of --authority`, `inbox <command> --for <address>` |
+| A delegation: one principal may speak for another, and act for its inbox: read, mark, answer and refuse its messages, open, close and wake on it in its place | `inbox keyfile add-delegation`, `inbox post --on-behalf-of --authority`, `inbox <command> --for <address>` |
+| The chat bridge runs with a key of its own under a delegation of the person, not with the person's key | `inbox bridge --for <address> --authority <delegation id>` |
 | The service checks the signature of every request and of every envelope, and the delegation when there is one, before it stores anything | |
 | A message is shown to its recipient and its sender only. Any other caller is answered as for a message that does not exist | |
 
@@ -87,7 +88,8 @@ In this order. None has a date.
 2. **An inbox for a person.** A bridge posts a person's messages into a chat channel and turns
    the person's reply into a signed answer. `inbox bridge` posts each message, marks it
    delivered, marks it read on the person's reaction, posts it once even after a restart of the
-   service, and writes one reply at the end of a message nobody answered. It needs `connectors`
+   service, and writes one reply at the end of a message nobody answered, with a key of its own
+   under a delegation of the person. It needs `connectors`
    0.77.0 or later and the operator's standing grant for the channel, and has not run on a real
    channel yet.
 3. **A persistent backend.** A restart of the service loses nothing.

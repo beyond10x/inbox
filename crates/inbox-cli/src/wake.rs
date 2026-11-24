@@ -16,7 +16,7 @@
 //!   file and a socket are not watched.
 //! - One wake per inbox and outbox file on a host: before its first request it takes an
 //!   exclusive `flock` of a file beside the outbox file, `<outbox>.wake.<16 hex digits>` (the
-//!   64-bit FNV-1a hash of the caller's address), and holds it until the process ends, a kill
+//!   64-bit FNV-1a hash of the address of the inbox it acts for, `--for` or the caller's own), and holds it until the process ends, a kill
 //!   included: the kernel releases it. A second wake that finds it held exits 5 and sends
 //!   nothing. The file is opened without blocking and without following a link, and must be a
 //!   regular file; a file left behind by a wake that ended holds no lock and blocks nothing.
@@ -357,7 +357,7 @@ pub fn rounds(client: &Client, surface: &mut dyn Surface) -> Result<i32, Failure
     surface.admits(client)?;
     end_on_signal()?;
     surface.watched()?;
-    let address = client.caller.principal.clone();
+    let address = client.own_inbox().0;
     let _lock = lock(client.outbox.path(), &address)?.ok_or_else(|| {
         Failure::AnotherWake(format!("another wake of {address} runs on this host"))
     })?;
@@ -416,7 +416,7 @@ pub fn rounds(client: &Client, surface: &mut dyn Surface) -> Result<i32, Failure
 ///
 /// [`Failure::OtherAdapter`].
 pub fn only(client: &Client, adapter: &str, mode: &str, purpose: &str) -> Result<(), Failure> {
-    let principal = &client.caller.principal;
+    let principal = &client.own_inbox().0;
     match client.outbox.opened(principal) {
         Some(record) if record.adapter != adapter => Err(Failure::OtherAdapter(format!(
             "{principal} was opened on this host with the adapter {}, and `{mode}` is the \
@@ -544,7 +544,7 @@ fn held(client: &Client, name: &str) -> Result<(Value, Option<String>), Failure>
                     reconnected = Some(reconnect.document);
                     reconnect.open
                 });
-                let principal = &client.caller.principal;
+                let principal = &client.own_inbox().0;
                 match came {
                     _ if reopened => {
                         return Err(Failure::NotOpen(format!(
@@ -680,7 +680,7 @@ fn end_on_signal() -> Result<(), Failure> {
 /// its group, then waits for it. The child is not yet waited for while it is in [`CHILD`], so its
 /// id names it and its group and no other process. A process that left the group (a session of
 /// its own) is not reached.
-fn end_group(mut running: Child) {
+pub fn end_group(mut running: Child) {
     let group = rustix::process::Pid::from_child(&running);
     let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
     let _ = running.kill();

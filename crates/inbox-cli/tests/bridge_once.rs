@@ -32,10 +32,10 @@ use std::time::{Duration, Instant, SystemTime};
 
 use inbox::server::json::{self, Value};
 use inbox_server::{format_instant, format_reading};
-use support::{BOB, Service, World, keys_only};
+use support::{BOB, Service, Signer, World, keys_only};
 
 /// The chat channel of the binding.
-const CHANNEL: &str = "C0000000001";
+pub(crate) const CHANNEL: &str = "C0000000001";
 /// Another chat channel, of a bridge started with another binding.
 const OTHER_CHANNEL: &str = "C0000000002";
 /// The allowed chat user of the binding.
@@ -45,10 +45,10 @@ const CONNECTOR: &str = "slack";
 /// How long a case waits for a fact or an exit: it only ends a hang.
 const HANG: Duration = support::STAND_IN_WAIT;
 /// A reaction of the allowed chat user, as the provider lists the reactions of a post.
-const REACTED: &str = r#"[{"name":"eyes","users":["U0000000001"],"count":1}]"#;
+pub(crate) const REACTED: &str = r#"[{"name":"eyes","users":["U0000000001"],"count":1}]"#;
 
 /// Waits until `fact` holds; [`HANG`] only ends a hang.
-fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
+pub(crate) fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
     let started = Instant::now();
     while !fact() {
         assert!(
@@ -69,13 +69,15 @@ fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
 /// numbered `f` from 1 in `failed.<f>` and fails (exit 1, a line on standard error). A read
 /// (`conversations.history`) is numbered `r` from 1 in `read.<r>` and answered with `history`,
 /// else a page without a post: the posts after `oldest`, and the one at `oldest` only with
-/// `"inclusive":true`, as the provider lists them.
-struct Connectors {
+/// `"inclusive":true`, as the provider lists them. While `hold-read` exists a read writes its
+/// process id to `holding-read` first and waits for `release-read` (a bound of about 10 s only
+/// ends a hang).
+pub(crate) struct Connectors {
     dir: PathBuf,
 }
 
 impl Connectors {
-    fn new(world: &World) -> Self {
+    pub(crate) fn new(world: &World) -> Self {
         let dir = world.dir.join("connectors");
         fs::create_dir_all(dir.join("bin")).expect("the stand-in's directory is made");
         let shown = dir.to_str().expect("a UTF-8 path");
@@ -112,6 +114,12 @@ chat.postMessage)
   exit 0
   ;;
 conversations.history)
+  if [ -e "$d/hold-read" ]; then
+    echo "$$" > "$d/holding-read.new"
+    mv "$d/holding-read.new" "$d/holding-read"
+    i=0
+    while [ ! -e "$d/release-read" ] && [ "$i" -lt 1000 ]; do sleep 0.01; i=$((i + 1)); done
+  fi
   if [ -e "$d/history" ]; then
     o=$(sed -n 's/.*"oldest":"\([0-9.]*\)".*/\1/p' "$d/input.$n")
     inc=0
@@ -142,7 +150,7 @@ exit 3
     }
 
     /// `PATH` with the stand-in first.
-    fn path(&self) -> String {
+    pub(crate) fn path(&self) -> String {
         format!(
             "{}:{}",
             self.dir.join("bin").display(),
@@ -151,7 +159,7 @@ exit 3
     }
 
     /// Writes the file `name` whole: beside it, then renamed over it.
-    fn file(&self, name: &str, text: &str) {
+    pub(crate) fn file(&self, name: &str, text: &str) {
         let staged = self.dir.join(format!("{name}.staged"));
         fs::write(&staged, text).expect("a file of the stand-in is written");
         fs::rename(&staged, self.dir.join(name)).expect("a file of the stand-in is replaced");
@@ -164,8 +172,15 @@ exit 3
             .count()
     }
 
+    /// The process id of the read that holds, once one does (`hold-read`).
+    pub(crate) fn holding_read(&self) -> Option<u32> {
+        fs::read_to_string(self.dir.join("holding-read"))
+            .ok()
+            .and_then(|text| text.trim().parse().ok())
+    }
+
     /// The posts so far, replies not counted.
-    fn posts(&self) -> usize {
+    pub(crate) fn posts(&self) -> usize {
         self.count("post")
     }
 
@@ -175,7 +190,7 @@ exit 3
     }
 
     /// The reads of the channel so far: one per poll that has an open post.
-    fn reads(&self) -> usize {
+    pub(crate) fn reads(&self) -> usize {
         self.count("read")
     }
 
@@ -205,7 +220,7 @@ exit 3
 
 /// The answer of a read of the channel that lists `messages` (each its reference and its
 /// reactions as JSON), newest first, one post per line, and no further page.
-fn history(messages: &[(&str, &str)]) -> String {
+pub(crate) fn history(messages: &[(&str, &str)]) -> String {
     let listed: Vec<String> = messages
         .iter()
         .rev()
@@ -226,24 +241,39 @@ fn history(messages: &[(&str, &str)]) -> String {
 /// What each connection of a [`Forwarder`] carried: what the client sent.
 type Carried = Arc<Mutex<Vec<Vec<u8>>>>;
 
+/// The request line (lower-cased) whose answer a [`Forwarder`] replaces with `401`, once set
+/// ([`Forwarder::refuse`]), and the connections whose answer it replaced.
+#[derive(Default)]
+struct Refusal {
+    line: Option<String>,
+    refused: Vec<usize>,
+}
+
+type Refusing = Arc<Mutex<Refusal>>;
+
 /// A TCP forwarder in front of the service: each connection is carried to a new connection to the
 /// service it is put in front of ([`Forwarder::to`]), and what the client sent is kept per
 /// connection, in the order the connections came. The client sends one request per connection.
-struct Forwarder {
+/// The answer to a request whose line [`Forwarder::refuse`] names is replaced with the service's
+/// `401` (`{"refused":"unauthenticated"}`) when it comes, also for a request sent before.
+pub(crate) struct Forwarder {
     address: String,
     kept: Carried,
     target: Arc<Mutex<String>>,
     stop: Arc<AtomicBool>,
+    refusal: Refusing,
 }
 
 impl Forwarder {
-    fn start(url: &str) -> Self {
+    pub(crate) fn start(url: &str) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("the forwarder binds");
         let address = listener.local_addr().expect("an address").to_string();
         let kept: Carried = Arc::new(Mutex::new(Vec::new()));
         let target = Arc::new(Mutex::new(url.trim_start_matches("http://").to_owned()));
         let stop = Arc::new(AtomicBool::new(false));
+        let refusal: Refusing = Arc::default();
         let (record, to, stopped) = (Arc::clone(&kept), Arc::clone(&target), Arc::clone(&stop));
+        let refusing = Arc::clone(&refusal);
         std::thread::spawn(move || {
             let started = Instant::now();
             while !stopped.load(Ordering::SeqCst) && started.elapsed() < 6 * HANG {
@@ -257,8 +287,9 @@ impl Forwarder {
                     kept.len() - 1
                 };
                 let record = Arc::clone(&record);
+                let refusing = Arc::clone(&refusing);
                 let target = to.lock().expect("the target").clone();
-                std::thread::spawn(move || carry(client, &target, &record, at));
+                std::thread::spawn(move || carry(client, &target, &record, &refusing, at));
             }
         });
         Self {
@@ -266,7 +297,18 @@ impl Forwarder {
             kept,
             target,
             stop,
+            refusal,
         }
+    }
+
+    /// From now on the answer to a request whose line, lower-cased, starts with `line` is `401`.
+    pub(crate) fn refuse(&self, line: &str) {
+        self.refusal.lock().expect("the refusal").line = Some(line.to_lowercase());
+    }
+
+    /// The connections whose answer was replaced with `401`, in the order of the replacements.
+    pub(crate) fn refused(&self) -> Vec<usize> {
+        self.refusal.lock().expect("the refusal").refused.clone()
     }
 
     /// Puts the forwarder in front of the service at `url`: a new start of it.
@@ -274,12 +316,12 @@ impl Forwarder {
         *self.target.lock().expect("the target") = url.trim_start_matches("http://").to_owned();
     }
 
-    fn url(&self) -> String {
+    pub(crate) fn url(&self) -> String {
         format!("http://{}", self.address)
     }
 
     /// What each connection so far sent, in the order the connections came.
-    fn sent(&self) -> Vec<Vec<u8>> {
+    pub(crate) fn sent(&self) -> Vec<Vec<u8>> {
         self.kept.lock().expect("the record").clone()
     }
 
@@ -307,8 +349,9 @@ impl Drop for Forwarder {
 }
 
 /// Carries one connection of a [`Forwarder`] to `target`, keeping what the client sent as
-/// connection `at`.
-fn carry(client: TcpStream, target: &str, kept: &Carried, at: usize) {
+/// connection `at`; when the first bytes of the answer come and `refusal` names the request's
+/// line, the client gets `401` instead.
+fn carry(client: TcpStream, target: &str, kept: &Carried, refusal: &Refusing, at: usize) {
     let Ok(upstream) = TcpStream::connect(target) else {
         let _ = client.shutdown(Shutdown::Both);
         return;
@@ -334,14 +377,43 @@ fn carry(client: TcpStream, target: &str, kept: &Carried, at: usize) {
         let _ = to_upstream.shutdown(Shutdown::Write);
     });
     let (mut from_upstream, mut to_client) = (upstream, client);
-    let _ = std::io::copy(&mut from_upstream, &mut to_client);
+    let mut first = [0_u8; 4096];
+    if let Ok(read) = from_upstream.read(&mut first)
+        && read > 0
+    {
+        let sent = String::from_utf8_lossy(&kept.lock().expect("the record")[at]).to_lowercase();
+        let refused = {
+            let mut refusal = refusal.lock().expect("the refusal");
+            let named = refusal
+                .line
+                .as_deref()
+                .is_some_and(|line| sent.starts_with(line));
+            if named {
+                refusal.refused.push(at);
+            }
+            named
+        };
+        if refused {
+            let body = r#"{"refused":"unauthenticated"}"#;
+            let _ = to_client.write_all(
+                format!(
+                    "HTTP/1.1 401 Unauthorized\r\ncontent-type: application/json\r\n\
+                     content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+        } else if to_client.write_all(&first[..read]).is_ok() {
+            let _ = std::io::copy(&mut from_upstream, &mut to_client);
+        }
+    }
     let _ = to_client.shutdown(Shutdown::Both);
     let _ = from_upstream.shutdown(Shutdown::Both);
     let _ = up.join();
 }
 
 /// The system clock's second.
-fn this_second() -> inbox_verify::Instant {
+pub(crate) fn this_second() -> inbox_verify::Instant {
     inbox_verify::Instant::from_unix(
         inbox_verify::Instant::from_system_time(SystemTime::now()).unix_seconds(),
         0,
@@ -349,7 +421,7 @@ fn this_second() -> inbox_verify::Instant {
 }
 
 /// Sets the clock file `name` of the case's directory whole.
-fn set_clock(dir: &Path, name: &str, at: inbox_verify::Instant) {
+pub(crate) fn set_clock(dir: &Path, name: &str, at: inbox_verify::Instant) {
     let staged = dir.join(format!("{name}.new"));
     fs::write(&staged, format_reading(at)).expect("the clock file is written");
     fs::rename(&staged, dir.join(name)).expect("the clock file is replaced");
@@ -357,7 +429,7 @@ fn set_clock(dir: &Path, name: &str, at: inbox_verify::Instant) {
 
 /// A new start of `inbox serve` in `dir`: its clock the file `clock` of the case, a sweep of the
 /// expiry task every second.
-fn serve(dir: &Path, operator_public_key: &str) -> Service {
+pub(crate) fn serve(dir: &Path, operator_public_key: &str) -> Service {
     Service::start(
         dir,
         &[
@@ -379,7 +451,13 @@ fn serve(dir: &Path, operator_public_key: &str) -> Service {
 /// The world of a case: the key set of the run, the service's clock file and the bridge's, both
 /// at the system clock's second, and a service over them.
 fn clocked(name: &str) -> World {
+    clocked_signed(name, Signer::Person)
+}
+
+/// [`clocked`] with the key file prepared for `signer` before the service starts.
+pub(crate) fn clocked_signed(name: &str, signer: Signer) -> World {
     let (dir, operator_public_key) = keys_only(name);
+    signer.prepare(&dir.path);
     set_clock(&dir.path, "clock", this_second());
     set_clock(&dir.path, "bridge-clock", this_second());
     let service = serve(&dir.path, &operator_public_key);
@@ -392,7 +470,7 @@ fn clocked(name: &str) -> World {
 
 /// A running `inbox bridge` of bob that polls every second, its standard error in a file; ended
 /// with SIGTERM and waited for when dropped.
-struct Bridge {
+pub(crate) struct Bridge {
     child: Option<Child>,
     stderr: PathBuf,
 }
@@ -407,11 +485,23 @@ impl Bridge {
         channel: &str,
         extra: &[&str],
     ) -> Self {
+        Self::signed(world, connectors, url, channel, extra, Signer::Person)
+    }
+
+    /// [`Bridge::start`] signed by `signer`, with bob's outbox file.
+    pub(crate) fn signed(
+        world: &World,
+        connectors: &Connectors,
+        url: &str,
+        channel: &str,
+        extra: &[&str],
+        signer: Signer,
+    ) -> Self {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let n = NEXT.fetch_add(1, Ordering::SeqCst);
         let stderr = world.dir.join(&format!("bridge-{n}.err"));
-        let child = world
-            .client_command("bob", &["bridge"])
+        let mut command = world.client_command("bob", &["bridge"]);
+        command
             .args([
                 "--chat-channel",
                 channel,
@@ -422,7 +512,9 @@ impl Bridge {
                 "--chat-poll-interval",
                 "1",
             ])
-            .args(extra)
+            .args(extra);
+        signer.apply(&mut command);
+        let child = command
             .env("PATH", connectors.path())
             .env("INBOX_URL", url)
             .stdout(std::process::Stdio::null())
@@ -440,7 +532,7 @@ impl Bridge {
     }
 
     /// Ends it with SIGTERM, waits for it, and answers its standard error.
-    fn end(mut self) -> String {
+    pub(crate) fn end(mut self) -> String {
         let mut child = self.child.take().expect("running");
         let sent = Command::new("kill")
             .args(["-TERM", &child.id().to_string()])
@@ -458,7 +550,7 @@ impl Bridge {
 
     /// Waits until it ends by itself ([`HANG`] only ends a hang); answers its exit code and its
     /// standard error.
-    fn exit(mut self) -> (Option<i32>, String) {
+    pub(crate) fn exit(mut self) -> (Option<i32>, String) {
         let mut status = None;
         wait_for("the bridge ends", || {
             status = self
@@ -484,13 +576,13 @@ impl Drop for Bridge {
 }
 
 /// `who` runs `args` against the service at `url`.
-fn client(world: &World, url: &str, who: &str, args: &[&str]) -> support::Run {
+pub(crate) fn client(world: &World, url: &str, who: &str, args: &[&str]) -> support::Run {
     world.client_env(who, args, &[("INBOX_URL", url)]).ok()
 }
 
 /// alice posts a message of `kind` with `body` and the flags `extra` to bob through `url`;
 /// answers its id.
-fn post(world: &World, url: &str, kind: &str, body: &str, extra: &[&str]) -> String {
+pub(crate) fn post(world: &World, url: &str, kind: &str, body: &str, extra: &[&str]) -> String {
     let mut args = vec!["post", "--to", BOB, "--kind", kind, "--body", body];
     match kind {
         "request" => args.extend(["--reply-shape", "free"]),
@@ -502,7 +594,7 @@ fn post(world: &World, url: &str, kind: &str, body: &str, extra: &[&str]) -> Str
 }
 
 /// The state of `message_id` in bob's `Pending`, or an empty text when it is not listed.
-fn state(world: &World, url: &str, message_id: &str) -> String {
+pub(crate) fn state(world: &World, url: &str, message_id: &str) -> String {
     support::rows(&client(world, url, "bob", &["pending", "--json"]).json())
         .iter()
         .find(|row| support::text(row, "message_id") == message_id)
@@ -549,7 +641,7 @@ fn entry(world: &World, message_id: &str) -> Option<Value> {
 }
 
 /// The member `name` of the line of the record of `message_id`, or an empty text.
-fn recorded(world: &World, message_id: &str, name: &str) -> String {
+pub(crate) fn recorded(world: &World, message_id: &str, name: &str) -> String {
     entry(world, message_id)
         .and_then(|line| match line.member(name) {
             Some(Value::Text(text)) => Some(text.clone()),
@@ -560,7 +652,7 @@ fn recorded(world: &World, message_id: &str, name: &str) -> String {
 
 /// Waits until the record holds `message_id` posted and the message is `Delivered`; answers the
 /// reference of its chat post.
-fn posted(world: &World, url: &str, message_id: &str) -> String {
+pub(crate) fn posted(world: &World, url: &str, message_id: &str) -> String {
     wait_for(&format!("{message_id} is posted and delivered"), || {
         recorded(world, message_id, "state") == "posted"
             && state(world, url, message_id) == "Delivered"
@@ -569,7 +661,7 @@ fn posted(world: &World, url: &str, message_id: &str) -> String {
 }
 
 /// A new start of `inbox serve` behind `forwarder`; the start before is ended.
-fn restart(world: &mut World, forwarder: &Forwarder) {
+pub(crate) fn restart(world: &mut World, forwarder: &Forwarder) {
     let next = serve(&world.dir.path, &world.operator_public_key);
     forwarder.to(&next.url);
     let before = std::mem::replace(&mut world.service, next);
@@ -637,12 +729,20 @@ fn as_of_the_build_before(world: &World, message_id: &str) {
 /// post per message id in all.
 #[test]
 fn a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice() {
-    let mut world = clocked("bridge-once-repost");
+    a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice_signed(Signer::Person);
+}
+
+/// The case above, with both bridges signed by `signer`: also run with the bridge's own key in
+/// `bridge_own_key`.
+pub(crate) fn a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice_signed(
+    signer: Signer,
+) {
+    let mut world = clocked_signed("bridge-once-repost", signer);
     let forwarder = Forwarder::start(&world.service.url);
     let url = forwarder.url();
     client(&world, &url, "bob", &["open", "--adapter", "slack"]);
     let connectors = Connectors::new(&world);
-    let bridge = Bridge::start(&world, &connectors, &url, CHANNEL, &[]);
+    let bridge = Bridge::signed(&world, &connectors, &url, CHANNEL, &[], signer);
     // 30 s after the system clock just before the posts: the clients sign with the system clock
     // and the service takes a request within 60 s of its reading.
     let expires_at = this_second().plus_seconds(30);
@@ -751,7 +851,7 @@ fn a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice() {
         client(&world, &url, "alice", &["outbox"]);
         state(&world, &url, &decision) == "Sent"
     });
-    let bridge = Bridge::start(&world, &connectors, &url, OTHER_CHANNEL, &[]);
+    let bridge = Bridge::signed(&world, &connectors, &url, OTHER_CHANNEL, &[], signer);
     wait_for("the new bridge marks the 3", || {
         state(&world, &url, &decision) == "Delivered"
             && sent_state(&world, &url, &request) == "Read"

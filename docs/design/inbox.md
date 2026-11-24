@@ -151,9 +151,9 @@ Each can be changed; the alternative is named where there is one.
    in every command; (C) the bridge reads and marks with such a key and signs only the reply with
    its own, which `not-sender` of `Answer` refuses unless the model changes. The service and
    `inbox-verify` hold it, and the client names the inbox it acts for with `--for <address>`
-   (`docs/design/service.md`, "The request signature"). Not built yet: `inbox wake` and `inbox
-   bridge` under a delegation, which do not take `--for`
-   (story:the-chat-bridge-runs-with-its-own-key-under-a-delegation).
+   (`docs/design/service.md`, "The request signature"); `inbox bridge` takes it beside
+   `--authority <delegation id>` and runs with its own key (`docs/design/bridge.md`, "The key of
+   the bridge"; story:the-chat-bridge-runs-with-its-own-key-under-a-delegation).
 5. **Ownership.** A caller carries a `principal` and an `inbox` address. `principal` is who
    signed the request; `inbox` is the address with the same text, or, in a request that names an
    inbox under a live delegation (decision 4), the address it names: the two differ then. Taken on

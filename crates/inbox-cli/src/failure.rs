@@ -76,6 +76,10 @@ pub enum Failure {
     /// names another adapter than the mode's own (`terminal`, `slack`). Exits as a refusal,
     /// before the lock and before any request.
     OtherAdapter(String),
+    /// `inbox bridge --for`: the service answered a request `401`, which it gives alike for a key
+    /// entry and for a delegation that is missing or lapsed in its key file. Exits as a refusal;
+    /// the line names the key id, the delegation id and the 2 commands that add them.
+    KeyRefused(String),
     /// The command did its work at the service, and what it took from there is printed, but a
     /// step after it failed: `done` is printed, then `cause` is reported and decides the exit.
     After {
@@ -93,7 +97,8 @@ impl Failure {
             Self::Refused { .. }
             | Self::Unreadable { .. }
             | Self::NotOpen(_)
-            | Self::OtherAdapter(_) => REFUSED,
+            | Self::OtherAdapter(_)
+            | Self::KeyRefused(_) => REFUSED,
             Self::Usage(_) => USAGE,
             Self::Transport(_) | Self::Certificate(_) | Self::Unexpected { .. } => TRANSPORT,
             Self::Local(_) => LOCAL,
@@ -114,7 +119,8 @@ impl Failure {
             Self::Local(detail)
             | Self::AnotherWake(detail)
             | Self::NotOpen(detail)
-            | Self::OtherAdapter(detail) => detail.clone(),
+            | Self::OtherAdapter(detail)
+            | Self::KeyRefused(detail) => detail.clone(),
             Self::After { cause, .. } => cause.message(),
         }
     }
@@ -164,7 +170,8 @@ impl Failure {
             | Self::Local(detail)
             | Self::AnotherWake(detail)
             | Self::NotOpen(detail)
-            | Self::OtherAdapter(detail) => {
+            | Self::OtherAdapter(detail)
+            | Self::KeyRefused(detail) => {
                 json::member(out, "error");
                 json::push_text(
                     out,
@@ -176,6 +183,7 @@ impl Failure {
                         Self::AnotherWake(_) => "another wake",
                         Self::NotOpen(_) => "inbox not open",
                         Self::OtherAdapter(_) => "another adapter",
+                        Self::KeyRefused(_) => "key refused",
                         _ => "local",
                     },
                 );

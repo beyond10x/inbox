@@ -309,11 +309,12 @@ fn an_empty_or_padded_for_is_wrong_usage_and_sends_nothing() {
     assert!(!dir.join("alice.outbox").exists(), "an envelope was kept");
 }
 
-/// `inbox wake`, `inbox bridge`, `inbox open` and `inbox close` keep state on this host keyed by
-/// the caller's own address: they do not take `--for`. Exit 2 and one line, nothing sent, no
-/// file written.
+/// `inbox bridge` takes `--for` only with `--authority`, and `--authority` only with `--for`
+/// (story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, which made `wake`, `open`,
+/// `close` and `bridge` take `--for`): either alone is exit 2 and one line, nothing sent, no file
+/// written.
 #[test]
-fn wake_bridge_open_and_close_do_not_take_for() {
+fn the_bridge_takes_for_only_with_authority() {
     let (dir, _) = keys_only("for-local");
     let (url, heads) = recording(401, UNAUTHENTICATED);
     let env = [
@@ -336,15 +337,28 @@ fn wake_bridge_open_and_close_do_not_take_for() {
         names
     };
     let before = listing();
-    for command in ["wake", "bridge", "open", "close"] {
-        let refused = run(&dir.path, &[command, "--for", BOB], &env);
-        assert_eq!(refused.status, USAGE, "{command}: {refused:#?}");
-        assert_eq!(
-            refused.stderr,
-            format!("inbox {command}: does not take --for\n"),
-            "{command}"
+    let binding = [
+        "bridge",
+        "--chat-channel",
+        "C0000000001",
+        "--allowed-chat-user",
+        "U0000000001",
+        "--chat-connector",
+        "slack",
+    ];
+    for (alone, value) in [("--for", BOB), ("--authority", "alice-for-bob")] {
+        let mut args = binding.to_vec();
+        args.extend([alone, value]);
+        let refused = run(&dir.path, &args, &env);
+        assert_eq!(refused.status, USAGE, "{alone}: {refused:#?}");
+        assert_eq!(refused.stderr.lines().count(), 1, "{alone}: {refused:#?}");
+        assert!(
+            refused.stderr.starts_with("inbox bridge: usage: ")
+                && refused.stderr.contains("--for")
+                && refused.stderr.contains("--authority"),
+            "{alone}: {refused:#?}"
         );
-        assert!(refused.stdout.is_empty(), "{command}: {refused:#?}");
+        assert!(refused.stdout.is_empty(), "{alone}: {refused:#?}");
     }
     assert!(
         heads.lock().expect("not poisoned").is_empty(),
@@ -474,9 +488,10 @@ fn serve_writes_no_line_for_an_uncovered_inbox_or_a_bad_signature() {
     assert_eq!(after_forged, before, "a line for the bad signature");
 }
 
-/// After a new start of the service the reconnect of a command under `--for` does not open the
-/// caller's own inbox (its record is keyed by the caller's own address, and under the header the
-/// service answers that open `not-owner`); the next command without `--for` opens it again.
+/// After a new start of the service the reconnect of a command under `--for` opens only the inbox
+/// it acts for, from that inbox's line of the record of the opened inbox: alice's outbox file holds
+/// a line of her own inbox and none of bob's, so it opens nothing (not alice's own inbox, which is
+/// not the caller's inbox under the header); the next command without `--for` opens alice's again.
 #[test]
 fn under_for_the_reconnect_leaves_the_callers_own_inbox_to_a_command_without_it() {
     let mut world = world("for-reconnect", &[(D, ALICE, BOB, None)], None);

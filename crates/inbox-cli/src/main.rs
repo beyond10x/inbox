@@ -62,9 +62,9 @@ enum Command {
     /// The certificate `inbox serve` answers with over TLS.
     #[command(subcommand)]
     Tls(TlsCommand),
-    /// Open the caller's own inbox. The adapter is recorded beside the outbox file: after a
-    /// restart of the service the caller's next command opens the inbox again with it, until
-    /// `inbox close`.
+    /// Open the caller's own inbox, or with --for the inbox of that address. The adapter is
+    /// recorded beside the outbox file for that inbox: after a restart of the service the
+    /// caller's next command for the same inbox opens it again with it, until `inbox close`.
     Open {
         #[command(flatten)]
         client: ClientArgs,
@@ -72,7 +72,7 @@ enum Command {
         #[arg(long, default_value = "terminal")]
         adapter: String,
     },
-    /// Close the caller's own inbox.
+    /// Close the caller's own inbox, or with --for the inbox of that address.
     Close {
         #[command(flatten)]
         client: ClientArgs,
@@ -141,10 +141,18 @@ enum Command {
     /// the end of a message nobody answered it writes one line into the thread of its post: the
     /// option silence took, or "expired, not answered"; it never answers in the person's place.
     /// A released `connectors` refuses the posts until the operator gave it a standing approval
-    /// of the post operation into the channel: the bridge passes no approval proof.
+    /// of the post operation into the channel: the bridge passes no approval proof. With a key of
+    /// its own it serves the person's inbox with --for <address> and --authority <delegation id>,
+    /// which go together; a request then answered 401 (the key entry or the delegation is missing
+    /// from the service's key file or lapsed) ends it with 1 and one line that names both ids.
     Bridge {
         #[command(flatten)]
         client: ClientArgs,
+        /// With --for: the id of the delegation of the person of --for that lets the bridge's key
+        /// act for that inbox, as the service's key file holds it. Named in the line of a refused
+        /// key; not checked by the client.
+        #[arg(long, value_name = "DELEGATION_ID")]
+        authority: Option<String>,
         /// The chat channel the messages are posted into: its id, such as C0000000001.
         #[arg(long)]
         chat_channel: Option<String>,
@@ -256,9 +264,12 @@ struct ClientArgs {
     /// service answers the caller as the owner of that inbox while the key file holds a live
     /// delegation of the caller for that principal; without one every request is refused as one
     /// signed with a key the service does not hold. It is then the caller's inbox in the command:
-    /// the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value,
+    /// the default of --inbox, and of --on-behalf-of of `answer`; the inbox `open`, `close`,
+    /// `wake` and `bridge` open, close and serve; and the inbox whose record this host keeps
+    /// beside the outbox file (the lock of the wake, the record of `inbox open`, which the
+    /// reconnect opens again, and the record of the chat posts). Sent as given; an empty value,
     /// one with white space at either end and one with a control character are wrong usage.
-    /// `open`, `close`, `wake` and `bridge` do not take it.
+    /// `bridge` takes it with --authority only.
     #[arg(long = "for", value_name = "ADDRESS")]
     acting_for: Option<String>,
 }
@@ -274,21 +285,6 @@ impl ClientArgs {
             outbox::Outbox::locate(self.outbox.as_deref())?,
         )
         .acting_for(self.acting_for.clone()))
-    }
-
-    /// Ends the process with exit 2 and one line when `--for` is given to `command`, which keeps
-    /// state on this host keyed by the caller's own address (the record of the opened inbox, the
-    /// wake lock, the record of the chat posts) and so does not take it in this version.
-    fn refuse_for(&self, command: &str, json: bool) {
-        if self.acting_for.is_none() {
-            return;
-        }
-        let failure = Failure::Usage(format!("inbox {command} does not take --for"));
-        if json {
-            output::print_document(&failure.document());
-        }
-        output::warn(&format!("inbox {command}: does not take --for"));
-        std::process::exit(failure.status());
     }
 
     /// Runs the client command `command` (`typed`), and hands back the client for the reconnect
@@ -871,13 +867,6 @@ fn main() {
         }
     };
     let json = cli.json;
-    match &cli.command {
-        Command::Open { client, .. } => client.refuse_for("open", json),
-        Command::Close { client } => client.refuse_for("close", json),
-        Command::Wake { client, .. } => client.refuse_for("wake", json),
-        Command::Bridge { client, .. } => client.refuse_for("bridge", json),
-        _ => {}
-    }
     // `inbox wake` writes its own output: the rows before the marks, and the reconnects as they
     // run.
     if let Command::Wake { client, follow } = &cli.command {
@@ -890,6 +879,7 @@ fn main() {
     // So does `inbox bridge`, which runs the rounds of the wake.
     if let Command::Bridge {
         client,
+        authority,
         chat_channel,
         allowed_chat_user,
         chat_connector,
@@ -909,10 +899,25 @@ fn main() {
             clock_file: clock_file.as_deref(),
             #[cfg(not(debug_assertions))]
             clock_file: None,
+            authority: authority.as_deref(),
         };
-        let status = match client.client() {
-            Ok(client) => bridge::run(&client, json, given),
-            Err(failure) => bridge::report(&failure, json),
+        // A key of its own acts for the person's inbox only under a delegation: the two flags go
+        // together, and either alone is wrong usage before anything is read or sent.
+        let status = if client.acting_for.is_some() == authority.is_some() {
+            match client.client() {
+                Ok(client) => bridge::run(client, json, given),
+                Err(failure) => bridge::report(&failure, json),
+            }
+        } else {
+            bridge::report(
+                &Failure::Usage(
+                    "--for <address> and --authority <delegation id> go together: with a key of \
+                     its own the bridge acts for the inbox of --for under the delegation of \
+                     --authority, and with a key of the person it takes neither"
+                        .to_owned(),
+                ),
+                json,
+            )
         };
         std::process::exit(status);
     }

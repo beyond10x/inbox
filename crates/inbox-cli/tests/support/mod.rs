@@ -342,6 +342,19 @@ impl Spawned {
     }
 }
 
+impl From<Command> for Spawned {
+    /// `command` started with its standard output and standard error piped, not waited for.
+    fn from(mut command: Command) -> Self {
+        Self(Some(
+            command
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("the binary starts"),
+        ))
+    }
+}
+
 impl Drop for Spawned {
     fn drop(&mut self) {
         if let Some(mut child) = self.0.take() {
@@ -492,6 +505,180 @@ pub fn serve(dir: &Path, operator_public_key: &str) -> Service {
         ],
         &[],
     )
+}
+
+/// The principal of the chat bridge's own key in the cases of
+/// story:the-chat-bridge-runs-with-its-own-key-under-a-delegation. Its secret key file is
+/// `chat-bridge.key`, so `World::client("chat-bridge", …)` signs with it.
+pub const CHAT_BRIDGE: &str = "agent:demo/chat-bridge";
+/// The key id of the chat bridge's own key.
+pub const CHAT_BRIDGE_KEY_ID: &str = "chat-bridge-1";
+
+/// Who signs the requests of `inbox bridge` in a case of the bridge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Signer {
+    /// A key of the person: the bridge as the stories before ran it.
+    Person,
+    /// The bridge's own key (`chat-bridge.key`, principal [`CHAT_BRIDGE`]) with
+    /// `--for <person> --authority <delegation>`, under that delegation of the key file.
+    Own {
+        person: &'static str,
+        delegation: &'static str,
+    },
+}
+
+impl Signer {
+    /// Before the service starts: for [`Signer::Own`] the bridge's key and its entry in
+    /// `keys.json` of `dir` (once), and the delegation of the bridge for the person.
+    pub fn prepare(self, dir: &Path) {
+        if let Self::Own { person, delegation } = self {
+            chat_bridge_key(dir, None);
+            add_delegation(dir, delegation, CHAT_BRIDGE, person, None);
+        }
+    }
+
+    /// Makes `command`, an `inbox bridge` (or `inbox wake`) of the person, one of this signer:
+    /// for [`Signer::Own`] the bridge's key file and `--for <person> --authority <delegation>`.
+    /// The outbox file stays the one the command names.
+    pub fn apply(self, command: &mut Command) {
+        if let Self::Own { person, delegation } = self {
+            command
+                .env("INBOX_SECRET_KEY_FILE", "chat-bridge.key")
+                .args(["--for", person, "--authority", delegation]);
+        }
+    }
+}
+
+/// The bridge's own key `chat-bridge.key` in `dir` and its entry in `keys.json`, valid until
+/// `until` (30 days from now without one); nothing when the key file is there already.
+pub fn chat_bridge_key(dir: &Path, until: Option<&str>) {
+    if dir.join("chat-bridge.key").exists() {
+        return;
+    }
+    let public_key = key_new(
+        dir,
+        "chat-bridge.key",
+        Some((CHAT_BRIDGE_KEY_ID, CHAT_BRIDGE)),
+    );
+    let mut args = vec![
+        "keyfile",
+        "add-key",
+        "--file",
+        "keys.json",
+        "--operator-secret-key-file",
+        "operator.key",
+        "--key-id",
+        CHAT_BRIDGE_KEY_ID,
+        "--principal",
+        CHAT_BRIDGE,
+        "--public-key",
+        public_key.as_str(),
+    ];
+    if let Some(until) = until {
+        args.extend(["--valid-until", until]);
+    }
+    run(dir, &args, &[]).ok();
+}
+
+/// `inbox keyfile add-delegation` into `keys.json` of `dir`, valid until `until` (30 days from
+/// now without one).
+pub fn add_delegation(dir: &Path, id: &str, agent: &str, person: &str, until: Option<&str>) {
+    let mut args = vec![
+        "keyfile",
+        "add-delegation",
+        "--file",
+        "keys.json",
+        "--operator-secret-key-file",
+        "operator.key",
+        "--delegation-id",
+        id,
+        "--agent",
+        agent,
+        "--on-behalf-of",
+        person,
+    ];
+    if let Some(until) = until {
+        args.extend(["--valid-until", until]);
+    }
+    run(dir, &args, &[]).ok();
+}
+
+impl World {
+    /// [`World::new`] with the key file prepared for `signer` before the service starts.
+    pub fn signed(name: &str, signer: Signer) -> Self {
+        let (dir, operator_public_key) = keys_only(name);
+        signer.prepare(&dir.path);
+        let service = serve(&dir.path, &operator_public_key);
+        Self {
+            service,
+            operator_public_key,
+            dir,
+        }
+    }
+}
+
+/// The 32 bytes of standard base64 `text` (44 characters, one `=`).
+fn base64_32(text: &str) -> [u8; 32] {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = [0_u8; 32];
+    let (mut bits, mut count, mut at) = (0_u32, 0, 0);
+    for symbol in text.trim_end_matches('=').bytes() {
+        let value = ALPHABET
+            .iter()
+            .position(|known| *known == symbol)
+            .expect("a base64 symbol");
+        bits = (bits << 6) | u32::try_from(value).expect("6 bits");
+        count += 6;
+        if count >= 8 {
+            count -= 8;
+            out[at] = u8::try_from((bits >> count) & 0xFF).expect("a byte");
+            at += 1;
+        }
+        bits &= (1 << count) - 1;
+    }
+    assert_eq!(at, 32, "32 bytes");
+    out
+}
+
+/// The rows of the `Inboxes` view of the service at `url` (`http://<host>:<port>`), read with the
+/// key `<who>.key` of `dir`: a signed `GET` no command of the binary sends. Each row has
+/// `address`, `owner`, `adapter` and `state`.
+pub fn inboxes(dir: &Path, who: &str, url: &str) -> Vec<Value> {
+    use std::io::{Read, Write};
+    let secret = json::parse(
+        &fs::read_to_string(dir.join(format!("{who}.key"))).expect("the secret key file is read"),
+    )
+    .expect("the secret key file is JSON");
+    let key = inbox_verify::SecretKey::from_seed(&base64_32(&text(&secret, "seed")));
+    let timestamp = inbox_server::format_instant(inbox_verify::Instant::from_system_time(
+        std::time::SystemTime::now(),
+    ));
+    let target = "/messaging/views/inboxes";
+    let headers = inbox_server::request_headers(
+        "GET",
+        target,
+        b"",
+        &text(&secret, "key_id"),
+        &key,
+        &timestamp,
+    );
+    let host = url.trim_start_matches("http://");
+    let mut stream = std::net::TcpStream::connect(host).expect("the service is reached");
+    let mut head = format!("GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n");
+    for (name, value) in headers {
+        head.push_str(&format!("{name}: {value}\r\n"));
+    }
+    head.push_str("\r\n");
+    stream
+        .write_all(head.as_bytes())
+        .expect("the request is sent");
+    let mut answer = String::new();
+    stream
+        .read_to_string(&mut answer)
+        .expect("the answer is read");
+    let (status, body) = answer.split_once("\r\n\r\n").expect("a head and a body");
+    assert!(status.starts_with("HTTP/1.1 200"), "{answer}");
+    rows(&json::parse(body).expect("the view is JSON"))
 }
 
 /// The text member `name` of `value`.

@@ -171,9 +171,14 @@ the session did not read stays in `Pending` and `inbox pending` lists it.
 ## One wake per inbox on a host
 
 Before its first request the wake takes an exclusive `flock` of a file beside the outbox file,
-`<outbox>.wake.<16 hex digits>`: the digits are the 64-bit FNV-1a hash of the caller's address,
-so every address has a file of its own and a name of fixed length, and two principals that share
-one outbox file do not block each other. The kernel releases the lock when the process ends in
+`<outbox>.wake.<16 hex digits>`: the digits are the 64-bit FNV-1a hash of the address of the inbox
+the wake acts for, so every address has a file of its own and a name of fixed length, and two
+principals that share one outbox file do not block each other. That address is the caller's own
+(the text of its principal), or, with `--for <address>`, the address of `--for`
+(story:the-chat-bridge-runs-with-its-own-key-under-a-delegation): a wake or a bridge of an agent
+under a delegation takes the lock of the person's inbox, so it and a wake or a bridge of the
+person's own key with the same outbox file exclude each other, and a wake of the agent's own inbox
+is not blocked by it. The kernel releases the lock when the process ends in
 any way, a kill included, and a file left behind holds no lock and blocks nothing. The directory
 is made as the outbox lock makes it (mode 0700); the file is created with mode 0600, opened
 without blocking (a FIFO in its place refuses at once) and without following a symbolic link in

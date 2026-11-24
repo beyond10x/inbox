@@ -526,7 +526,7 @@ fn settlement(out: &mut String, row: &Value) {
 
 /// A member printed inside a line: its line ends shown as `\u{a}` as well, so it cannot end the
 /// line it is in. [`print_text`] then shows every other control character.
-fn inline(text: &str) -> Cow<'_, str> {
+pub fn inline(text: &str) -> Cow<'_, str> {
     escaped(text, |character| character == '\n')
 }
 

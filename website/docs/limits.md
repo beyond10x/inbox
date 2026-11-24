@@ -79,10 +79,17 @@ record out.
 - The key file is not reloaded while the service runs: a new or a removed delegation takes effect
   at the next start.
 - **Acting for another inbox (`--for`) has limits.** An agent with a live delegation for a
-  person reads, marks, answers and refuses the messages of the person's inbox with `--for`.
-  - `inbox open`, `inbox close`, `inbox wake` and `inbox bridge` do not take `--for`: each keeps
-    state on this host under the caller's own address. So no command wakes an agent for the
-    person's inbox yet, and none opens it for the person.
+  person reads, marks, answers and refuses the messages of the person's inbox with `--for`, and
+  opens, closes, wakes on and bridges it.
+  - `inbox bridge` takes `--for` only beside `--authority <delegation id>`, and the key file of
+    the service must hold the bridge's key entry and the delegation when the service starts. A
+    bridge the service refuses for either ends with one line and sends nothing more; it does not
+    wait for the key file to change.
+  - What a command under `--for` keeps on this host (the line of the opened inbox, the lock of
+    the wake, the record of the chat posts) is the person's. So with one outbox file one wake or
+    bridge runs per person, whoever's key it holds, and after a restart of the service a command
+    under `--for` opens the person's inbox again, not the caller's own; the caller's own inbox is
+    opened again by its next command without `--for`.
   - An inbox an agent opens for the person through the service (the request with
     `Inbox-On-Behalf-Of`) is the agent's: the person's own key does not close it, and the agent
     closes it only with that header while its delegation is live. After the delegation lapses

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:54:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (not ending the running connectors child on a 401 leaves every case green): round 2 (0723ed8): bridge_own_key::a_401_while_a_child_runs_ends_the_child_with_the_bridge holds a read of the stand-in on a file of the case while the 401 arrives and holds that the child is gone when the bridge has ended; the mutant is red in it (the child outlived the bridge)",
+    "review": "review-result:adversary-bridge-own-key-pass-1",
+    "outcome": "fixed"
+  }
+}

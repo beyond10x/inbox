@@ -18,10 +18,10 @@ use std::time::{Duration, Instant};
 
 use inbox::server::json::{self, Value};
 
-use support::{ALICE, Dir, LOCAL, REFUSED, USAGE, World};
+use support::{ALICE, Dir, LOCAL, REFUSED, Signer, USAGE, World};
 
 /// The address of the person's inbox the bridge serves.
-const PERSON: &str = "human:person";
+pub(crate) const PERSON: &str = "human:person";
 /// The chat channel of the binding.
 const CHANNEL: &str = "C0000000001";
 /// The allowed chat user of the binding.
@@ -49,6 +49,11 @@ fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
 /// An operator key, the keys of alice and of the person, a key file holding both, and a running
 /// service over it.
 fn world(name: &str) -> World {
+    world_signed(name, Signer::Person)
+}
+
+/// [`world`] with the key file prepared for `signer` before the service starts.
+fn world_signed(name: &str, signer: Signer) -> World {
     let dir = Dir::new(name);
     let members = [
         ("alice.key", "alice-1", ALICE),
@@ -71,6 +76,7 @@ fn world(name: &str) -> World {
     for ((_, key_id, principal), public_key) in members.iter().zip(&public_keys) {
         support::add_key(&dir.path, "operator.key", key_id, principal, public_key);
     }
+    signer.prepare(&dir.path);
     let service = support::serve(&dir.path, &operator_public_key);
     World {
         service,
@@ -276,13 +282,26 @@ struct Bridge {
 impl Bridge {
     /// `inbox bridge` of `who` with `args`, `PATH` set to `path`, and the extra variables `env`.
     fn start(world: &World, who: &str, args: &[&str], path: &str, env: &[(&str, &str)]) -> Self {
+        Self::start_signed(world, who, args, path, env, Signer::Person)
+    }
+
+    /// [`Bridge::start`] signed by `signer`.
+    fn start_signed(
+        world: &World,
+        who: &str,
+        args: &[&str],
+        path: &str,
+        env: &[(&str, &str)],
+        signer: Signer,
+    ) -> Self {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let stdout = world.dir.join(&format!("bridge-{n}.out"));
         let stderr = world.dir.join(&format!("bridge-{n}.err"));
-        let child = world
-            .client_command(who, &["bridge"])
-            .args(args)
+        let mut command = world.client_command(who, &["bridge"]);
+        command.args(args);
+        signer.apply(&mut command);
+        let child = command
             .env("PATH", path)
             .envs(env.iter().copied())
             .stdout(fs::File::create(&stdout).expect("the stdout file is made"))
@@ -300,7 +319,12 @@ impl Bridge {
 
     /// The bridge of the person with the binding of the cases.
     fn bound(world: &World, connectors: &Connectors) -> Self {
-        Self::start(world, "person", &binding(), &connectors.path(), &[])
+        Self::bound_signed(world, connectors, Signer::Person)
+    }
+
+    /// [`Bridge::bound`] signed by `signer`, with the person's outbox file.
+    fn bound_signed(world: &World, connectors: &Connectors, signer: Signer) -> Self {
+        Self::start_signed(world, "person", &binding(), &connectors.path(), &[], signer)
     }
 
     fn pid(&self) -> u32 {
@@ -508,7 +532,17 @@ fn listening(pid: u32) -> Vec<String> {
 /// bridge listens on no socket.
 #[test]
 fn a_note_a_request_and_a_decision_are_posted_in_the_order_of_pending_and_delivered() {
-    let world = world("bridge-acceptance");
+    a_note_a_request_and_a_decision_are_posted_in_the_order_of_pending_and_delivered_signed(
+        Signer::Person,
+    );
+}
+
+/// The case above, with the bridge signed by `signer`: also run with the bridge's own key in
+/// `bridge_own_key`.
+pub(crate) fn a_note_a_request_and_a_decision_are_posted_in_the_order_of_pending_and_delivered_signed(
+    signer: Signer,
+) {
+    let world = world_signed("bridge-acceptance", signer);
     world.client("person", &["open", "--adapter", "slack"]).ok();
     let connectors = Connectors::new(&world, "connectors");
     connectors.hold();
@@ -531,7 +565,7 @@ fn a_note_a_request_and_a_decision_are_posted_in_the_order_of_pending_and_delive
         );
     }
 
-    let mut bridge = Bridge::bound(&world, &connectors);
+    let mut bridge = Bridge::bound_signed(&world, &connectors, signer);
     for (at, message_id) in order.iter().enumerate() {
         let n = at + 1;
         wait_for(&format!("invocation {n}"), || connectors.calls() >= n);

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:54:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-runs-with-its-own-key-under-a-delegation",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (taking the kept envelopes of a reconnect by the inbox acted for leaves every case green): round 2 (0723ed8): bridge_own_key::the_agents_kept_envelopes_are_posted_again_once_by_its_next_command_under_for holds what the client does: both envelopes are from the agent, so its next command after a new start posts both again once, with the header when that command runs under --for, and the command after it posts none; the mutant is red in it. The outbox does not record under which --for an envelope was posted and this story does not add that: the service answers a post with the header as one without it (docs/design/service.md, the row of post), so both reach the same inbox",
+    "review": "review-result:adversary-bridge-own-key-pass-1",
+    "outcome": "fixed"
+  }
+}

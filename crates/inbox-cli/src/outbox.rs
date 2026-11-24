@@ -374,9 +374,10 @@ impl Outbox {
         Ok(contents)
     }
 
-    /// What a reconnect does for the caller `principal` (whose own inbox has the same text)
-    /// when an answer names the epoch `current`: open its inbox again when the file of the
-    /// opened inbox records it at another epoch or at none, and post its kept envelopes again
+    /// What a reconnect does for a command that acts for the inbox `inbox` (the caller's own, or
+    /// the address of `--for`) and whose caller sent its envelopes as `sender` (its principal)
+    /// when an answer names the epoch `current`: open `inbox` again when the file of the opened
+    /// inbox records it at another epoch or at none, and post the sender's kept envelopes again
     /// when one of them, unexpired at `now`, is recorded at another epoch or marked unsent (kept
     /// and not answered yet, or its post failed in transport or was refused `UnknownInbox`),
     /// except the envelope `own` the command itself just posted. An envelope the epochs file
@@ -384,16 +385,23 @@ impl Outbox {
     /// for a reason of its own (`413`), or answered `duplicate-key`. Read without the lock (each
     /// file is replaced whole, so a reader sees one version of it) and never fails nor blocks
     /// ([`Outbox::read_or_nothing`]). The steps themselves read under the lock again.
-    pub fn due(&self, principal: &str, current: &Epoch, now: Instant, own: Option<&str>) -> Due {
+    pub fn due(
+        &self,
+        inbox: &str,
+        sender: &str,
+        current: &Epoch,
+        now: Instant,
+        own: Option<&str>,
+    ) -> Due {
         let open = Records::parse(
             &self.read_or_nothing(&beside(&self.path, ".opened"), MOST_OPENED_BYTES),
         )
-        .of(principal)
+        .of(inbox)
         .filter(|record| record.epoch.as_ref() != Some(current))
         .cloned();
         let text = self.read_or_nothing(&self.path, MOST_BYTES);
         let lines: Vec<String> = text.lines().map(str::to_owned).collect();
-        let kept: Vec<Kept> = of_sender(&unexpired(&lines, now), principal)
+        let kept: Vec<Kept> = of_sender(&unexpired(&lines, now), sender)
             .into_iter()
             .filter(|kept| Some(kept.envelope.message_id.0.as_str()) != own)
             .collect();
@@ -1631,13 +1639,16 @@ mod tests {
         let now = at("2026-11-22T12:00:00Z");
         let (current, other) = (epoch(EPOCH), epoch(OTHER));
         let nothing = super::Due::default();
-        assert_eq!(outbox.due("agent:test/alice", &current, now, None), nothing);
+        assert_eq!(
+            outbox.due("agent:test/alice", "agent:test/alice", &current, now, None),
+            nothing
+        );
 
         let alice = envelope(1, "agent:test/alice", "2099-01-01T00:00:00Z");
         let carol = envelope(2, "agent:test/carol", "2099-01-01T00:00:00Z");
         std::fs::write(&path, format!("{alice}\n{carol}\n")).expect("the outbox file");
         assert_eq!(
-            outbox.due("agent:test/alice", &current, now, None),
+            outbox.due("agent:test/alice", "agent:test/alice", &current, now, None),
             nothing,
             "an envelope the epochs file says nothing of"
         );
@@ -1649,18 +1660,26 @@ mod tests {
             "a kept envelope is marked, one not kept is not"
         );
         assert!(
-            outbox.due("agent:test/alice", &current, now, None).repost,
+            outbox
+                .due("agent:test/alice", "agent:test/alice", &current, now, None)
+                .repost,
             "an envelope marked unsent"
         );
         assert_eq!(
-            outbox.due("agent:test/alice", &current, now, Some(&id(1))),
+            outbox.due(
+                "agent:test/alice",
+                "agent:test/alice",
+                &current,
+                now,
+                Some(&id(1))
+            ),
             nothing,
             "the command's own envelope"
         );
         outbox.record_epoch(&id(1), &current, now).expect("written");
         outbox.mark_unsent(&id(1), now).expect("written");
         assert_eq!(
-            outbox.due("agent:test/alice", &current, now, None),
+            outbox.due("agent:test/alice", "agent:test/alice", &current, now, None),
             nothing,
             "an envelope recorded at an epoch is not marked"
         );
@@ -1669,9 +1688,21 @@ mod tests {
             format!("{}\t{OTHER}\n{}\t{OTHER}\n", id(1), id(2)),
         )
         .expect("the epochs file");
-        assert!(outbox.due("agent:test/alice", &current, now, None).repost);
-        assert!(!outbox.due("agent:test/alice", &other, now, None).repost);
-        assert!(!outbox.due("agent:test/bob", &current, now, None).repost);
+        assert!(
+            outbox
+                .due("agent:test/alice", "agent:test/alice", &current, now, None)
+                .repost
+        );
+        assert!(
+            !outbox
+                .due("agent:test/alice", "agent:test/alice", &other, now, None)
+                .repost
+        );
+        assert!(
+            !outbox
+                .due("agent:test/bob", "agent:test/bob", &current, now, None)
+                .repost
+        );
 
         let slack = super::Opened {
             adapter: "slack".to_owned(),
@@ -1691,10 +1722,20 @@ mod tests {
                 .expect("written"),
             super::Recorded::Written
         );
-        let due = outbox.due("agent:test/alice", &current, now, None);
+        let due = outbox.due("agent:test/alice", "agent:test/alice", &current, now, None);
         assert_eq!(due.open, Some(slack.clone()));
-        assert_eq!(outbox.due("agent:test/alice", &other, now, None).open, None);
-        assert_eq!(outbox.due("agent:test/bob", &current, now, None).open, None);
+        assert_eq!(
+            outbox
+                .due("agent:test/alice", "agent:test/alice", &other, now, None)
+                .open,
+            None
+        );
+        assert_eq!(
+            outbox
+                .due("agent:test/bob", "agent:test/bob", &current, now, None)
+                .open,
+            None
+        );
         let terminal = super::Opened {
             adapter: "terminal".to_owned(),
             epoch: None,
@@ -1715,7 +1756,9 @@ mod tests {
             "from the record held: replaced"
         );
         assert_eq!(
-            outbox.due("agent:test/alice", &other, now, None).open,
+            outbox
+                .due("agent:test/alice", "agent:test/alice", &other, now, None)
+                .open,
             Some(terminal),
             "a record at no epoch is opened again"
         );

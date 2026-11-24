@@ -103,6 +103,9 @@ pub struct Given<'a> {
     pub chat_post_retention: u64,
     /// `--clock-file`, a debug build's only; the system clock where absent.
     pub clock_file: Option<&'a Path>,
+    /// `--authority`: the id of the delegation the bridge acts for the inbox of `--for` under,
+    /// named in the line of a refused key ([`refused_key`]); given with `--for` only.
+    pub authority: Option<&'a str>,
 }
 
 /// A `ChatChannelBinding`: the chat channel the caller's inbox is posted into, the one chat user
@@ -163,12 +166,54 @@ impl Binding {
 }
 
 /// Runs `inbox bridge` for `client` with the binding `given`, and answers its exit status. It
-/// ends only by a signal or a failure.
-pub fn run(client: &Client, json: bool, given: Given<'_>) -> i32 {
-    match bridge(client, given) {
+/// ends only by a signal or a failure. With `--for` and `--authority` it ends the process on the
+/// first answer `401` ([`refused_key`]).
+pub fn run(client: Client, json: bool, given: Given<'_>) -> i32 {
+    let client = match given.authority {
+        Some(authority) if client.acts_for_another() => {
+            let end = refused_key(&client, authority, json);
+            client.ending_on_refused_key(end)
+        }
+        _ => client,
+    };
+    match bridge(&client, given) {
         Ok(status) => status,
         Err(failure) => report(&failure, json),
     }
+}
+
+/// The end of a bridge with `--for` whose request the service answered `401`
+/// (story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, Open 4 A): the service gives
+/// that answer alike for a key entry and a delegation that are missing or lapsed in its key file,
+/// so the one line names both ids and both commands, and that the service reads the key file at
+/// its start. It takes the slot of the `connectors` child and holds it to the end, ends a running
+/// child with its group as the signal path does ([`wake::end_group`]), writes the failure
+/// ([`report`]) and exits 1: no post and no further request. The ids come as typed
+/// (`--authority`) and as the secret key file holds them (the key id, the principal), checked by
+/// nobody on the client: each is written with its line ends as `\u{a}` ([`output::inline`]), and
+/// the line as every line ([`output::warn`]: each other control character, each character that
+/// changes the direction of text and each one a reader cannot see as its escape), so it stays one
+/// line in the order it was written.
+fn refused_key(client: &Client, authority: &str, json: bool) -> commands::RefusedKey {
+    let key_id = output::inline(&client.caller.key_id).into_owned();
+    let principal = output::inline(&client.caller.principal).into_owned();
+    let inbox = output::inline(&client.own_inbox().0).into_owned();
+    let authority = output::inline(authority).into_owned();
+    Arc::new(move || {
+        let mut held = wake::child();
+        if let Some(running) = held.take() {
+            wake::end_group(running);
+        }
+        let failure = Failure::KeyRefused(format!(
+            "the service refused the key {key_id} acting for {inbox} under the delegation \
+             {authority} (401): its key file holds no live key entry {key_id} or no live \
+             delegation {authority} of {principal} for {inbox}; add the missing one with `inbox \
+             keyfile add-key` or `inbox keyfile add-delegation` and start the service again: it \
+             reads the key file at its start only"
+        ));
+        let status = report(&failure, json);
+        std::process::exit(status);
+    })
 }
 
 /// Writes `failure` as every command does (the document with `--json`, one line on standard
@@ -182,7 +227,7 @@ pub fn report(failure: &Failure, json: bool) -> i32 {
 }
 
 fn bridge(client: &Client, given: Given<'_>) -> Result<i32, Failure> {
-    let binding = Binding::given(given, &client.caller.principal)?;
+    let binding = Binding::given(given, &client.own_inbox().0)?;
     let program = on_path(CONNECTORS).ok_or_else(|| {
         Failure::Local(format!(
             "`{CONNECTORS}` is not on PATH: the bridge posts through it, and nothing is asked of \
@@ -289,7 +334,7 @@ impl Surface for Chat {
         // The bridge ends with 4, as after a post whose record cannot be written.
         let held = client
             .outbox
-            .chat_posts(&client.caller.principal)
+            .chat_posts(&client.own_inbox().0)
             .map_err(|failure| {
                 let message_id = output::rows(answer)
                     .first()
@@ -342,7 +387,7 @@ impl Surface for Chat {
             client
                 .outbox
                 .record_chat_post(
-                    &client.caller.principal,
+                    &client.own_inbox().0,
                     &ChatPost {
                         message_id: message_id.to_owned(),
                         channel: Some(self.binding.channel.clone()),
@@ -412,7 +457,7 @@ impl Chat {
             if let Err(failure) =
                 client
                     .outbox
-                    .change_chat_post(&client.caller.principal, entry, Some(&live))
+                    .change_chat_post(&client.own_inbox().0, entry, Some(&live))
             {
                 output::warn(&format!(
                     "{NAME}: {message_id} is live again, and the record of the chat posts could \
@@ -999,7 +1044,7 @@ impl Poll {
     /// `unknown-message` or `deadline-passed`, a read of `Thread`, or a change of the record that
     /// failed. A line at the end of a message that failed fails no poll.
     fn once(&mut self) -> Result<(), NotMade> {
-        let address = self.client.caller.principal.clone();
+        let address = self.client.own_inbox().0;
         let address = &address;
         let channel = self.binding.channel.clone();
         let channel = &channel;
@@ -1110,7 +1155,7 @@ impl Poll {
     fn change(&self, post: &ChatPost, to: Option<&ChatPost>) -> Result<(), NotMade> {
         self.client
             .outbox
-            .change_chat_post(&self.client.caller.principal, post, to)
+            .change_chat_post(&self.client.own_inbox().0, post, to)
             .map(drop)
             .map_err(|failure| {
                 NotMade::because(format!(
@@ -1229,7 +1274,7 @@ impl Poll {
     ///
     /// As [`Poll::once`] says.
     fn marked(&self, open: &[ChatPost]) -> Result<(), NotMade> {
-        let address = &self.client.caller.principal;
+        let address = &self.client.own_inbox().0;
         let channel = &self.binding.channel;
         let reacted = self.reacted(oldest(open))?;
         for post in open.iter().filter(|post| reacted.contains(&post.reference)) {
@@ -1849,6 +1894,7 @@ mod tests {
                 chat_poll_interval: 10,
                 chat_post_retention: 86_400,
                 clock_file: None,
+                authority: None,
             },
             "human:person",
         )

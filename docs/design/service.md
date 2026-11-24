@@ -102,12 +102,12 @@ address is the caller's inbox in the command: the default of `--inbox` of `pendi
 and the default `on_behalf_of` of the reply of `answer` (an `--on-behalf-of` given stays as given,
 and `--authority` is the caller's to give). A request the service refuses because no live
 delegation of the pair covers the inbox is printed as any `401`, with the same exit status 1 and
-line. `post`, `pending`, `wait`, `read`, `answer`, `refuse`, `outbox`, `collect`, `thread`,
-`replies` and `repost` take it. `open`, `close`, `wake` and `bridge` do not (exit 2, one line
-`inbox <command>: does not take --for`, nothing sent): each keeps state on this host keyed by the
-caller's own address (the record of the opened inbox, the wake lock, the record of the chat
-posts), and keying it by the address of `--for` is
-story:the-chat-bridge-runs-with-its-own-key-under-a-delegation.
+line. Every client command takes it (story:the-chat-bridge-runs-with-its-own-key-under-a-delegation
+added `open`, `close`, `wake` and `bridge`; `bridge` takes it with `--authority`,
+`docs/design/bridge.md`, "The key of the bridge"). The state a command keeps on this host for an
+inbox is keyed by the inbox it acts for, the address of `--for`: the line of the inbox in the
+record of the opened inbox, the wake lock, the record of the chat posts. The kept envelopes stay
+keyed by their sender, the key's principal.
 
 The signed `path` is the request target as the generated reader splits it: the path, then `?` and
 the query when the query is not empty. The reader keeps no empty query, so a target that ends in a
@@ -134,10 +134,10 @@ stored nothing of that envelope. When the epochs file cannot be written, `repost
 every envelope, prints its report and exits 4 with the local failure. Every client command
 reads the epoch for a reconnect too: after its own request, when the answer names an epoch
 other than one the client recorded, it opens the caller's own inbox again with the adapter of
-its last `inbox open` (not under `--for`, where the caller's own inbox is not its inbox: the next
-command without `--for` opens it; the reposts of a command under `--for` carry the header too;
-the file `<outbox>.opened` holds it with the epoch of the answer that
-said the inbox is open; `inbox close` removes it before it sends the close and puts it back when
+its last `inbox open` (under `--for` the inbox acted for, from its own line of the file, with the
+header; the caller's own inbox is opened by the next command without `--for`; the reposts of a
+command under `--for` carry the header too; the file `<outbox>.opened` holds it with the epoch
+of the answer that said the inbox is open; `inbox close` removes it before it sends the close and puts it back when
 the close fails in transport or is refused other than `UnknownInbox`), and posts the kept
 envelopes again as `repost` does, at that epoch and without asking for it, when one of them is
 recorded at another epoch or marked unsent (the epochs file holds `<message id>\tnone` for

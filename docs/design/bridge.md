@@ -2,7 +2,7 @@
 
 `inbox bridge` serves the inbox of a person through a chat channel
 (story:the-chat-bridge-posts-a-pending-message, the first story of epic:human-inbox). It is a
-long-running client of the service: it holds the caller's own `Pending` open as
+long-running client of the service: it holds the `Pending` of the inbox it acts for open as
 `inbox wake --follow` does, and for each message in `Sent` that is not due it makes one chat post
 through `connectors`, records it, then sends `MarkDelivered`. The message moves from `Sent` to
 `Delivered` with no typed command. At an interval it reads the recent posts of the channel
@@ -22,15 +22,74 @@ code is `crates/inbox-cli/src/bridge.rs`.
 ```
 inbox bridge --chat-channel <id> --allowed-chat-user <id> --chat-connector <connector[/instance]>
              [--chat-poll-interval <seconds>] [--chat-post-retention <seconds>]
+             [--for <address> --authority <delegation id>]
 ```
 
 with the client's `INBOX_URL`, `INBOX_SECRET_KEY_FILE` and outbox file, as every client command.
-It signs with the key file it is given; the key's entry names the address of the person as its
-principal (`human:<name>`). Another key reads that `Pending` too, with `--for`, while the key
-file holds a live delegation of its principal for the person (`docs/design/service.md`, "The
-caller"), but `inbox bridge` does not take `--for` in this version: its lock and its record of
-the chat posts are keyed by the caller's own address. A key of its own under a delegation is
-story:the-chat-bridge-runs-with-its-own-key-under-a-delegation.
+It signs with the key file it is given: a key of the person, whose entry names the address of the
+person as its principal (`human:<name>`), or a key of its own under a delegation of the person
+("The key of the bridge", below).
+
+## The key of the bridge
+
+story:the-chat-bridge-runs-with-its-own-key-under-a-delegation, under the operator's answer B
+(approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner). The bridge runs with a key of
+its own (principal `agent:<host>/chat-bridge`, say) and the delegation the person gave it, with the
+2 flags (Open 1 A, Open 3 A):
+
+- `--for <address>`, the client flag of every client command (`docs/design/service.md`, "The
+  request signature"): every request of the bridge carries `Inbox-On-Behalf-Of` with the address,
+  signed: both reads of each round, `MarkDelivered`, the `read` of a reaction, the reads of
+  `Pending` and `Thread` of the poll, and the `OpenInbox` of its start and of the reconnect.
+- `--authority <delegation id>`: the id of the delegation in the service's key file. The client
+  reads no key file of the service and does not check the id; the bridge names it in the line of
+  a refused key (below).
+
+The two go together: `--for` without `--authority`, and `--authority` without `--for`, are wrong
+usage (exit 2, one line, nothing sent). Without both the bridge is the one of before this story,
+byte for byte.
+
+The inbox the bridge acts for is the address of `--for`, else the caller's own address: one notion
+in the client (`Client::own_inbox` in `crates/inbox-cli/src/commands.rs`). The 3 files the bridge
+keeps beside the outbox file are keyed by it, not by the key's principal: the lock of the wake
+(`<outbox>.wake.<16 hex digits>`, `docs/design/wake.md`, "One wake per inbox on a host"), the line
+of the inbox in `<outbox>.opened` (written by the bridge's open, read by the check of the adapter
+and by the reconnect), and the record of the chat posts (`<outbox>.chat.<16 hex digits>`). So a
+bridge that ran with a key of the person and is started again with its own key for the same
+person, with the same outbox file, holds the same lock, reads the same line and the same record,
+and posts no message the record holds. The kept envelopes of the outbox file stay keyed by their
+sender, the key's principal; the bridge posts none.
+
+The inbox is opened under the header: the model sets its `owner` to the caller's principal, the
+bridge's (`OpenInbox`, outcome `opened`); that is Open 4 A of
+story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal. An inbox the person opened
+before is answered `already-open` and keeps its owner.
+
+A refused key. The service reads its key file at its start and answers every request of a key
+entry that is missing or lapsed, and every request under a delegation that is missing, lapsed or
+of another pair, with the same `401 {"refused":"unauthenticated"}`; the bridge's secret key file
+holds no `valid_until`. So the bridge cannot tell the causes apart, and a bridge started with
+`--for` that gets a `401` to any request ends at once (Open 4 A): it sends no further request,
+ends a running `connectors` child with its group as a signal does, and exits 1 with one line, the
+same for every cause:
+
+```
+inbox bridge: the service refused the key <key id> acting for <address> under the delegation <delegation id> (401): its key file holds no live key entry <key id> or no live delegation <delegation id> of <principal> for <address>; add the missing one with `inbox keyfile add-key` or `inbox keyfile add-delegation` and start the service again: it reads the key file at its start only
+```
+
+The ids in it are not checked on the client: the delegation id comes as `--authority` was typed,
+the key id and the principal as the secret key file holds them. Each is written with its line
+ends as `\u{a}`, and the line, as every line the client writes, with each other control character,
+each character that changes the direction of text and each one a reader cannot see as its escape
+(`crates/inbox-cli/src/output.rs`), so it stays one line, shown in the order it was written,
+whatever the ids hold.
+
+It posts nothing after it. The client of the rounds and the client of the poll both end the
+process on it, and a thread that starts a request after it waits for the end and sends nothing;
+a request another thread of the bridge started at the same instant is not held back. A bridge without `--for` does on a `401` what it did before: a `401` to its open or
+to a read of `Pending` ends it with 1 and the line `inbox bridge: refused: unauthenticated (401)`;
+a `401` to a `MarkDelivered` is named in one line and the round is tried again after the pause of a
+failure; a `401` in the poll fails the poll, named once per run of failures.
 
 It ends only by SIGINT, SIGTERM or a failure, with the exit statuses of `inbox wake`: 1 a refusal
 (another adapter, the inbox not open and not opened again), 2 wrong usage (a URL outside loopback,
@@ -47,7 +106,8 @@ far.
 - `ChatChannelBinding`: the address of the inbox of the person, the chat channel the messages are
   posted into (an id of the provider), the allowed chat user (an id of the provider), and the
   target `connectors invoke` is called with (a connector, or a connector and its instance). It is
-  given by the 3 flags of the command; the address is the caller's own inbox.
+  given by the 3 flags of the command; the address is the inbox the bridge acts for (`--for`,
+  else the caller's own).
 - `ChatPost`: one inbox message id, the chat provider's reference of the post that shows it (the
   `ts` of the answer), the channel it was posted in, the thread and the `expires` of the message
   as `Pending` listed them when it was posted, and the state of the bridge's handling of it.
@@ -171,8 +231,8 @@ is gone") belongs to the surface that writes rows there; the bridge writes none 
   outbox file on the host finds it held, sends nothing and exits 5 (the bridge's line:
   `inbox bridge: another wake of <address> runs on this host`).
 - The adapter is `slack` (Open 4, answered A). The bridge reads this host's record of an
-  `inbox open` of the caller (`<outbox>.opened`) at the start, before the lock and any request,
-  and in every round before its posts; when the record names another adapter it ends with 1 and
+  `inbox open` of the inbox it acts for (`<outbox>.opened`) at the start, before the lock and
+  any request, and in every round before its posts; when the record names another adapter it ends with 1 and
   one line that names `inbox open --adapter slack`. Once it holds the lock it opens the inbox with
   the adapter `slack` (`OpenInbox`, which records `slack` in `<outbox>.opened`), so after a restart
   of the service the reconnect opens it again with `slack`. `inbox wake --follow` ends with 1 on
@@ -750,3 +810,24 @@ are in `crates/inbox-cli/tests/adversary_bridge_once.rs`: a `read` of a repost l
 record the rounds cannot read at a repost, an entry of the build before after a restart of the
 service, a held line cut short at a repost, a record that cannot be written, and the bridge's
 clock file removed while it runs.
+
+The cases of the bridge's own key are in `crates/inbox-cli/tests/bridge_own_key.rs`, in the forms
+above: the key file of the service holds the key entry of `agent:demo/chat-bridge` and its
+delegation from the person (`support::Signer`). They run the acceptance cases of `bridge.rs`,
+`bridge_read.rs` and `bridge_once.rs` again with that key, and check the header of every request
+the bridge's key signed (by its `Inbox-Key-Id` at the forwarder), the lock against a second bridge,
+the person's own wake and a bridge for another person, the line of `<outbox>.opened` and the
+`Inboxes` view after a restart of the service, the record of a bridge with the person's key read
+on by one with its own, the check of the adapter, and the end on a refused key (no delegation, a
+lapsed delegation, a lapsed key entry: one request, one line, exit 1). The forwarder of
+`bridge_once.rs` replaces the answer to a named request with that `401`, and its stand-in holds a
+read of the channel on a file of the case: so a `401` reaches the poll's whole read of `Pending`
+first (one line, no request after it), and one reaches the rounds while the poll's `connectors`
+child runs (the child is gone when the bridge has ended). A delegation that lapses at the
+service's clock while the rounds hold their read ends the bridge the same way. Further cases run
+`inbox wake`, `inbox open` and `inbox close` under `--for` (with one outbox file for 2 persons, a
+close for one keeps the line of the other), and hold that the agent's kept envelopes, the one
+posted under `--for` and the one without, are posted again once each by its next command after a
+new start, with the header when that command runs under `--for`. The usage of `--for` and
+`--authority` alone is in `crates/inbox-cli/tests/acting_for.rs`; the adversary's case of a line
+break in `--authority` is in `crates/inbox-cli/tests/adversary_bridge_own_key.rs`.

@@ -18,8 +18,18 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   person; `--authority` names the delegation). Without a live delegation such a request is
   refused as one with a bad signature (`401`). Under the header a reply on behalf of anybody but
   the person is `authority-invalid`, and a `close-inbox` closes only the caller's inbox of that
-  request. `inbox open`, `inbox close`, `inbox wake` and `inbox bridge` do not take `--for` yet.
-  A request without `--for` is the one of before, byte for byte.
+  request. A request without `--for` is the one of before, byte for byte.
+- Every client command takes `--for` now: `inbox open`, `inbox close` and `inbox wake` act for
+  the person's inbox, and `inbox bridge --for <address> --authority <delegation id>` runs the
+  chat bridge with a key of its own under a delegation of the person, so the bridge no longer
+  holds the person's key. What they keep on this host is the person's: the line of the opened
+  inbox, the lock of the wake (a second bridge or wake for the person exits 5) and the record of
+  the chat posts, which a bridge with the person's key wrote before and a bridge with its own key
+  reads on. After a restart of the service the next command under `--for` opens the person's
+  inbox again. A bridge whose key entry or delegation the service refuses (`401`) ends with exit
+  status 1 and one line that names the key, the delegation and the two `inbox keyfile` commands
+  that add them, and sends nothing more. One of `--for` and `--authority` without the other is
+  exit status 2. A bridge without either runs as before.
 - `inbox bridge`, the chat bridge of a person's inbox: it posts each message of the inbox into
   the chat channel of its binding (`--chat-channel`, `--allowed-chat-user`, `--chat-connector`)
   through `connectors`, one post per message with the body in a block of literal text, records
