@@ -143,7 +143,9 @@ pub const POSTED: &str = "posted";
 pub const READ: &str = "read";
 /// The state of a `ChatPost` whose message's deadline had passed at the read mark.
 pub const DUE: &str = "due";
-/// The end of a `ChatPost` whose message the person answered or refused.
+/// The end of a `ChatPost` whose message the person answered or refused; and the state answered
+/// of a `ChatPost` whose message the service answered with the `Answer` the bridge sent for a
+/// thread reply, while the service holds the answer.
 pub const ANSWERED: &str = "answered";
 /// The end of a `ChatPost` whose decision silence decided, once its line is written.
 pub const DECIDED: &str = "decided";
@@ -162,7 +164,7 @@ pub struct ChatPost {
     pub channel: Option<String>,
     /// The chat provider's reference of the post (its `ts`).
     pub reference: String,
-    /// The read mark: [`POSTED`], [`READ`] or [`DUE`].
+    /// The read mark: [`POSTED`], [`READ`] or [`DUE`]; or the state answered, [`ANSWERED`].
     pub state: String,
     /// The thread of the message; `None` in a line of a build before it was recorded.
     pub thread: Option<String>,
@@ -176,6 +178,21 @@ pub struct ChatPost {
     /// without `expires` gone from the service: its retention counts from there. `None` for every
     /// other entry.
     pub gone_at: Option<String>,
+    /// The reference of the last thread reply of the allowed chat user the bridge handled (sent
+    /// as an answer, or answered with a line); `None` before the first.
+    pub replied: Option<String>,
+    /// The text of the line the bridge owes into the thread for the reply `replied`, from before
+    /// the line is written until it went through; `None` for no line owed.
+    pub owed: Option<String>,
+    /// The reference of the last message of the thread the bridge read and has nothing left to do
+    /// with, whoever wrote it (a reply of the allowed chat user handled, a reply of another chat
+    /// user, a line of the bridge's own): the next read of the replies starts after it. `None`
+    /// before the first.
+    pub read_to: Option<String>,
+    /// The references of the lines the bridge posted into the thread (as the post operation
+    /// answered them) that no read of the replies has passed yet: a message of the thread with
+    /// one of them is the bridge's own, never a reply. Empty for none.
+    pub own_lines: Vec<String>,
 }
 
 /// The outbox file.
@@ -1164,13 +1181,25 @@ fn chat_posts_of(text: &str) -> Result<Vec<ChatPost>, String> {
 }
 
 /// The `ChatPost` a line of the record of the chat posts holds, when it is a JSON object with the
-/// text members `message_id`, `reference` and `state`, and the text members `channel`, `thread`,
-/// `expires`, `end` and `gone_at` when the line has them (a line of a build before them has not).
+/// text members `message_id`, `reference` and `state`, the text members `channel`, `thread`,
+/// `expires`, `end`, `gone_at`, `replied`, `owed` and `read_to` when the line has them (a line of
+/// a build before them has not), and the list of texts `own_lines` when it has one (any other
+/// value of it is read as none).
 fn chat_post(line: &str) -> Option<ChatPost> {
     let value = json::parse(line).ok()?;
     let text = |name: &str| match value.member(name) {
         Some(json::Value::Text(text)) => Some(text.clone()),
         _ => None,
+    };
+    let own_lines = match value.member("own_lines") {
+        Some(json::Value::Array(references)) => references
+            .iter()
+            .filter_map(|reference| match reference {
+                json::Value::Text(reference) => Some(reference.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
     };
     Some(ChatPost {
         message_id: text("message_id")?,
@@ -1181,13 +1210,18 @@ fn chat_post(line: &str) -> Option<ChatPost> {
         expires: text("expires"),
         end: text("end"),
         gone_at: text("gone_at"),
+        replied: text("replied"),
+        owed: text("owed"),
+        read_to: text("read_to"),
+        own_lines,
     })
 }
 
 /// The line of the record of the chat posts that holds `post`:
 /// `{"message_id":…,"channel":…,"reference":…,"state":…,"thread":…,"expires":…,"end":…,
-/// "gone_at":…}`, each of `channel`, `thread`, `expires`, `end` and `gone_at` left out when the
-/// post has none.
+/// "gone_at":…,"replied":…,"owed":…,"read_to":…,"own_lines":[…]}`, each of `channel`, `thread`,
+/// `expires`, `end`, `gone_at`, `replied`, `owed` and `read_to` left out when the post has none,
+/// and `own_lines` when it is empty.
 fn chat_line(post: &ChatPost) -> String {
     let mut line = String::from("{");
     json::member(&mut line, "message_id");
@@ -1205,11 +1239,25 @@ fn chat_line(post: &ChatPost) -> String {
         ("expires", &post.expires),
         ("end", &post.end),
         ("gone_at", &post.gone_at),
+        ("replied", &post.replied),
+        ("owed", &post.owed),
+        ("read_to", &post.read_to),
     ] {
         if let Some(value) = value {
             json::member(&mut line, name);
             json::push_text(&mut line, value);
         }
+    }
+    if !post.own_lines.is_empty() {
+        json::member(&mut line, "own_lines");
+        line.push('[');
+        for (at, reference) in post.own_lines.iter().enumerate() {
+            if at > 0 {
+                line.push(',');
+            }
+            json::push_text(&mut line, reference);
+        }
+        line.push(']');
     }
     line.push('}');
     line
@@ -1349,6 +1397,10 @@ mod tests {
             expires: Some("2099-01-01T00:00:00Z".to_owned()),
             end: None,
             gone_at: None,
+            replied: None,
+            owed: None,
+            read_to: None,
+            own_lines: Vec::new(),
         };
         outbox.record_chat_post(address, &first).expect("recorded");
         let path = outbox.chat_path(address);
@@ -1376,6 +1428,48 @@ mod tests {
         assert!(outbox.change_chat_post(address, &first, None).is_err());
         assert_eq!(std::fs::read_to_string(&path).expect("the record"), text);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A line of the record keeps `read_to` and `own_lines` as written; a line without them (of a
+    /// build before them) reads as none of either.
+    #[test]
+    fn a_line_of_the_record_keeps_where_the_read_of_the_replies_is_and_the_own_lines() {
+        let post = super::ChatPost {
+            message_id: "M1".to_owned(),
+            channel: Some("C0000000001".to_owned()),
+            reference: "1700000000.000001".to_owned(),
+            state: super::READ.to_owned(),
+            thread: Some("M1".to_owned()),
+            expires: Some("2099-01-01T00:00:00Z".to_owned()),
+            end: None,
+            gone_at: None,
+            replied: Some("1700000002.000001".to_owned()),
+            owed: None,
+            read_to: Some("1700000002.000003".to_owned()),
+            own_lines: vec![
+                "1700000003.000001".to_owned(),
+                "1700000003.000002".to_owned(),
+            ],
+        };
+        let line = super::chat_line(&post);
+        assert!(
+            line.ends_with(
+                r#","read_to":"1700000002.000003","own_lines":["1700000003.000001","1700000003.000002"]}"#
+            ),
+            "{line}"
+        );
+        assert_eq!(super::chat_post(&line), Some(post.clone()));
+        let before = super::ChatPost {
+            read_to: None,
+            own_lines: Vec::new(),
+            ..post
+        };
+        let line = super::chat_line(&before);
+        assert!(
+            !line.contains("read_to") && !line.contains("own_lines"),
+            "{line}"
+        );
+        assert_eq!(super::chat_post(&line), Some(before));
     }
 
     #[test]

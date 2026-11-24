@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (dropping 408 from the answers that are tried again leaves every case green): round 2 (e815aa9): bridge_answer::an_answer_answered_408_gets_no_line_and_is_sent_again; the mutant is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

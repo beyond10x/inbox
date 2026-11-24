@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (mutant: the set of failing posts never cleared leaves every case of the story green): the same case of the pass holds it; the mutant was run again in round 3 (64d5a8e) and is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

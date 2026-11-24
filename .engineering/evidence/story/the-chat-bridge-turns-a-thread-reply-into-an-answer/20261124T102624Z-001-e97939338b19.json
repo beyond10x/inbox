@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (after a read of the replies refused rate_limited the poll reads the next thread at once, inside the wait the provider named): round 3 (64d5a8e): a read refused with a named wait ends the reads of the poll; the posts after it are read at the next poll, after the wait; a read that fails without a named wait stays as round 2 made it; adversary_bridge_answer::a_rate_limited_read_of_one_thread_fires_no_read_of_another_thread_inside_its_wait is green unchanged, and red again under the mutant without the stop",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

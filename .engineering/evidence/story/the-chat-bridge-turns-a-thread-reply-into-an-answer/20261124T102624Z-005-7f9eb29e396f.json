@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (mutant: the line of a failed read written at every poll leaves every case of the story green): the green case of the pass stays, adversary_bridge_answer::a_failed_thread_read_is_named_once_per_run_and_again_after_a_success; the mutant was run again in round 3 (64d5a8e) and is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

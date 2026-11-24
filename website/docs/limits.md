@@ -102,7 +102,8 @@ record out.
 ## The chat bridge
 
 `inbox bridge` posts each message of a person's inbox into a chat channel through `connectors`,
-marks it delivered, and marks it read when the person reacts to its post. What it does not do:
+marks it delivered, marks it read when the person reacts to its post, and sends the person's
+reply in the thread of a post as the answer. What it does not do:
 
 - **It needs `connectors` 0.77.0 or later and the operator's standing grant.** `connectors`
   refuses each post (`approval_required`) until the operator gave it one standing grant of posts
@@ -115,7 +116,40 @@ marks it delivered, and marks it read when the person reacts to its post. What i
   undelivered until the operator renews it.
 - The approval allows a number of posts per hour: over it, posts wait as undelivered until the
   hour's cap frees.
-- It reads no reply and no decision from the channel. The person answers with `inbox answer`.
+- It cannot refuse a message: a reply in the thread is an answer or nothing. The person refuses
+  with `inbox refuse`.
+- Only a reply that starts with the letter of an option answers a decision ("B", "b",
+  "B: because …"); a reply that names the option another way gets a line that lists the letters
+  and is not sent. A reply to a request is sent as it is, with the chat provider's escapes of
+  `&`, `<` and `>` in its text.
+- Only the first reply that is taken answers a message; every later reply of the person gets
+  the line "already-settled" and is not sent. A reply to a message answered with `inbox answer`,
+  decided on silence, or whose answer its sender already took, gets no line at all.
+- A reply is seen at the next poll, every 10 s by default (`--chat-poll-interval`), and each
+  poll reads the thread of every open post once. A thread is read 100 messages at a time from
+  the last message the bridge read, whoever wrote it: a reply of the person after 100 or more
+  replies of other people is seen one poll later for each full page before it.
+- A reply to a request that holds no text (a file or an image shared in the thread) is not
+  sent: it gets the line "it holds no text".
+- An answer the service took whose acknowledgement was lost, or taken just before the bridge was
+  stopped, is sent once: the next poll finds the message answered and writes no line in the
+  thread. A later reply of the person to that message gets no line either. When the
+  acknowledgement was lost, the bridge writes one line on standard error: whether the service
+  took the answer is not known, and the next poll sends it again unless the message has left
+  `Pending` by then. The bridge cannot tell an acknowledgement lost on its way back from an
+  answer lost on its way to the service.
+- The bridge tells its own lines in a thread from the person's replies by the references the
+  chat provider answered when it posted them. This is not checked against the provider. A line
+  whose reference the bridge could not keep (stopped right after posting it) could be read back
+  as the person's reply when `connectors` posts as the person's chat user.
+- A thread whose read fails (its post was removed from the channel) is named once in a line on
+  standard error and read again at every poll; the other posts are not held up. A read the chat
+  provider refuses over its rate limit, with a wait, holds the reads of the other threads until
+  the next poll, after that wait.
+- A decision tried by an older bridge and not yet posted meets `idempotency_conflict` after an
+  upgrade, since its post now lists the options; it waits as undelivered.
+- Whether `connectors` and the chat provider list the replies of a thread as the bridge expects
+  (`conversations.replies`, oldest first, the person's user id on each) is not checked.
 - Only reactions of the allowed chat user count, any reaction of theirs: a reaction of anyone
   else does nothing and is not reported.
 - A reaction is seen at the next read of the channel, every 10 s by default

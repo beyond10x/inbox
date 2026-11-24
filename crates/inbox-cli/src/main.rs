@@ -140,6 +140,14 @@ enum Command {
     /// undelivered, is marked delivered (and read, when it was read) without a second post. At
     /// the end of a message nobody answered it writes one line into the thread of its post: the
     /// option silence took, or "expired, not answered"; it never answers in the person's place.
+    /// The post of a decision lists its options by letter. A reply of the allowed chat user in the
+    /// thread of the post of a request or a decision is sent as the answer, signed with the
+    /// bridge's key (on behalf of the person of --for, under --authority): the text as the body
+    /// of a request; for a decision the letter of an option, alone or followed by a space, a
+    /// colon or a full stop and a body. A message not read yet is marked read first.
+    /// Every other reply of the allowed chat user (no option named, to a note, over 65536 bytes,
+    /// no text, refused by the service, after the answer) gets one line in the thread and sends
+    /// nothing; a reply of any other chat user, and a line of the bridge's own, does nothing.
     /// A released `connectors` refuses the posts until the operator gave it a standing approval
     /// of the post operation into the channel: the bridge passes no approval proof. With a key of
     /// its own it serves the person's inbox with --for <address> and --authority <delegation id>,
@@ -157,7 +165,8 @@ enum Command {
         #[arg(long)]
         chat_channel: Option<String>,
         /// The one chat user allowed to act on the posts: its id, such as U0000000001. Any
-        /// reaction of this user on a post marks the message read.
+        /// reaction of this user on a post marks the message read; a reply of this user in the
+        /// thread of a post answers it.
         #[arg(long)]
         allowed_chat_user: Option<String>,
         /// The target `connectors invoke` is called with: a connector, or a connector and its
@@ -165,8 +174,8 @@ enum Command {
         #[arg(long, value_name = "CONNECTOR[/INSTANCE]")]
         chat_connector: Option<String>,
         /// How often the bridge reads the recent posts of the chat channel for the reactions on
-        /// its open posts, in seconds; at least 1. A poll that fails is tried again after a pause
-        /// instead.
+        /// its open posts, and the threads of the posts of open messages for replies, in seconds;
+        /// at least 1. A poll that fails is tried again after a pause instead.
         #[arg(long, value_name = "SECONDS", default_value_t = 10,
               value_parser = clap::value_parser!(u64).range(1..))]
         chat_poll_interval: u64,

@@ -71,7 +71,9 @@ pub(crate) fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
 /// else a page without a post: the posts after `oldest`, and the one at `oldest` only with
 /// `"inclusive":true`, as the provider lists them. While `hold-read` exists a read writes its
 /// process id to `holding-read` first and waits for `release-read` (a bound of about 10 s only
-/// ends a hang).
+/// ends a hang). A read of the replies of a post (`conversations.replies`) is numbered from 1 in
+/// `thread-read.<k>` and answered with `replies-of.<ts of the post>`, else a page without a
+/// reply: the messages after `oldest`, at most `limit` of them, as the provider lists a page.
 pub(crate) struct Connectors {
     dir: PathBuf,
 }
@@ -138,6 +140,25 @@ conversations.history)
   number read
   exit 0
   ;;
+conversations.replies)
+  t=$(sed -n 's/.*"ts":"\([0-9.]*\)".*/\1/p' "$d/input.$n")
+  if [ -n "$t" ] && [ -e "$d/replies-of.$t" ]; then
+    o=$(sed -n 's/.*"oldest":"\([0-9.]*\)".*/\1/p' "$d/input.$n")
+    l=$(sed -n 's/.*"limit":\([0-9]*\).*/\1/p' "$d/input.$n")
+    awk -v o="$o" -v l="$l" '
+      /^\{{"type":"message"/ {{
+        ts = $0; sub(/.*"ts":"/, "", ts); sub(/".*/, "", ts)
+        if ((o == "" || (ts "") > (o "")) && (l == "" || c < l + 0)) {{ printf "%s%s", sep, $0; sep = ","; c++ }}
+        next
+      }}
+      {{ printf "%s", $0 }}
+      END {{ print "" }}' "$d/replies-of.$t"
+  else
+    printf '%s\n' '{{"result":{{"result":{{"status":200,"body":{{"ok":true,"messages":[],"has_more":false}}}}}}}}'
+  fi
+  number thread-read
+  exit 0
+  ;;
 esac
 exit 3
 "#
@@ -185,7 +206,7 @@ exit 3
     }
 
     /// The replies in the thread of a post so far.
-    fn replies(&self) -> usize {
+    pub(crate) fn replies(&self) -> usize {
         self.count("reply")
     }
 
@@ -194,8 +215,13 @@ exit 3
         self.count("read")
     }
 
-    /// The invocation number of `kind` `k` (`post`, `reply` or `read`).
-    fn invocation(&self, kind: &str, k: usize) -> usize {
+    /// The reads of the replies of a post so far.
+    pub(crate) fn thread_reads(&self) -> usize {
+        self.count("thread-read")
+    }
+
+    /// The invocation number of `kind` `k` (`post`, `reply`, `read` or `thread-read`).
+    pub(crate) fn invocation(&self, kind: &str, k: usize) -> usize {
         let text = fs::read_to_string(self.dir.join(format!("{kind}.{k}")))
             .expect("the number is recorded");
         text.trim()
@@ -203,7 +229,7 @@ exit 3
             .unwrap_or_else(|error| panic!("{error}: {text:?}"))
     }
 
-    fn args(&self, n: usize) -> Vec<String> {
+    pub(crate) fn args(&self, n: usize) -> Vec<String> {
         fs::read_to_string(self.dir.join(format!("args.{n}")))
             .expect("the arguments are recorded")
             .lines()
@@ -211,7 +237,7 @@ exit 3
             .collect()
     }
 
-    fn input(&self, n: usize) -> Value {
+    pub(crate) fn input(&self, n: usize) -> Value {
         let text =
             fs::read_to_string(self.dir.join(format!("input.{n}"))).expect("the input is recorded");
         json::parse(&text).unwrap_or_else(|error| panic!("{error}: {text:?}"))
@@ -241,6 +267,24 @@ pub(crate) fn history(messages: &[(&str, &str)]) -> String {
 /// What each connection of a [`Forwarder`] carried: what the client sent.
 type Carried = Arc<Mutex<Vec<Vec<u8>>>>;
 
+/// What a [`Forwarder`] does with the next request whose head starts with the armed text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Instead {
+    /// The request is kept and dropped: nothing reaches the service, and the client gets no
+    /// answer.
+    Drop,
+    /// Nothing reaches the service, and the client gets the service's own `408` (the request was
+    /// not read in time: `{"refused":"request timeout"}`).
+    TimedOut,
+    /// The request reaches the service, and its answer is read and thrown away: the client gets
+    /// no answer to a request the service took.
+    AnswerLost,
+}
+
+/// The start of the head of the next request a [`Forwarder`] does not carry as it is, and what it
+/// does instead, if one is armed.
+type Dropping = Arc<Mutex<Option<(String, Instead)>>>;
+
 /// The request line (lower-cased) whose answer a [`Forwarder`] replaces with `401`, once set
 /// ([`Forwarder::refuse`]), and the connections whose answer it replaced.
 #[derive(Default)]
@@ -254,13 +298,18 @@ type Refusing = Arc<Mutex<Refusal>>;
 /// A TCP forwarder in front of the service: each connection is carried to a new connection to the
 /// service it is put in front of ([`Forwarder::to`]), and what the client sent is kept per
 /// connection, in the order the connections came. The client sends one request per connection.
-/// The answer to a request whose line [`Forwarder::refuse`] names is replaced with the service's
-/// `401` (`{"refused":"unauthenticated"}`) when it comes, also for a request sent before.
+/// Once armed ([`Forwarder::drop_next`]), the next request whose head starts with the armed text
+/// is read whole, kept, and dropped: the connection is closed with no answer and nothing reaches
+/// the service; armed with [`Forwarder::next`], it is answered `408` instead, or carried and its
+/// answer lost ([`Instead`]). The answer to a request whose line [`Forwarder::refuse`] names is replaced with
+/// the service's `401` (`{"refused":"unauthenticated"}`) when it comes, also for a request sent
+/// before.
 pub(crate) struct Forwarder {
     address: String,
     kept: Carried,
     target: Arc<Mutex<String>>,
     stop: Arc<AtomicBool>,
+    dropping: Dropping,
     refusal: Refusing,
 }
 
@@ -271,8 +320,10 @@ impl Forwarder {
         let kept: Carried = Arc::new(Mutex::new(Vec::new()));
         let target = Arc::new(Mutex::new(url.trim_start_matches("http://").to_owned()));
         let stop = Arc::new(AtomicBool::new(false));
+        let dropping: Dropping = Arc::new(Mutex::new(None));
         let refusal: Refusing = Arc::default();
         let (record, to, stopped) = (Arc::clone(&kept), Arc::clone(&target), Arc::clone(&stop));
+        let armed = Arc::clone(&dropping);
         let refusing = Arc::clone(&refusal);
         std::thread::spawn(move || {
             let started = Instant::now();
@@ -289,7 +340,10 @@ impl Forwarder {
                 let record = Arc::clone(&record);
                 let refusing = Arc::clone(&refusing);
                 let target = to.lock().expect("the target").clone();
-                std::thread::spawn(move || carry(client, &target, &record, &refusing, at));
+                let armed = Arc::clone(&armed);
+                std::thread::spawn(move || {
+                    carry(client, &target, &record, &refusing, at, &armed);
+                });
             }
         });
         Self {
@@ -297,6 +351,7 @@ impl Forwarder {
             kept,
             target,
             stop,
+            dropping,
             refusal,
         }
     }
@@ -316,6 +371,23 @@ impl Forwarder {
         *self.target.lock().expect("the target") = url.trim_start_matches("http://").to_owned();
     }
 
+    /// Drops the next request whose head starts with `head` (such as
+    /// `POST /messaging/commands/answer `): the client gets no answer.
+    pub(crate) fn drop_next(&self, head: &str) {
+        self.next(head, Instead::Drop);
+    }
+
+    /// Does `instead` with the next request whose head starts with `head`.
+    pub(crate) fn next(&self, head: &str, instead: Instead) {
+        *self.dropping.lock().expect("the armed head") = Some((head.to_owned(), instead));
+    }
+
+    /// Whether a request armed with [`Forwarder::drop_next`] or [`Forwarder::next`] is still to
+    /// come.
+    pub(crate) fn dropping(&self) -> bool {
+        self.dropping.lock().expect("the armed head").is_some()
+    }
+
     pub(crate) fn url(&self) -> String {
         format!("http://{}", self.address)
     }
@@ -327,7 +399,7 @@ impl Forwarder {
 
     /// The numbers of the connections from `from` on that sent the command `command` for
     /// `message_id`.
-    fn commands(&self, from: usize, command: &str, message_id: &str) -> Vec<usize> {
+    pub(crate) fn commands(&self, from: usize, command: &str, message_id: &str) -> Vec<usize> {
         let head = format!("POST /messaging/commands/{command} ");
         self.sent()
             .iter()
@@ -348,14 +420,79 @@ impl Drop for Forwarder {
     }
 }
 
+/// The whole request at the start of `held`: its head and the body its `Content-Length` names;
+/// `None` while more of it is to come.
+fn whole_request(held: &[u8]) -> Option<usize> {
+    let end = held.windows(4).position(|four| four == b"\r\n\r\n")? + 4;
+    let head = String::from_utf8_lossy(&held[..end]).to_lowercase();
+    let length: usize = head
+        .lines()
+        .find_map(|line| line.strip_prefix("content-length:"))
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(0);
+    (held.len() >= end + length).then_some(end + length)
+}
+
 /// Carries one connection of a [`Forwarder`] to `target`, keeping what the client sent as
-/// connection `at`; when the first bytes of the answer come and `refusal` names the request's
-/// line, the client gets `401` instead.
-fn carry(client: TcpStream, target: &str, kept: &Carried, refusal: &Refusing, at: usize) {
-    let Ok(upstream) = TcpStream::connect(target) else {
+/// connection `at`. While a head is armed in `dropping`, the request is read whole first, and for
+/// one whose head starts with it the forwarder does what the arming says ([`Instead`]; the arming
+/// is used up). When the first bytes of the answer come and `refusal` names the request's line,
+/// the client gets `401` instead.
+fn carry(
+    client: TcpStream,
+    target: &str,
+    kept: &Carried,
+    refusal: &Refusing,
+    at: usize,
+    dropping: &Dropping,
+) {
+    let mut held = Vec::new();
+    let mut lose = false;
+    if dropping.lock().expect("the armed head").is_some() {
+        let mut buffer = [0_u8; 4096];
+        let mut reader = &client;
+        while whole_request(&held).is_none() {
+            match reader.read(&mut buffer) {
+                Ok(0) | Err(_) => break,
+                Ok(read) => held.extend_from_slice(&buffer[..read]),
+            }
+        }
+        kept.lock().expect("the record")[at].extend_from_slice(&held);
+        let mut armed = dropping.lock().expect("the armed head");
+        if let Some((head, instead)) = armed.clone()
+            && held.starts_with(head.as_bytes())
+        {
+            *armed = None;
+            match instead {
+                Instead::Drop => {
+                    let _ = client.shutdown(Shutdown::Both);
+                    return;
+                }
+                Instead::TimedOut => {
+                    let body = r#"{"refused":"request timeout"}"#;
+                    let _ = (&client).write_all(
+                        format!(
+                            "HTTP/1.1 408 Request Timeout\r\ncontent-type: application/json\r\n\
+                             content-length: {}\r\nconnection: close\r\n\r\n{body}",
+                            body.len()
+                        )
+                        .as_bytes(),
+                    );
+                    let _ = client.shutdown(Shutdown::Both);
+                    return;
+                }
+                Instead::AnswerLost => lose = true,
+            }
+        }
+    }
+    let Ok(mut upstream) = TcpStream::connect(target) else {
         let _ = client.shutdown(Shutdown::Both);
         return;
     };
+    if upstream.write_all(&held).is_err() {
+        let _ = client.shutdown(Shutdown::Both);
+        return;
+    }
     let (Ok(mut from_client), Ok(mut to_upstream)) = (client.try_clone(), upstream.try_clone())
     else {
         return;
@@ -393,7 +530,10 @@ fn carry(client: TcpStream, target: &str, kept: &Carried, refusal: &Refusing, at
             }
             named
         };
-        if refused {
+        if lose {
+            // The service took the request; its answer is read to its end and goes nowhere.
+            let _ = std::io::copy(&mut from_upstream, &mut std::io::sink());
+        } else if refused {
             let body = r#"{"refused":"unauthenticated"}"#;
             let _ = to_client.write_all(
                 format!(
@@ -877,7 +1017,7 @@ pub(crate) fn a_message_posted_again_after_a_restart_is_marked_and_never_posted_
 
 /// The text a reply of the stand-in's reply `q` carried, its idempotency key, and the message id
 /// whose chat post's reference is its `thread_ts`.
-fn reply(world: &World, connectors: &Connectors, q: usize) -> (String, String, String) {
+pub(crate) fn reply(world: &World, connectors: &Connectors, q: usize) -> (String, String, String) {
     let n = connectors.invocation("reply", q);
     let args = connectors.args(n);
     let input = connectors.input(n);

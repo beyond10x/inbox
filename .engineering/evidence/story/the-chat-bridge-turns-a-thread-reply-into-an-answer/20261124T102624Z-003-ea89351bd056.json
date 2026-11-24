@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (mutant: own_lines never pruned leaves every case of the story green): the green case of the pass stays in the story's tests, adversary_bridge_answer::an_own_line_a_read_has_passed_is_never_read_again_as_the_persons_reply; the mutant was run again in round 3 (64d5a8e) and is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

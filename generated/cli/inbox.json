@@ -702,7 +702,7 @@
       "path": [
         "bridge"
       ],
-      "about": "The chat bridge, for the inbox of a person: post each message of the caller's own inbox into the chat channel of the binding through `connectors`, one post per message, then mark it delivered, until SIGINT or SIGTERM. It opens the inbox with the adapter slack and takes the lock of `inbox wake`; an inbox this host opened with another adapter ends it with 1. A post that fails is tried again after a pause, and the message stays undelivered until it succeeds. While one of its posts is open it reads the recent posts of the channel through `connectors` at an interval, and a reaction of the allowed chat user on a post marks its message read (a note is handled and removed); a reaction of any other chat user does nothing. A read of the channel and a post never run at once. A message is posted once per message id: one that comes back after a restart of the service, or that a new bridge finds undelivered, is marked delivered (and read, when it was read) without a second post. At the end of a message nobody answered it writes one line into the thread of its post: the option silence took, or \"expired, not answered\"; it never answers in the person's place. A released `connectors` refuses the posts until the operator gave it a standing approval of the post operation into the channel: the bridge passes no approval proof. With a key of its own it serves the person's inbox with --for <address> and --authority <delegation id>, which go together; a request then answered 401 (the key entry or the delegation is missing from the service's key file or lapsed) ends it with 1 and one line that names both ids",
+      "about": "The chat bridge, for the inbox of a person: post each message of the caller's own inbox into the chat channel of the binding through `connectors`, one post per message, then mark it delivered, until SIGINT or SIGTERM. It opens the inbox with the adapter slack and takes the lock of `inbox wake`; an inbox this host opened with another adapter ends it with 1. A post that fails is tried again after a pause, and the message stays undelivered until it succeeds. While one of its posts is open it reads the recent posts of the channel through `connectors` at an interval, and a reaction of the allowed chat user on a post marks its message read (a note is handled and removed); a reaction of any other chat user does nothing. A read of the channel and a post never run at once. A message is posted once per message id: one that comes back after a restart of the service, or that a new bridge finds undelivered, is marked delivered (and read, when it was read) without a second post. At the end of a message nobody answered it writes one line into the thread of its post: the option silence took, or \"expired, not answered\"; it never answers in the person's place. The post of a decision lists its options by letter. A reply of the allowed chat user in the thread of the post of a request or a decision is sent as the answer, signed with the bridge's key (on behalf of the person of --for, under --authority): the text as the body of a request; for a decision the letter of an option, alone or followed by a space, a colon or a full stop and a body. A message not read yet is marked read first. Every other reply of the allowed chat user (no option named, to a note, over 65536 bytes, no text, refused by the service, after the answer) gets one line in the thread and sends nothing; a reply of any other chat user, and a line of the bridge's own, does nothing. A released `connectors` refuses the posts until the operator gave it a standing approval of the post operation into the channel: the bridge passes no approval proof. With a key of its own it serves the person's inbox with --for <address> and --authority <delegation id>, which go together; a request then answered 401 (the key entry or the delegation is missing from the service's key file or lapsed) ends it with 1 and one line that names both ids",
       "arguments": [
         {
           "name": "url",
@@ -762,7 +762,7 @@
           "kind": "option",
           "long": "allowed-chat-user",
           "valueName": "ALLOWED_CHAT_USER",
-          "help": "The one chat user allowed to act on the posts: its id, such as U0000000001. Any reaction of this user on a post marks the message read"
+          "help": "The one chat user allowed to act on the posts: its id, such as U0000000001. Any reaction of this user on a post marks the message read; a reply of this user in the thread of a post answers it"
         },
         {
           "name": "chat_connector",
@@ -777,7 +777,7 @@
           "long": "chat-poll-interval",
           "valueName": "SECONDS",
           "default": "10",
-          "help": "How often the bridge reads the recent posts of the chat channel for the reactions on its open posts, in seconds; at least 1. A poll that fails is tried again after a pause instead"
+          "help": "How often the bridge reads the recent posts of the chat channel for the reactions on its open posts, and the threads of the posts of open messages for replies, in seconds; at least 1. A poll that fails is tried again after a pause instead"
         },
         {
           "name": "chat_post_retention",

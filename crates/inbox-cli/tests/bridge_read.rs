@@ -63,7 +63,8 @@ fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
 /// `err.<r>` on its standard error, and the exit status `exit.<r>`, else 0. While `hold-post`
 /// (`hold-read`) exists a post (a read) writes `holding-post.<p>` (`holding-read.<r>`) and waits
 /// for `release-post.<p>` (`release-read.<r>`). An invocation that starts while another one runs
-/// writes `overlap`.
+/// writes `overlap`. A read of the replies of a post (`conversations.replies`) is answered with
+/// none.
 struct Connectors {
     dir: PathBuf,
 }
@@ -136,6 +137,10 @@ conversations.history)
   fi
   if [ -e "$d/err.$r" ]; then cat "$d/err.$r" >&2; fi
   if [ -e "$d/exit.$r" ]; then finish "$(cat "$d/exit.$r")"; fi
+  finish 0
+  ;;
+conversations.replies)
+  printf '%s\n' '{{"result":{{"result":{{"status":200,"body":{{"ok":true,"messages":[]}}}}}}}}'
   finish 0
   ;;
 esac

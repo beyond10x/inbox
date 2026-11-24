@@ -88,8 +88,9 @@ In this order. None has a date.
 2. **An inbox for a person.** A bridge posts a person's messages into a chat channel and turns
    the person's reply into a signed answer. `inbox bridge` posts each message, marks it
    delivered, marks it read on the person's reaction, posts it once even after a restart of the
-   service, and writes one reply at the end of a message nobody answered, with a key of its own
-   under a delegation of the person. It needs `connectors`
+   service, sends the person's reply in the thread of a request or a decision as the answer, and
+   writes one reply at the end of a message nobody answered, with a key of its own under a
+   delegation of the person. It needs `connectors`
    0.77.0 or later and the operator's standing grant for the channel, and has not run on a real
    channel yet.
 3. **A persistent backend.** A restart of the service loses nothing.

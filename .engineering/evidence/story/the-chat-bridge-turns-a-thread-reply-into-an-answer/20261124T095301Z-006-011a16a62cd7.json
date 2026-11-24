@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (a repost of an answered entry that is not made read again leaves every case green): round 2 (e815aa9): bridge_answer::a_repost_of_an_answered_message_takes_a_later_reply_again; the mutant is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -53,7 +53,7 @@ fn holds_within(mut fact: impl FnMut() -> bool) -> bool {
 /// (the provider leaves out the post at `oldest`); else `history`; else a page without a post.
 /// `err.<r>` goes to standard error and `exit.<r>` is the exit status. While `hold-read` exists a
 /// read writes `holding-read.<r>` and waits for `release-read.<r>`. An invocation that starts
-/// while another runs writes `overlap`.
+/// while another runs writes `overlap`. A read of the replies of a post is answered with none.
 struct Connectors {
     dir: PathBuf,
 }
@@ -110,6 +110,10 @@ conversations.history)
   fi
   if [ -e "$d/err.$r" ]; then cat "$d/err.$r" >&2; fi
   if [ -e "$d/exit.$r" ]; then finish "$(cat "$d/exit.$r")"; fi
+  finish 0
+  ;;
+conversations.replies)
+  printf '%s\n' '{{"result":{{"result":{{"status":200,"body":{{"ok":true,"messages":[]}}}}}}}}'
   finish 0
   ;;
 esac

@@ -41,7 +41,8 @@ fn wait_for(what: &str, mut fact: impl FnMut() -> bool) {
 }
 
 /// A stand-in `connectors` that numbers each post in `post.<p>` and answers it with the reference
-/// `1700000000.<p>`, and answers a read of the channel with the file `history` or an empty page.
+/// `1700000000.<p>`, and answers a read of the channel with the file `history` or an empty page,
+/// and a read of the replies of a post with none.
 struct Connectors {
     dir: PathBuf,
 }
@@ -67,6 +68,10 @@ conversations.history)
   if [ -e "$d/history" ]; then cat "$d/history"; else
   printf '%s\n' '{{"result":{{"result":{{"status":200,"body":{{"ok":true,"messages":[],"has_more":false}}}}}}}}'
   fi
+  exit 0
+  ;;
+conversations.replies)
+  printf '%s\n' '{{"result":{{"result":{{"status":200,"body":{{"ok":true,"messages":[]}}}}}}}}'
   exit 0
   ;;
 esac

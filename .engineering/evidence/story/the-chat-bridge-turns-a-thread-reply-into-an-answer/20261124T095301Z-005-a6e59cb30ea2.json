@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (a channel filter of the answers that is always true leaves every case green): round 2 (e815aa9): the filter the adversary changed could not be reached, since the poll had dropped the entries of other channels before; both steps now use one filter, and bridge_answer::an_entry_of_another_channel_is_not_read is red under its mutant",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

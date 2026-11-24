@@ -73,6 +73,29 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   step fails closed: also on an entry under `ess/` that git is told not to look at
   (assume-unchanged, skip-worktree), and on an exit 0 of `ess` with more breaking and unknown
   changes than it acknowledged.
+- `inbox bridge` turns a thread reply of the allowed chat user into an answer: at each poll it
+  reads the replies in the thread of the post of each open request, decision and note through
+  `connectors` (`conversations.replies`, one read per post), and sends the first reply that
+  answers as `Answer`, signed with its key: with `--for` and `--authority` on behalf of the
+  person under the delegation, else as the person. A request takes the text as its body; a
+  decision takes a reply that is the letter of an option, alone or followed by a space, a colon
+  or a full stop and a body (with no body, the option's text). A message not read yet is marked
+  read first. The post of a decision now lists its options by letter, the recommended one, the
+  option silence takes and its deadline, and how to answer. A reply that names no option, a
+  reply to a note, a reply over 65536 bytes, a reply after the one taken and a reply the service
+  refuses send nothing and get one line in the thread under the key
+  `inbox-<message id>-reply-<reply>`, and so does a reply to a request that holds no text (a
+  file or an image); a reply of another chat user does nothing. The record of the chat posts
+  keeps the last reply handled and the last message of the thread read, whoever wrote it, so a
+  new bridge sends no answer and no line twice and a page full of other people's replies does
+  not hide the person's next one. The bridge keeps the references of its own lines in the
+  thread and never takes one for the person's reply, also when `connectors` posts as the allowed
+  chat user. A thread whose read fails is named once and holds up no other post, but a read
+  refused with a wait of the provider's rate limit holds the other threads until the next poll,
+  after that wait. An `Answer` that got no answer is sent again after a pause, unless the
+  service took it: then the message ends answered with no line in the thread; standard error
+  gets one line that says whether the service took it is not known. No call of `connectors` was
+  run.
 
 ## [0.6.1] - 2026-11-23
 

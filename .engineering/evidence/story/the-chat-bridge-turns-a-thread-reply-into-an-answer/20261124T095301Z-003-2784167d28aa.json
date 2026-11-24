@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (2 sentences said a lost acknowledgement leads to a second Answer and a false line; measured: 1 Answer, no line, the entry ends answered at the next poll): round 2 (e815aa9): website/docs/limits.md and docs/design/bridge.md say what was measured, and the adversary's fourth case is taken over as bridge_answer::an_answer_taken_whose_answer_was_lost_ends_the_entry_with_no_line (the end answered, 1 Answer, 0 lines, the collected body)",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

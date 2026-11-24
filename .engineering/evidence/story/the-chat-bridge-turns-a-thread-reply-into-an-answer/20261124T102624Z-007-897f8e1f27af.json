@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 8 (mutant: the wait a rate_limited read of the replies named is dropped, no case): round 3 (64d5a8e): bridge_answer::a_read_of_the_replies_refused_with_a_wait_holds_the_next_call_for_that_wait (a wait of 2 s named, the next call of the stand-in not before 2 s after the refusal); the mutant is red in it",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

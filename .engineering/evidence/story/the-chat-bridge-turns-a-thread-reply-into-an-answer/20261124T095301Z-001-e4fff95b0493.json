@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (after a full page of replies of other chat users the same page is read for ever and the person's reply behind it is never seen; 2 sentences said otherwise): round 2 (e815aa9): the record of a post keeps read_to, the reference of the last message of the thread read, whoever wrote it, and every read starts after it; a reply of another chat user still gets no line and no request; the adversary's case is green unchanged, and bridge_answer::a_reply_after_a_full_page_of_other_users_is_read_at_the_next_poll holds the fix (red under the mutant that never moves read_to); the 2 sentences of website/docs/limits.md and docs/design/bridge.md say what holds",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

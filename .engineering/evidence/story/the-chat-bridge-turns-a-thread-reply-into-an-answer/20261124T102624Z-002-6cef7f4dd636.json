@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:26:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the case of the full page reads read_to from the record before the bridge wrote it and was red once): round 3 (64d5a8e): the case waits for the state answered of the record before its unchanged assertion; no other case of rounds 1 and 2 asserts on the record right after a wait on the service",
+    "review": "review-result:adversary-bridge-answer-pass-2",
+    "outcome": "fixed"
+  }
+}

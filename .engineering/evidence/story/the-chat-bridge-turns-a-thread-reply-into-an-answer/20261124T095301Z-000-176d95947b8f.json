@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:53:01Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-turns-a-thread-reply-into-an-answer",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (one post whose thread read fails fails the whole poll at every poll, so no reply in any other thread is answered): round 2 (e815aa9): a failed read of the replies of one post is that post's alone; the posts after it are read and handled in the same poll, the poll does not count as failed, and one line per run of failures of that post is written; adversary_bridge_answer::a_thread_whose_read_fails_stops_no_answer_in_another_thread is green unchanged, and red again under the mutant that fails the poll",
+    "review": "review-result:adversary-bridge-answer-pass-1",
+    "outcome": "fixed"
+  }
+}

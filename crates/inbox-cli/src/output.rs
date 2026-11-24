@@ -215,7 +215,9 @@ pub const MOST_CHAT_BODY_BYTES: usize = 3000;
 /// (so a mention of the provider, `<!channel>`, arrives as text). A body whose text would be over
 /// [`MOST_CHAT_BODY_BYTES`] in the block is cut before the first character whose text would pass
 /// it, so no escape is cut in half, and a line after the block says so and names the message id
-/// and `inbox pending`, which shows it whole.
+/// and `inbox pending`, which shows it whole. The post of a decision has, after the block, one
+/// line per option (`<letter>: <text>`, the recommended one marked), the option silence takes at
+/// its expiry, and how to answer: a reply in the thread with the letter of an option.
 pub fn chat_post(row: &Value) -> String {
     let field = |name: &str| text(row, name);
     let mut out = String::new();
@@ -256,12 +258,77 @@ pub fn chat_post(row: &Value) -> String {
         at += run;
     }
     out.push_str("\n```");
+    if field("kind") == "decision" {
+        chat_options(&mut out, row);
+    }
     if cut {
         out.push_str("\ncut at ");
         out.push_str(&MOST_CHAT_BODY_BYTES.to_string());
         out.push_str(" bytes: inbox pending shows the whole message ");
         chat_head(&mut out, field("message_id"));
     }
+    out
+}
+
+/// The lines of the chat post of a decision after its body (Open 1 A of
+/// story:the-chat-bridge-turns-a-thread-reply-into-an-answer): one per option `<letter>: <text>`,
+/// the recommended one followed by ` (recommended)`; the option silence takes and `expires`; and
+/// how to answer. Each value as in the head line ([`chat_head`]).
+fn chat_options(out: &mut String, row: &Value) {
+    let decision = row.member("decision");
+    let recommended = decision.map_or("", |decision| text(decision, "recommended_option"));
+    if let Some(Value::Array(options)) = decision.and_then(|decision| decision.member("options")) {
+        for option in options {
+            out.push('\n');
+            chat_head(out, text(option, "letter"));
+            out.push_str(": ");
+            chat_head(out, text(option, "text"));
+            if !recommended.is_empty() && text(option, "letter") == recommended {
+                out.push_str(" (recommended)");
+            }
+        }
+    }
+    match text(row, "default_on_silence") {
+        "" => out.push_str("\nsilence takes no option: it expires at "),
+        letter => {
+            out.push_str("\nsilence takes option ");
+            chat_head(out, letter);
+            out.push_str(" at ");
+        }
+    }
+    chat_head(out, text(row, "expires"));
+    out.push_str("\nreply in this thread with the letter of an option");
+}
+
+/// The line `inbox bridge` writes into the thread of a chat post for a reply too long to send.
+pub const CHAT_TOO_LONG: &str = "the reply was not taken: it is longer than 65536 bytes";
+
+/// The line `inbox bridge` writes into the thread of the chat post of a request for a reply whose
+/// text is empty or only white space (a file or an image shared in the thread).
+pub const CHAT_NO_TEXT: &str = "the reply was not taken: it holds no text";
+
+/// The line `inbox bridge` writes into the thread of the chat post of a note for a reply.
+pub const CHAT_NOTE: &str = "the reply was not taken: a note takes no answer";
+
+/// The line `inbox bridge` writes into the thread of the chat post of a decision for a reply that
+/// names none of its options: the letters, each as in the head line of a post.
+pub fn chat_no_option(letters: &[&str]) -> String {
+    let mut out =
+        String::from("the reply was not taken: it names no option; reply with one of the letters ");
+    for (at, letter) in letters.iter().enumerate() {
+        if at > 0 {
+            out.push_str(", ");
+        }
+        chat_head(&mut out, letter);
+    }
+    out
+}
+
+/// The line `inbox bridge` writes into the thread of a chat post for a reply whose `Answer` the
+/// service refused: the refusal, as in the head line of a post.
+pub fn chat_refused(refusal: &str) -> String {
+    let mut out = String::from("the reply was not taken: the service refused it: ");
+    chat_head(&mut out, refusal);
     out
 }
 
@@ -647,6 +714,37 @@ mod tests {
                  01J00000000000000000000001"
             );
         }
+    }
+
+    /// The post of a decision shows each option with its letter and text, the recommended one,
+    /// the option silence takes with `expires` (or none), and how to answer; a line end, a
+    /// backtick, a mention and a control character in an option text are escapes in its line.
+    #[test]
+    fn the_post_of_a_decision_shows_its_options_silence_and_how_to_answer() {
+        let decision = |extra: &str| {
+            json::parse(&format!(
+                r#"{{"message_id":"01J00000000000000000000001","kind":"decision","from":"agent:test/a","on_behalf_of":"agent:test/a","expires":"2099-01-01T00:00:00Z","body":"Ship?","decision":{{"options":[{{"letter":"A","text":"Ship\n<!here> `now`\u0007"}},{{"letter":"B","text":"Hold"}}]{extra}}}"#
+            ))
+            .unwrap()
+        };
+        let post = chat_post(&decision(
+            r#","recommended_option":"B"},"default_on_silence":"A""#,
+        ));
+        let (_, after) = block(&post);
+        assert_eq!(
+            after,
+            "\nA: Ship\\u{a}&lt;!here&gt; \\u{60}now\\u{60}\\u{7}\nB: Hold (recommended)\n\
+             silence takes option A at 2099-01-01T00:00:00Z\n\
+             reply in this thread with the letter of an option"
+        );
+        let post = chat_post(&decision("}"));
+        let (_, after) = block(&post);
+        assert_eq!(
+            after,
+            "\nA: Ship\\u{a}&lt;!here&gt; \\u{60}now\\u{60}\\u{7}\nB: Hold\n\
+             silence takes no option: it expires at 2099-01-01T00:00:00Z\n\
+             reply in this thread with the letter of an option"
+        );
     }
 
     /// A forged head line, as a sender would put it after a line end to start a message of
