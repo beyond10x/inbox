@@ -992,32 +992,117 @@ fn a_helper_of_a_post_that_ended_by_itself_is_not_ended_by_the_bridge() {
     wait_for("the released helper ends", || !alive(helper));
 }
 
-/// A bridge started while the service does not answer (a closed loopback port) says so in the
-/// line of the wake, under its own name, and keeps trying instead of ending at the open of its
-/// start.
+/// A listener on a loopback port the kernel picks: it accepts each connection, reads what arrives
+/// of the request, and closes it without an answer, which a client reads as a failed transport
+/// and tries again. It counts the connections. Its thread stops once it is dropped and the read
+/// in progress ended ([`HANG`] bounds a read), takes no connection after three times [`HANG`],
+/// and does not hold the end of the test process.
+struct Unanswered {
+    url: String,
+    connections: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Unanswered {
+    fn start() -> Self {
+        use std::sync::atomic::Ordering;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("the listener binds");
+        let url = format!("http://{}", listener.local_addr().expect("an address"));
+        let connections = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (counted, stopped) = (connections.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            while !stopped.load(Ordering::SeqCst) && started.elapsed() < 3 * HANG {
+                let Some(mut stream) = support::accept_within(&listener, Duration::from_millis(20))
+                else {
+                    continue;
+                };
+                counted.fetch_add(1, Ordering::SeqCst);
+                read_request(&mut stream);
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            }
+        });
+        Self {
+            url,
+            connections,
+            stop,
+        }
+    }
+
+    fn connections(&self) -> usize {
+        self.connections.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Drop for Unanswered {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// Reads one request from `stream`: its head, and its body as `Content-Length` says, or what
+/// arrives before the client stops sending ([`HANG`] only ends a hang).
+fn read_request(stream: &mut std::net::TcpStream) {
+    use std::io::Read;
+    let _ = stream.set_read_timeout(Some(HANG));
+    let mut received = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    let mut expected = None;
+    while !expected.is_some_and(|total| received.len() >= total) {
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => received.extend_from_slice(&buffer[..read]),
+        }
+        if expected.is_none()
+            && let Some(end) = received.windows(4).position(|window| window == b"\r\n\r\n")
+        {
+            let head = String::from_utf8_lossy(&received[..end]).to_lowercase();
+            let length: usize = head
+                .lines()
+                .find_map(|line| line.strip_prefix("content-length:"))
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(0);
+            expected = Some(end + 4 + length);
+        }
+    }
+}
+
+/// A bridge started while the service does not answer (a listener that closes each connection
+/// without an answer) says so in the line of the wake, under its own name, and keeps trying
+/// instead of ending at the open of its start. The line is said once for the run of failures: the
+/// case counts the lines once the listener took the 3rd connection. The line of a try is written
+/// after that try failed and before the pause that follows it, so by then the failures of 2 tries
+/// were handled.
 #[test]
 fn a_bridge_started_before_the_service_answers_says_so_and_keeps_trying() {
     let world = world("bridge-early");
     let connectors = Connectors::new(&world, "connectors");
-    let closed_port = support::ClosedPort::new();
-    let url = closed_port.url();
+    let unanswered = Unanswered::start();
     let mut bridge = Bridge::start(
         &world,
         "person",
         &binding(),
         &connectors.path(),
-        &[("INBOX_URL", &url)],
+        &[("INBOX_URL", &unanswered.url)],
     );
-    wait_for("the line of a service that does not answer", || {
-        bridge
-            .stderr()
-            .contains("trying again until the service answers")
+    wait_for("the 3rd try of the bridge, or its end", || {
+        unanswered.connections() >= 3 || !bridge.running()
     });
     assert!(bridge.running(), "{}", bridge.stderr());
     let stderr = bridge.stderr();
     let lines: Vec<&str> = stderr.lines().collect();
-    assert_eq!(lines.len(), 1, "one line for the run of failures: {stderr}");
+    assert_eq!(
+        lines.len(),
+        1,
+        "one line for the run of failures of {} tries: {stderr}",
+        unanswered.connections()
+    );
     assert!(lines[0].starts_with("inbox bridge: "), "{stderr}");
+    assert!(
+        lines[0].ends_with("trying again until the service answers"),
+        "{stderr}"
+    );
     assert_eq!(connectors.calls(), 0);
 }
 

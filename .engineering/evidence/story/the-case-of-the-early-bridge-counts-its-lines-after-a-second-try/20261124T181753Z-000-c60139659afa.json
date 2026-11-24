@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T18:17:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-case-of-the-early-bridge-counts-its-lines-after-a-second-try",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T18:16:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-case-of-the-early-bridge-counts-its-lines-after-a-second-try",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "note (the doc comment of the listener said its thread stops after three times HANG at most): the comment says that the thread stops once it is dropped and the read in progress ended, and takes no connection after three times HANG",
+    "review": "review-result:adversary-early-bridge-case-pass-1",
+    "outcome": "fixed"
+  }
+}
