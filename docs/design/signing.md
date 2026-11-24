@@ -22,7 +22,7 @@ UTF-8. The context string fixes the kind:
 |---|---|---|
 | envelope | `inbox.v1.envelope` + LF | the envelope without its member `signature` |
 | entry | `inbox.v1.entry` + LF | the key entry or delegation entry without its member `operator_signature` |
-| request | `inbox.v1.request` + LF | the five request members below |
+| request | `inbox.v1.request` + LF | the five request members below, and a sixth when the request acts for an inbox |
 
 No context string is a prefix of another, and each ends in a byte that JCS never writes first (a
 JCS object starts with `{`), so a signature of one kind never verifies as another.
@@ -70,18 +70,38 @@ the other.
 
 ### Request
 
-The object has exactly these five members, all strings:
+The object has these members, all strings: the five of every request, and `on_behalf_of` only
+in a request that acts for an inbox.
 
 | Member | Value |
 |---|---|
 | `body_sha256` | SHA-256 of the exact body bytes as sent, standard base64 with padding (44 characters). An empty body hashes the empty string |
 | `key_id` | the key id the request names |
 | `method` | the HTTP method as sent, case-sensitive (`POST`, not `post`) |
+| `on_behalf_of` | only in a request that acts for an inbox: the address of that inbox, as text |
 | `path` | the request target in origin form as received: the path, then `?` and the query when there is one. Not decoded, not normalized |
 | `timestamp` | the RFC 3339 instant the caller sends, as text |
 
 How these travel (header names) is story:http-service's to fix; the signed bytes do not depend on
-it. JCS writes the members in the order of the table.
+it (`docs/design/service.md`, "The request signature": `on_behalf_of` travels in
+`Inbox-On-Behalf-Of`). JCS writes the members in the order of the table, so `on_behalf_of` sits
+between `method` and `path`.
+
+A request that acts for no inbox has no member `on_behalf_of`, absent and not empty: its object
+has the five members and its signed bytes are byte for byte those of a request before the member
+existed, so every signature a client of an earlier version makes still verifies. A request that
+acts for an inbox has the six. An absent member and an empty one are two different requests, and
+an empty one is refused (below): it is never read as absent.
+
+The value of `on_behalf_of` is the text of an `Address` (`ess/domains/messaging.yaml`, a newtype
+of `String` with no invariant): non-empty UTF-8, without a leading or trailing space or tab. The
+service holds no other grammar for an address, and needs none here: the value counts only when a
+live delegation names a principal with the same text, byte for byte (below), so a text that names
+no principal of the key file is refused by that check. Version 1 checks no form such as
+`agent:<host>/<session-name>`.
+
+`inbox_verify::request_bytes_for` writes the object of five or six members (`request_bytes` is
+it with no member `on_behalf_of`), and `sign_request_for` signs it.
 
 ## Encoding on the wire
 
@@ -121,8 +141,14 @@ In this order, the first failure refuses:
 
 ### A delegation (`authority-invalid`)
 
-Checked when an envelope names `authority`. The chain length is one: the delegation itself, signed
-by the operator key, and nothing it points to.
+A delegation entry lets its `agent` do two things for its `on_behalf_of` until `valid_until`:
+speak for that principal in every envelope it sends (`authority`), and act as the owner of the
+inbox whose address has the text of that principal, in every request that names that inbox
+(`on_behalf_of` of the request, below; decision 4 of `docs/design/inbox.md`). One entry grants
+both; no entry grants one without the other. The chain length is one: the delegation itself,
+signed by the operator key, and nothing it points to.
+
+Checked when an envelope names `authority`:
 
 1. The id names a delegation entry that the pinned operator key signed (unknown otherwise).
 2. Its `agent` is the envelope's `from` and its `on_behalf_of` is the envelope's `on_behalf_of`
@@ -132,13 +158,62 @@ by the operator key, and nothing it points to.
 Whether an envelope that speaks for another principal names a delegation at all is the
 specification's guard `no-authority`, decided before the verifier is asked.
 
+Checked when a request names an inbox (step 4 of a request, below), by the pair and not by an id:
+the request names no delegation. The signer acts for the inbox when the verifier holds at least
+one delegation entry whose `agent` is the principal of the request's key, whose `on_behalf_of` has
+the same text as the request's `on_behalf_of`, and which is not lapsed at the instant the request
+is authenticated at (`valid_until` exclusive, "Instants"). Which entry counts when several name the
+pair: any one live entry is enough, and a lapsed entry beside it refuses nothing; the request
+admits no particular entry, so the `authority` of an envelope in its body is checked by itself
+(above), against any held entry of its own pair. A reply in a request that names an inbox speaks
+for the principal of that inbox: one whose `on_behalf_of` is any other principal, the agent
+included, is refused `authority-invalid` before its `authority` is looked up, a rule of the
+service and not of the verifier (`docs/design/service.md`, "The caller"). Version 1 has no scope
+narrower than the pair ("Left out of version 1"), so an agent with a live delegation answers any
+message of the person's inbox in the person's place, one it sent itself included, and the record
+says the person answered; a sender that must not answer its own question holds no delegation of
+the person it asks. An entry the verifier ignores (not signed by the
+operator, an ambiguous id, "The key file") counts for nothing here either. A request that names
+the signer's own address is no exception: it needs a live entry whose `agent` and `on_behalf_of`
+are both the signer. `KeyRing::acts_for` is this check.
+
 ### A request
 
 1. The key id names a signed key entry that is not lapsed.
 2. The timestamp is an RFC 3339 instant within the window below.
-3. The signature is a canonical encoding and verifies over the request's signed bytes.
+3. The signature is a canonical encoding and verifies over the request's signed bytes: the five
+   members when the request carries no `on_behalf_of`, the six when it carries one.
+4. When the request carries `on_behalf_of`: the text is not empty and has no leading or trailing
+   space or tab, and a delegation of the pair (the key's principal, that text) is live at the
+   instant of the check ("A delegation", above). This step runs only after step 3 passed, so only
+   the holder of a live key makes the verifier look a delegation up.
 
-The caller is then the key entry's principal.
+The caller is then the key entry's principal, and its inbox the address the request's
+`on_behalf_of` names, or, without one, the address with the text of that principal
+(`docs/design/service.md`, "The caller").
+
+Each of these is refused, as a failure of step 3 or 4, and the service answers each as every
+other refusal of a request (`docs/design/service.md`, "The request signature"):
+
+- signed without the member `on_behalf_of` and sent with the header that carries it: the six
+  members the service signs over are not the five that were signed;
+- signed with the member and sent without the header: the five are not the six;
+- sent with a header whose value differs from the signed member, in any byte;
+- the header sent twice, with the same value or with two: it is read neither as the first nor as
+  the last;
+- the header with an empty value, or with one the reader trims to empty: never read as absent,
+  also when the request was signed without the member;
+- a value that differs from the signed member only by leading or trailing white space: the
+  reader trims the header of every white space at its ends (`str::trim`, Unicode white space, not
+  only a space or a tab), so it differs from the signed member;
+- no live delegation of the pair: none held, every one lapsed at the instant, or each one held for
+  another `agent` or another `on_behalf_of`.
+
+A header value that is not UTF-8 never reaches these checks: the generated reader refuses such a
+header line in step 1 of the service (`400`), as it refuses it in every other header.
+
+`KeyRing::verify_request_for` runs the 4 steps (step 4 refuses `Refusal::NotActingFor`);
+`KeyRing::verify_request` is it for a request without the member.
 
 ### The key file
 
@@ -201,7 +276,9 @@ stale, one more than 60 s ahead of the instant is refused as early.
 - Revocation lists: a short `valid_until` and an edit of the key file replace them. The edit
   removes the entry; a renewal is a new entry under a new id, never the old id signed again.
 - Delegation chains: a delegation is one entry, signed by the operator key.
-- A delegation scope narrower than the pair (`agent`, `on_behalf_of`).
+- A delegation scope narrower than the pair (`agent`, `on_behalf_of`): an entry lets its agent
+  speak for its principal in every envelope and act for that principal's inbox in every request,
+  and no entry grants one of the two alone.
 - Hardware-backed keys.
 - Payload encryption.
 - A replay cache for requests: a signed request may be repeated inside its 60 s window. Posts are

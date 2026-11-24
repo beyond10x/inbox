@@ -22,7 +22,9 @@ use inbox::server::json;
 pub struct CallerAttributes {
     /// `principal`: who the request was authenticated as.
     pub principal: Option<Principal>,
-    /// `inbox`: the address of the inbox that principal owns.
+    /// `inbox`: the address of the inbox the request acts for: the address with the text of the
+    /// principal, or, in a request the service admitted under a delegation, the address that
+    /// request names (`docs/design/service.md`, "The caller").
     pub inbox: Option<Address>,
 }
 

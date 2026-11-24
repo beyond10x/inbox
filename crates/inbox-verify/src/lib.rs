@@ -16,7 +16,8 @@ mod ring;
 pub use canonical::{
     CanonicalError, ENTRY_CONTEXT, ENVELOPE_CONTEXT, Envelope, MAX_SAFE_INTEGER, REQUEST_CONTEXT,
     Request, delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes,
-    sign_delegation_entry, sign_envelope, sign_key_entry, sign_request,
+    request_bytes_for, sign_delegation_entry, sign_envelope, sign_key_entry, sign_request,
+    sign_request_for,
 };
 pub use duplicate::duplicate_member;
 pub use instant::{Instant, InstantError};

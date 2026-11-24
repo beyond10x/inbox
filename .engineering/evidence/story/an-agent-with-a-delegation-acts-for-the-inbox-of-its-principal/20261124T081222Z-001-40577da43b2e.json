@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:12:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a control character in --for is sent as given): decided against decision 2 of the client round: the client refuses every control character (char::is_control) with exit 2 before any request, round 3 (3d38d76); adversary_acting_for::a_control_character_in_for_is_wrong_usage_and_sends_nothing was red and is green; red under the mutants that drop the check and that refuse only CR and LF",
+    "review": "review-result:adversary-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

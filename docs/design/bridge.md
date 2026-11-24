@@ -26,8 +26,10 @@ inbox bridge --chat-channel <id> --allowed-chat-user <id> --chat-connector <conn
 
 with the client's `INBOX_URL`, `INBOX_SECRET_KEY_FILE` and outbox file, as every client command.
 It signs with the key file it is given; the key's entry names the address of the person as its
-principal (`human:<name>`), which today is the only key that may read that `Pending`
-(`docs/design/service.md`, "The caller"). A key of its own under a delegation is
+principal (`human:<name>`). Another key reads that `Pending` too, with `--for`, while the key
+file holds a live delegation of its principal for the person (`docs/design/service.md`, "The
+caller"), but `inbox bridge` does not take `--for` in this version: its lock and its record of
+the chat posts are keyed by the caller's own address. A key of its own under a delegation is
 story:the-chat-bridge-runs-with-its-own-key-under-a-delegation.
 
 It ends only by SIGINT, SIGTERM or a failure, with the exit statuses of `inbox wake`: 1 a refusal

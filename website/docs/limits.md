@@ -76,7 +76,21 @@ record out.
   leave the record and the service apart until the next typed `inbox open` or `inbox close`.
 - **Nothing is deployed**, and no release attaches a binary ([releases](releases.md)).
 - One request per connection: no keep-alive and no pipelining.
-- The key file is not reloaded while the service runs.
+- The key file is not reloaded while the service runs: a new or a removed delegation takes effect
+  at the next start.
+- **Acting for another inbox (`--for`) has limits.** An agent with a live delegation for a
+  person reads, marks, answers and refuses the messages of the person's inbox with `--for`.
+  - `inbox open`, `inbox close`, `inbox wake` and `inbox bridge` do not take `--for`: each keeps
+    state on this host under the caller's own address. So no command wakes an agent for the
+    person's inbox yet, and none opens it for the person.
+  - An inbox an agent opens for the person through the service (the request with
+    `Inbox-On-Behalf-Of`) is the agent's: the person's own key does not close it, and the agent
+    closes it only with that header while its delegation is live. After the delegation lapses
+    nobody closes it until the service starts again.
+  - An agent with a live delegation answers any message of the person's inbox in the person's
+    place, one it sent itself included, and the record says the person answered. A sender that
+    must not answer its own question holds no delegation of the person it asks.
+  - A wait admitted under a delegation reads on after the delegation lapses, until the wait ends.
 
 ## The chat bridge
 

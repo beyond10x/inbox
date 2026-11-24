@@ -7,7 +7,7 @@ use inbox::messaging::{DelegationEntry, DelegationId, KeyEntry, KeyFile, Princip
 use inbox::server::{json, wire};
 
 use crate::canonical::{
-    Envelope, Request, delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes,
+    Envelope, Request, delegation_entry_bytes, envelope_bytes, key_entry_bytes, request_bytes_for,
 };
 use crate::duplicate::duplicate_member;
 use crate::instant::Instant;
@@ -52,6 +52,8 @@ pub enum Refusal {
     DelegationPair,
     /// The delegation is lapsed at the instant of the check.
     DelegationLapsed,
+    /// The request names an inbox no live delegation lets the key's principal act for.
+    NotActingFor,
 }
 
 impl Refusal {
@@ -82,6 +84,7 @@ impl fmt::Display for Refusal {
             Self::UnknownDelegation => "the delegation id is unknown",
             Self::DelegationPair => "the delegation names another pair",
             Self::DelegationLapsed => "the delegation is lapsed",
+            Self::NotActingFor => "no live delegation lets the key's principal act for the inbox",
         })
     }
 }
@@ -386,6 +389,59 @@ impl KeyRing {
         }
     }
 
+    /// Whether `agent` may act for the inbox whose address is the text `on_behalf_of`: a held
+    /// delegation entry names `agent` and, byte for byte, that text, and is not lapsed at `at`.
+    /// Any one such entry is enough; a lapsed entry beside it refuses nothing. Checked by the pair,
+    /// not by an id (`docs/design/signing.md`, "A delegation").
+    #[must_use]
+    pub fn acts_for(&self, agent: &Principal, on_behalf_of: &str, at: Instant) -> bool {
+        self.delegations.values().any(|delegation| {
+            delegation.agent == *agent
+                && delegation.on_behalf_of.0 == on_behalf_of
+                && at < delegation.valid_until
+        })
+    }
+
+    /// Verifies a request at `at` and answers the principal of its key, for a request that acts
+    /// for the inbox `on_behalf_of` names or, with `None`, for none: steps 1 to 3 of
+    /// [`KeyRing::verify_request`] over [`request_bytes_for`](crate::request_bytes_for), then,
+    /// for `Some`, step 4: the text is not empty, has no leading or trailing space or tab, and
+    /// [`KeyRing::acts_for`] admits the pair (the key's principal, that text) at `at`. Only a
+    /// request whose signature verified reaches step 4.
+    ///
+    /// # Errors
+    ///
+    /// The first [`Refusal`] in that order; step 4 refuses [`Refusal::NotActingFor`].
+    pub fn verify_request_for(
+        &self,
+        request: &Request<'_>,
+        on_behalf_of: Option<&str>,
+        signature: &str,
+        at: Instant,
+    ) -> Result<&Principal, Refusal> {
+        let key = self.live_key(request.key_id, at)?;
+        let signed_at = Instant::parse(request.timestamp).map_err(|_| Refusal::BadTimestamp)?;
+        if signed_at < at.plus_seconds(-REQUEST_WINDOW_SECONDS) {
+            return Err(Refusal::RequestStale);
+        }
+        if signed_at > at.plus_seconds(REQUEST_WINDOW_SECONDS) {
+            return Err(Refusal::RequestEarly);
+        }
+        let value = signature_from_base64(signature).map_err(|_| Refusal::SignatureEncoding)?;
+        if !key
+            .public_key
+            .verifies(&request_bytes_for(request, on_behalf_of), &value)
+        {
+            return Err(Refusal::SignatureMismatch);
+        }
+        match on_behalf_of {
+            Some(text) if !(an_address(text) && self.acts_for(&key.principal, text, at)) => {
+                Err(Refusal::NotActingFor)
+            }
+            _ => Ok(&key.principal),
+        }
+    }
+
     /// Verifies a request at `at` and answers the principal of its key: the key is held and not
     /// lapsed, the timestamp lies within 60 s of `at` either way, and `signature` verifies over
     /// [`request_bytes`](crate::request_bytes).
@@ -399,19 +455,13 @@ impl KeyRing {
         signature: &str,
         at: Instant,
     ) -> Result<&Principal, Refusal> {
-        let key = self.live_key(request.key_id, at)?;
-        let signed_at = Instant::parse(request.timestamp).map_err(|_| Refusal::BadTimestamp)?;
-        if signed_at < at.plus_seconds(-REQUEST_WINDOW_SECONDS) {
-            return Err(Refusal::RequestStale);
-        }
-        if signed_at > at.plus_seconds(REQUEST_WINDOW_SECONDS) {
-            return Err(Refusal::RequestEarly);
-        }
-        let value = signature_from_base64(signature).map_err(|_| Refusal::SignatureEncoding)?;
-        if key.public_key.verifies(&request_bytes(request), &value) {
-            Ok(&key.principal)
-        } else {
-            Err(Refusal::SignatureMismatch)
-        }
+        self.verify_request_for(request, None, signature, at)
     }
+}
+
+/// Whether `text` may name an inbox a request acts for: not empty, and no space or tab at either
+/// end. Version 1 holds no other grammar for an address (`docs/design/signing.md`, "Request").
+fn an_address(text: &str) -> bool {
+    let edge = [' ', '\t'];
+    !text.is_empty() && !text.starts_with(edge) && !text.ends_with(edge)
 }

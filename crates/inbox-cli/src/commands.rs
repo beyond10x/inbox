@@ -48,6 +48,9 @@ pub struct Client {
     /// The message id of the envelope `inbox post` kept and posted in this command: the
     /// reconnect after it does not post it a second time.
     posted: RefCell<Option<String>>,
+    /// The address of `--for`: every request carries it in `Inbox-On-Behalf-Of`, signed, and it
+    /// is the caller's inbox in this command ([`Client::own_inbox`]).
+    acting_for: Option<String>,
 }
 
 impl Client {
@@ -59,7 +62,14 @@ impl Client {
             outbox,
             seen: RefCell::new(None),
             posted: RefCell::new(None),
+            acting_for: None,
         }
+    }
+
+    /// This client acting for the inbox at `address` (`--for`), or for its own without it.
+    pub fn acting_for(mut self, address: Option<String>) -> Self {
+        self.acting_for = address;
+        self
     }
 
     /// A client of the same service, key and outbox file that has seen nothing yet: for a thread
@@ -77,7 +87,8 @@ impl Client {
                 principal: self.caller.principal.clone(),
             },
             Outbox::locate(Some(self.outbox.path()))?,
-        ))
+        )
+        .acting_for(self.acting_for.clone()))
     }
 
     /// Sends one request and reads its answer, keeping the epoch it named ([`Client::seen`]).
@@ -89,7 +100,14 @@ impl Client {
         body: &[u8],
         wait: Duration,
     ) -> Result<Reply, Failure> {
-        let sent = self.service.send(&self.caller, method, target, body, wait);
+        let sent = self.service.send(
+            &self.caller,
+            self.acting_for.as_deref(),
+            method,
+            target,
+            body,
+            wait,
+        );
         *self.seen.borrow_mut() = sent.as_ref().ok().and_then(|reply| reply.epoch.clone());
         sent
     }
@@ -137,10 +155,15 @@ impl Client {
         Ok(self.exchange("GET", &target, b"", Duration::ZERO)?.epoch)
     }
 
-    /// The caller's own inbox: the address with the text of its principal (decision 5 of
-    /// `docs/design/inbox.md`).
+    /// The caller's inbox: the address of `--for`, else the address with the text of its
+    /// principal (decision 5 of `docs/design/inbox.md`), as the service makes the caller's
+    /// `inbox`.
     fn own_inbox(&self) -> Address {
-        Address(self.caller.principal.clone())
+        Address(
+            self.acting_for
+                .clone()
+                .unwrap_or_else(|| self.caller.principal.clone()),
+        )
     }
 }
 
@@ -753,7 +776,7 @@ pub struct AnswerInput {
     pub in_reply_to: String,
     /// `--option`.
     pub option: Option<String>,
-    /// `--on-behalf-of`; the caller when absent.
+    /// `--on-behalf-of`; the address of `--for` when absent, else the caller.
     pub on_behalf_of: Option<String>,
     /// `--authority`.
     pub authority: Option<String>,
@@ -764,6 +787,8 @@ pub struct AnswerInput {
 }
 
 /// `inbox answer`: the reply envelope (the model's kind reply), signed and sent as `Answer`.
+/// Under `--for` the reply speaks for the person of that inbox unless `--on-behalf-of` names
+/// another (the service refuses any other there); `--authority` is the caller's to give.
 pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
     let reading = now();
     let reply_id = ulid()?;
@@ -776,6 +801,7 @@ pub fn answer(client: &Client, input: &AnswerInput) -> Result<Done, Failure> {
             input
                 .on_behalf_of
                 .clone()
+                .or_else(|| client.acting_for.clone())
                 .unwrap_or_else(|| caller.principal.clone()),
         ),
         authority: input.authority.clone().map(DelegationId),
@@ -1097,9 +1123,11 @@ pub fn reconnect(client: &Client, typed: Typed) -> Option<Reconnected> {
     let due = client
         .outbox
         .due(&client.caller.principal, &current, now(), posted.as_deref());
+    // Under `--for` no inbox is opened again: the record is of the caller's own inbox, which is
+    // not the caller's in a request with the header (the service answers its open `not-owner`).
     let open = due
         .open
-        .filter(|_| !matches!(typed, Typed::Open | Typed::Close));
+        .filter(|_| !matches!(typed, Typed::Open | Typed::Close) && client.acting_for.is_none());
     let repost = due.repost && typed != Typed::Repost;
     if open.is_none() && !repost {
         return None;

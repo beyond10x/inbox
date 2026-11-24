@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:12:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (the help of --on-behalf-of of inbox answer still said the caller by default): round 3 (3d38d76): the help says the caller by default, and under --for the address of --for; generated/cli/inbox.json written anew by task cli-reference",
+    "review": "review-result:adversary-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

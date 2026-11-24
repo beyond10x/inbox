@@ -1,5 +1,5 @@
 // generated from inbox v1
-// contract digest ab51269fa0786cb62de332826f17f3199db230ea4e52fe7335e4d8ea79e313bc
+// contract digest e34e82a0a81f7c01ba3d91fa287c7a723f89e6d1fbdd928b462676dc857fd14a
 // do not edit: regenerate with `ess synthesize --layout crate`
 
 //! Messaging — `inbox.messaging`.
@@ -118,7 +118,7 @@ pub struct DedupKey(pub String);
 
 /// DelegationEntry — `inbox.messaging.DelegationEntry`.
 ///
-/// One delegation of the key file: `agent` may speak for `on_behalf_of` until `valid_until`. It covers every message the agent sends for that principal; version 1 has no narrower scope and no chain. The operator key signs the entry.
+/// One delegation of the key file: until `valid_until`, `agent` may speak for `on_behalf_of` in every message it sends, and act as the owner of the inbox whose address has the text of `on_behalf_of` in every request that names that inbox. Version 1 has no narrower scope and no chain. The operator key signs the entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DelegationEntry {
     /// `delegation_id` — `inbox.messaging.DelegationId`.

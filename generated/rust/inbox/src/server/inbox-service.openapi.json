@@ -8,7 +8,7 @@
     "x-ess-provenance": {
       "system": "inbox",
       "specification_version": "v1",
-      "contract_digest": "slice-sha256/2:06a55b631774a98dd1963698c1586a37b420a9837664daaf4f3299949b978ff7"
+      "contract_digest": "slice-sha256/2:5327a740b942b8ae3e9e3bbd76780d77b27bf423482bfa4bdff1f4fb2e79ab83"
     },
     "x-ess-reached-by": "network"
   },
@@ -5781,7 +5781,7 @@
     },
     "inbox.messaging.Inbox": {
       "title": "Inbox",
-      "description": "A named address that messages are posted to. It belongs to the principal the address names; only a caller authenticated for the address opens it, closes it or handles its messages.",
+      "description": "A named address that messages are posted to. Only a caller whose `inbox` is the address opens it or handles its messages; only its `owner`, the principal that opened it, closes it.",
       "x-ess-name": "inbox.messaging.Inbox",
       "x-ess-kind": "entity",
       "type": "object",

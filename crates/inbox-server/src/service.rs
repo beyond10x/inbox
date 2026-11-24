@@ -3,16 +3,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use inbox::actor::{Actor, Caller};
-use inbox::behaviour::{InboxStorage, MessageStorage};
-use inbox::messaging::Address;
+use inbox::actor::Actor;
+use inbox::behaviour::{ExternalCommand, InboxStorage, MessageStorage, TryContext};
+use inbox::messaging::{Address, PostMessage, Principal};
+use inbox::obligation::UnmetObligation;
 use inbox::primitives::Timestamp;
 use inbox::server::json::{self, Value};
-use inbox::server::{http, inbox_service};
-use inbox_core::{CallerAttributes, CommandClock, Exclusive, ServiceContext};
+use inbox::server::{http, inbox_service, wire};
+use inbox_core::{CallerAttributes, CommandClock, Exclusive, PostExternals, ServiceContext};
 use inbox_verify::{Instant, duplicate_member};
 
-use crate::auth::{RingVerifier, authenticate};
+use crate::auth::{Authenticated, RingVerifier, authenticate};
 use crate::clock::CommandReading;
 use crate::config::Config;
 use crate::signals::Signals;
@@ -30,7 +31,7 @@ impl<B> Backend for B where
 }
 
 /// Every request over HTTP is a client: no request is the expiry task.
-const CLIENT: Caller = Caller {
+const CLIENT: inbox::actor::Caller = inbox::actor::Caller {
     actor: Actor::Client,
 };
 
@@ -39,6 +40,14 @@ const POST: &str = "/messaging/commands/post";
 
 /// The view a `wait` holds open.
 const PENDING: &str = "/messaging/views/pending";
+
+/// The route of `close-inbox`, the one the service's rule over a close holds.
+const CLOSE: &str = "/messaging/commands/close-inbox";
+
+/// The status and body the generated writer gives `close-inbox` its outcome `not-owner`.
+const NOT_OWNER_STATUS: u16 = 403;
+const NOT_OWNER: &str =
+    r#"{"outcome":"not-owner","published":[],"error":"inbox.messaging.NotRecipient"}"#;
 
 /// What every connection thread of one service shares.
 #[derive(Debug)]
@@ -72,7 +81,7 @@ pub(crate) fn answer<B: Backend>(shared: &Shared<B>, request: &http::Request) ->
         return refusal(413, "body too large", Some(max_body));
     }
     let at = config.clock.now();
-    let Some(principal) = authenticate(&config.keys, request, at) else {
+    let Some(authenticated) = authenticate(&config.keys, request, at) else {
         return refusal(401, "unauthenticated", None);
     };
     if let Some(member) = duplicate(&request.body) {
@@ -84,8 +93,7 @@ pub(crate) fn answer<B: Backend>(shared: &Shared<B>, request: &http::Request) ->
         body.push('}');
         return http::Response::new(400, http::JSON, body);
     }
-    let inbox = Address(principal.0.clone());
-    let caller = CallerAttributes::new(principal, inbox);
+    let caller = Caller::of(authenticated);
     if request.method == "GET" && request.path == PENDING {
         match wait(&request.query, config.max_wait) {
             Ok(Some(wait)) => return waited(shared, request, &caller, at, wait),
@@ -94,6 +102,84 @@ pub(crate) fn answer<B: Backend>(shared: &Shared<B>, request: &http::Request) ->
         }
     }
     once(shared, request, &caller, at)
+}
+
+/// The caller of one request (`docs/design/service.md`, "The caller"): the attributes the core
+/// decides by, and the person whose inbox it acts for under `Inbox-On-Behalf-Of`.
+#[derive(Debug, Clone)]
+struct Caller {
+    /// `principal` the signer; `inbox` the address the header names, or the address with the
+    /// text of the principal.
+    attributes: CallerAttributes,
+    /// The person of the inbox the request acts for, when it sent the header.
+    person: Option<Principal>,
+}
+
+impl Caller {
+    fn of(authenticated: Authenticated) -> Self {
+        let inbox = authenticated
+            .on_behalf_of
+            .as_ref()
+            .unwrap_or(&authenticated.principal);
+        Self {
+            attributes: CallerAttributes::new(
+                authenticated.principal.clone(),
+                Address(inbox.0.clone()),
+            ),
+            person: authenticated.on_behalf_of,
+        }
+    }
+}
+
+/// The context of one request: the core's [`ServiceContext`], and the service's rule over a reply
+/// under `Inbox-On-Behalf-Of`. Such a reply speaks for the person of the inbox the request acts
+/// for: one whose `on_behalf_of` is anybody else is answered `authority-invalid`, where `Answer`
+/// asks for that branch (after `not-sender`, `no-authority`, `already-expired` and
+/// `signature-invalid`, before it reads the message), whether or not it names an `authority`.
+/// Without the header the core answers every branch (`docs/design/service.md`, "The caller").
+/// The service's other rule, over a close, sits in the listener's section and not here
+/// ([`closes_another_inbox`]), since `CloseInbox` asks its context no branch.
+struct RequestContext<C> {
+    core: C,
+    person: Option<Principal>,
+}
+
+impl<C: TryContext> TryContext for RequestContext<C> {
+    fn try_caller_inbox(&self) -> Result<Option<Address>, UnmetObligation> {
+        self.core.try_caller_inbox()
+    }
+
+    fn try_caller_principal(&self) -> Result<Option<Principal>, UnmetObligation> {
+        self.core.try_caller_principal()
+    }
+
+    fn try_external(
+        &mut self,
+        command: ExternalCommand<'_>,
+        outcome: &'static str,
+    ) -> Result<bool, UnmetObligation> {
+        if let (Some(person), ExternalCommand::InboxMessagingAnswer(reply), "authority-invalid") =
+            (&self.person, command, outcome)
+            && reply.on_behalf_of != *person
+        {
+            return Ok(true);
+        }
+        self.core.try_external(command, outcome)
+    }
+}
+
+impl<C: PostExternals> PostExternals for RequestContext<C> {
+    fn expired_on_arrival(&mut self, input: &PostMessage) -> Result<bool, UnmetObligation> {
+        self.core.expired_on_arrival(input)
+    }
+
+    fn signature_invalid(&mut self, input: &PostMessage) -> bool {
+        self.core.signature_invalid(input)
+    }
+
+    fn authority_invalid(&mut self, input: &PostMessage) -> bool {
+        self.core.authority_invalid(input)
+    }
 }
 
 /// The dotted path of a member name the body carries twice, when the body is JSON. A body that is
@@ -163,18 +249,21 @@ fn wait(query: &str, most: Duration) -> Result<Option<Wait>, http::Response> {
 fn once<B: Backend>(
     shared: &Shared<B>,
     request: &http::Request,
-    caller: &CallerAttributes,
+    caller: &Caller,
     at: Instant,
 ) -> http::Response {
     let backend = &shared.backend;
     let config = &shared.config;
     let verifier = RingVerifier::new(Arc::clone(&config.keys), at);
-    let context = ServiceContext::new(
-        caller.clone(),
-        verifier,
-        backend.clone(),
-        CommandReading(Arc::clone(&config.clock)),
-    );
+    let context = RequestContext {
+        core: ServiceContext::new(
+            caller.attributes.clone(),
+            verifier,
+            backend.clone(),
+            CommandReading(Arc::clone(&config.clock)),
+        ),
+        person: caller.person.clone(),
+    };
     let answered = backend.exclusive(|| {
         if request.method == "POST"
             && request.path == POST
@@ -182,14 +271,48 @@ fn once<B: Backend>(
         {
             return refusal(503, "message limit", Some(config.max_messages));
         }
+        if closes_another_inbox(backend, request, &caller.attributes) {
+            return http::Response::new(NOT_OWNER_STATUS, http::JSON, NOT_OWNER.to_owned());
+        }
         let mut system = inbox_core::system(backend.clone(), context);
         inbox_service::dispatch(&mut system, Some(&CLIENT), request)
     });
     if request.method != "GET" {
         shared.signals.command_answered();
-        return readable(as_unknown(answered), caller);
+        return readable(as_unknown(answered), &caller.attributes);
     }
-    readable(answered, caller)
+    readable(answered, &caller.attributes)
+}
+
+/// The service's rule over a close (`docs/design/service.md`, "The caller"): a `close-inbox` whose
+/// address is an inbox the backend holds and is not the caller's `inbox` is answered `not-owner`,
+/// as the model answers its own `not-owner`. So an agent closes the person's inbox it opened only
+/// under `Inbox-On-Behalf-Of` while its delegation is live, and not without the header, where its
+/// `inbox` is its own address; under the header it does not close its own inbox. The rule sits at
+/// the model's step for `not-owner`, after `unknown-inbox`: an address no inbox has, and a body
+/// the route refuses, pass to the generated route, which answers them as before. It is decided
+/// here and not in [`RequestContext`] because the generated `CloseInbox` asks its context no
+/// branch, only `try_caller_principal`. It runs inside the backend's section, so the row it reads
+/// is the one the command would read.
+fn closes_another_inbox<B: Backend>(
+    backend: &B,
+    request: &http::Request,
+    caller: &CallerAttributes,
+) -> bool {
+    if request.method != "POST" || request.path != CLOSE {
+        return false;
+    }
+    let Ok(text) = std::str::from_utf8(&request.body) else {
+        return false;
+    };
+    let Ok(value) = json::parse(text) else {
+        return false;
+    };
+    let Ok(input) = wire::decode_command_inbox_messaging_close_inbox(&value, "body") else {
+        return false;
+    };
+    InboxStorage::get(backend, &input.address).is_some()
+        && caller.inbox.as_ref() != Some(&input.address)
 }
 
 /// The status the generated writer gives the outcome `unknown-message`.
@@ -233,7 +356,7 @@ fn as_unknown(answer: http::Response) -> http::Response {
 fn waited<B: Backend>(
     shared: &Shared<B>,
     request: &http::Request,
-    caller: &CallerAttributes,
+    caller: &Caller,
     at: Instant,
     wait: Wait,
 ) -> http::Response {
@@ -276,11 +399,13 @@ fn waited<B: Backend>(
     }
 }
 
-/// Whether the caller's own inbox is stored and `Open`.
-fn own_inbox_open<B: Backend>(shared: &Shared<B>, caller: &CallerAttributes) -> bool {
+/// Whether the caller's own inbox (its `inbox`, the person's under `Inbox-On-Behalf-Of`) is
+/// stored and `Open`.
+fn own_inbox_open<B: Backend>(shared: &Shared<B>, caller: &Caller) -> bool {
     let backend = &shared.backend;
     backend.exclusive(|| {
         caller
+            .attributes
             .inbox
             .as_ref()
             .and_then(|inbox| InboxStorage::get(backend, inbox))

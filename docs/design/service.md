@@ -22,7 +22,7 @@ Each step answers or passes the request on; the first refusal wins, and nothing 
 | 1a. The request arrives in full within `request_timeout` of the accept | it has not | `408` | `{"refused": "request timeout"}` |
 | 1b. The service is not stopping before the request has arrived in full | it is | `503` | `{"refused": "stopping"}` |
 | 2. The body limit of the embedding | a body longer than `max_body` | `413` | `{"refused": "body too large", "limit": <max_body>}` |
-| 3. Authenticate the request signature at the clock reading | no valid request signature | `401` | `{"refused": "unauthenticated"}` |
+| 3. Authenticate the request signature at the clock reading; for a request that names an inbox to act for (`Inbox-On-Behalf-Of`), then the delegation of the pair at the same reading | no valid request signature; an inbox named and no live delegation of the pair | `401` | `{"refused": "unauthenticated"}` |
 | 4. A body that is JSON: `inbox_verify::duplicate_member` | an object, at any depth, carries a member name twice | `400` | `{"refused": "duplicate member", "member": "<dotted path>"}` |
 | 5. A post: the message count, inside the backend's section | the store holds `max_messages` messages or more | `503` | `{"refused": "message limit", "limit": <max_messages>}` |
 | 6. The generated `dispatch`, inside the backend's section | everything the generated surface answers: `404`, `405`, `400`, `403` (not granted), the declared outcomes, `501` | as generated | as generated |
@@ -38,6 +38,13 @@ the first of two members and one signature would cover two texts (`signing.md`, 
 
 `/openapi.json` and `/docs` are behind step 3 as well: every request is authenticated.
 
+Step 3 reads the clock once per request, and that one reading serves the request signature, the
+delegation of a named inbox, and the verifier of the envelopes in its body ("The verifier"); a
+wait does not read it again ("The wait"). The delegation is looked up only after the request
+signature verified, and its refusal is the `401` of a bad signature ("The request signature"), so
+the steps after it run for a caller under a delegation exactly as for any other, with the caller
+of "The caller".
+
 Steps 1a and 1b bound the generated reader from outside it; the reader itself is neither copied
 nor changed. Until a request has been read in full, its connection is watched: at
 `request_timeout`, or when the service stops, a task of the service shuts the socket for reading.
@@ -51,20 +58,56 @@ sends, so the bound and the stop end that too.
 
 ## The request signature
 
-The signed bytes are `signing.md`'s (the request object of five members). They travel in three
-headers; a header name is case-insensitive, as HTTP has it.
+The signed bytes are `signing.md`'s (the request object of five members, and of six for a
+request that acts for an inbox). They travel in three headers, and a fourth for that request; a
+header name is case-insensitive, as HTTP has it.
 
 | Header | Carries |
 |---|---|
 | `Inbox-Key-Id` | the key id of the caller's key entry in the key file |
 | `Inbox-Timestamp` | the RFC 3339 instant the caller signed at, as the text that was signed |
 | `Inbox-Signature` | the Ed25519 signature over the request's signed bytes, 88 characters of canonical base64 |
+| `Inbox-On-Behalf-Of` | only in a request that acts for an inbox: the address of that inbox, the text of the signed member `on_behalf_of` |
+
+A request without `Inbox-On-Behalf-Of` is signed and answered as before the header existed.
 
 `401 {"refused": "unauthenticated"}` answers each of: a header missing, a header sent twice, an
 unknown or lapsed key, a timestamp that is not RFC 3339 or lies more than 60 s before or after the
 clock reading (both bounds inclusive, `inbox_verify::KeyRing::verify_request`), a signature that is
 not canonical or does not verify. The body says nothing more, so a caller learns nothing about the
 key file from a refusal.
+
+`Inbox-On-Behalf-Of` adds these, each answered with the same `401` (`signing.md`, "A request"):
+the header sent twice (the rule of the other three); the header with an empty value, which is
+never read as absent; a request signed without the member and sent with the header, or signed
+with it and sent without; a header whose value is not the signed member; and an inbox no live
+delegation of the pair covers at the reading of step 3, the signer's own address included. That
+last refusal is no oracle on the key file: its status, its body and its headers are those of a bad
+signature byte for byte (the head of an answer depends only on its status, its body and the
+epoch), and the service writes no line for it, as it writes none for any request it answers,
+refused or not. A caller that reaches the lookup already holds a live key of the key file; the
+time the lookup takes is not made constant. `inbox_server::ON_BEHALF_OF_HEADER` names the header,
+and `inbox_server::request_headers_for` signs a request with or without it.
+
+The client sends the header on `--for <address>`: `inbox <command> --for <address>` puts the
+address, as given, in `Inbox-On-Behalf-Of` of every request of the command and signs it as the
+member `on_behalf_of`; without `--for` every request is the one of before the header, byte for
+byte. An empty value, one with white space at either end (`char::is_whitespace`: the service's
+reader trims every Unicode white space, not only a space or a tab) and one that holds a control
+character (`char::is_control`, a line break among them) are wrong usage (exit 2) before any
+request and before any file is written, since the service never honours one; nothing else of the
+value is checked. Nor does the client make a request head with a line break in any of its parts,
+whatever its caller passes. The
+address is the caller's inbox in the command: the default of `--inbox` of `pending` and `wait`,
+and the default `on_behalf_of` of the reply of `answer` (an `--on-behalf-of` given stays as given,
+and `--authority` is the caller's to give). A request the service refuses because no live
+delegation of the pair covers the inbox is printed as any `401`, with the same exit status 1 and
+line. `post`, `pending`, `wait`, `read`, `answer`, `refuse`, `outbox`, `collect`, `thread`,
+`replies` and `repost` take it. `open`, `close`, `wake` and `bridge` do not (exit 2, one line
+`inbox <command>: does not take --for`, nothing sent): each keeps state on this host keyed by the
+caller's own address (the record of the opened inbox, the wake lock, the record of the chat
+posts), and keying it by the address of `--for` is
+story:the-chat-bridge-runs-with-its-own-key-under-a-delegation.
 
 The signed `path` is the request target as the generated reader splits it: the path, then `?` and
 the query when the query is not empty. The reader keeps no empty query, so a target that ends in a
@@ -91,7 +134,9 @@ stored nothing of that envelope. When the epochs file cannot be written, `repost
 every envelope, prints its report and exits 4 with the local failure. Every client command
 reads the epoch for a reconnect too: after its own request, when the answer names an epoch
 other than one the client recorded, it opens the caller's own inbox again with the adapter of
-its last `inbox open` (the file `<outbox>.opened` holds it with the epoch of the answer that
+its last `inbox open` (not under `--for`, where the caller's own inbox is not its inbox: the next
+command without `--for` opens it; the reposts of a command under `--for` carry the header too;
+the file `<outbox>.opened` holds it with the epoch of the answer that
 said the inbox is open; `inbox close` removes it before it sends the close and puts it back when
 the close fails in transport or is refused other than `UnknownInbox`), and posts the kept
 envelopes again as `repost` does, at that epoch and without asking for it, when one of them is
@@ -171,10 +216,157 @@ gets none. The generated `http::Response` and the generated `http::write` are no
 
 ## The caller
 
-The key id resolves to the principal of its key entry (`KeyRing::verify_request`). The caller is the
-actor `inbox.messaging.Client` with that principal as its `principal` and, as its `inbox`, the
-address with the same text: decision 5 of `docs/design/inbox.md` ("a caller carries a `principal`
-and an `inbox` address, the same text in version 1"). The caller is the sender: a `post` or an
+The key id resolves to the principal of its key entry (`KeyRing::verify_request_for`). The caller is the
+actor `inbox.messaging.Client` with that principal as its `principal`. Its `inbox` is, for a
+request without `Inbox-On-Behalf-Of`, the address with the same text as the principal, as before
+the header existed; for a request with it that step 3 admitted, the address the header names,
+while `principal` stays the signer (decision 5 of `docs/design/inbox.md`). The listener makes the
+two attributes once per request, after step 3, and hands both to the core for every request.
+
+Which attribute decides each command and view the grant of `inbox.messaging.Client` holds
+(`ess/domains/messaging.yaml`, lines 259-274), and what an agent gets there in a request that
+names the inbox of a person it holds a live delegation of. "Beyond" marks what the story asks
+not for (it asks for `Pending`, `mark-delivered`, `read`, `answer`):
+
+| Command or view | Decided by | Source | Under a live delegation, naming the person's inbox |
+|---|---|---|---|
+| `open-inbox` | `inbox`: `not-owner` when `address != caller.inbox`; `principal`: `opened` sets `owner: {caller: principal}` | lines 341-348 | Beyond. Opens the person's address: an address no inbox has is created with the agent as `owner`; a closed one is reopened with the agent's adapter and keeps its owner; an open one is `already-open`. Without the header the agent gets `not-owner` (`403`), as before |
+| `close-inbox` | `principal`: `not-owner` when `owner != caller.principal`; `inbox`: `not-owner` when `address != caller.inbox`, the service's rule (below) | lines 372-375 | Beyond. The agent closes the person's inbox it opened only under the header, while its delegation is live. Without the header its `inbox` is its own address, so the person's inbox answers it `not-owner` (`403`); under the header so does its own inbox. An inbox the person opened answers it `not-owner` |
+| `post` | `principal`: `not-sender` when `from != caller.principal` | lines 418-420 | Beyond. A post with the header is answered as without it: its `from` must be the agent, and its `to`, `on_behalf_of` and `authority` are checked as in any post. No post is made "as" the person's inbox |
+| `mark-delivered` | `inbox`: `not-recipient` when `to != caller.inbox`; both: `foreign-message` when `to != caller.inbox` and `from != caller.principal` | lines 551-562 | Asked for. Marks a message of the person's inbox `delivered` |
+| `read` | as `mark-delivered` | lines 590-601 | Asked for. Moves a request or a decision to `Read` (`read`), removes a note (`handled`) |
+| `answer` | `principal`: `not-sender` when `from != caller.principal`; `inbox`: `not-recipient`; both: `foreign-message`. `authority-invalid` reads no attribute: the verifier checks the reply's own `authority` against its `from` and `on_behalf_of` | lines 649-681 | Asked for. A reply `from` the agent, `on_behalf_of` the person, `authority` a live delegation of that pair, to a message of the person's inbox, is `answered` with `answered_by: principal`. A reply `on_behalf_of` anybody else is `authority-invalid`, the service's rule (below). Version 1 has no scope narrower than the pair, so the agent answers any message of the person's inbox in the person's place, one it sent itself included, and the record says the person answered. A sender that must not answer its own question holds no delegation of the person it asks |
+| `refuse` | `inbox`: `not-recipient`; both: `foreign-message` | lines 761-772 | Beyond. Refuses a message of the person's inbox with a reason |
+| `collect` | `principal`: `not-sender` when `from != caller.principal`; both: `foreign-message` | lines 839-850 | Beyond, and nothing new: the agent collects what it sent, with the header or without it. A message the person sent to another inbox is `unknown-message` to it; one the person sent to its own inbox is `not-sender` |
+| `expire` | none: not granted to a client | lines 276-282 | `403` `not granted`, as for every request |
+| `Inboxes` | none: its rows carry no `to` and no `from`, the read rule keeps them all | lines 951-961 | As without the header |
+| `Pending` | both, by the read rule over the rows its `inbox` parameter selects: a row stays when `to` is `caller.inbox` or `from` is `caller.principal` | lines 963-988; `inbox_core::readable` | Asked for. Every row of the person's inbox in `Sent` or `Delivered`; of another inbox, only the rows the agent sent |
+| `Unanswered` | both, by the read rule | lines 990-1015 | Beyond. The requests and decisions of the person's inbox in `Read` |
+| `Outbox` | both, by the read rule over the rows of its `sender` parameter | lines 1017-1046 | Beyond. The rows the agent sent, as without the header, and the rows of any sender to the person's inbox, in every state, with the reply or the refusal they carry. A row the person sent to another inbox stays hidden |
+| `Settled` | both, by the read rule | lines 1048-1077 | Beyond. As `Outbox`, the answered and refused rows only |
+| `Thread` | both, by the read rule | lines 1079-1108 | Beyond. The rows of the thread to the person's inbox or from the agent |
+| `Replies` | both, by the read rule | lines 1110-1138 | Beyond. As `Thread`, the answered rows only |
+| `Due`, `Messages` | none: not granted to a client | lines 1140-1197 | `403` `not granted`, as for every request |
+| `Pending` with `wait` | both, as `Pending`; the wait holds the caller of its start | "The wait" | Beyond. Waits on the person's inbox |
+| `Pending` with `undelivered=1` | `inbox`: the `409` `{"refused": "inbox not open"}` reads whether `caller.inbox` is open; the rows as `Pending` | "The wait"; `own_inbox_open` | Beyond. Answers `409` while the person's inbox is not open |
+
+What the service answers where the table says "beyond", and why. The model decides each by the
+attribute in the second column, and the service answers as the model (Open 1 B of the story: a
+live delegation makes its agent the owner of the inbox of its principal), with two rules of its
+own over a body: the `on_behalf_of` of a reply under the header, and the address of a
+`close-inbox` (both below). The other choice left
+is whether the listener refuses a route under the header; it is named below where it was
+weighed, and refused each time.
+
+- Opening and reopening the person's inbox: as the model (the story's Open 4, A). Closing it: as
+  the model, and the service's rule over a close (below). The cost: an inbox the agent opens
+  before the person does is owned by the agent, so the person's own key gets `not-owner` when it
+  closes it, until a new start of the service drops it; after a new start, whoever opens the
+  address first owns it. After the delegation lapses that inbox stays open: posts to it are
+  accepted and the person reads it with its own key, but nobody closes it (the agent's requests
+  with the header are `401`, the agent without the header and the person are `not-owner`) until
+  the service starts anew, or a new delegation of the pair is in the key file at a new start. The person's own `open` of an inbox
+  the agent opened is `already-open`, and a reopen by either sets the adapter it names. Safe
+  because no caller gets an inbox it could not reach before without the operator's signed entry:
+  the agent can only open an address a live delegation names. The alternative, an owner set from
+  `caller.inbox`, changes `ess/`.
+- `refuse`: as the model. The cost: a refusal carries no signed envelope, so the sender cannot
+  tell a refusal of the agent from one of the person; that holds today for the person's own
+  refusals too. Refusing (B: the listener answers `refuse` with the header `401`) would make one
+  route an exception to the one rule of the header.
+- `post`: as without the header. Options: (A) answered as without the header; (B) a post with the
+  header refused (`401`) or answered `400`. Taken: A, so the header is checked per request and not
+  per route, and a post with it can do nothing a post without it cannot.
+- `collect`: nothing beyond what the agent's principal gets without the header.
+- `Unanswered`, `Outbox`, `Settled`, `Thread`, `Replies`: what the person's own key reads of the
+  person's inbox, which the agent needs to answer: safe as the agent may mark, read and answer
+  those messages anyway. The agent does not get the person's own outgoing messages.
+- The wait and `undelivered=1`: the wait of a delegation's agent on the person's inbox, and its
+  `409` while that inbox is not open. A delegation that lapses during a wait is "The wait"'s.
+- The agent's own inbox: in a request with the header the caller's `inbox` is the person's, so the
+  agent's own inbox is no longer its inbox in that request: its rows from others leave its views,
+  and its marks, reads, answers and refusals of them are `unknown-message` (`foreign-message`
+  renamed) or `not-recipient`. It handles its own inbox in requests without the header.
+
+**Under the header, a reply speaks for the person of the inbox it answers in.** In a request that
+carries `Inbox-On-Behalf-Of`, an `answer` whose reply envelope has an `on_behalf_of` other than
+the principal with the text of the header's value is refused `authority-invalid`: `502`
+`{"outcome":"authority-invalid","published":[],"error":"inbox.messaging.NoAuthority"}`, the
+generated answer of that outcome (`generated/rust/inbox/src/server/inbox_service.rs`, lines
+662-671), and nothing changes. A reply `on_behalf_of` the agent itself is refused so as well, with
+or without an `authority`, and so is one `on_behalf_of` another principal the agent holds a live
+delegation of. Without the rule such a reply would reach the person's message and record
+`answered_by: principal` for a principal the sender did not ask, which no request could do before
+the header, since only the person's key reached that inbox.
+
+The rule answers at the place of `authority-invalid` in the order of `Answer`: the generated
+`Answer` asks the request's context for that external branch after `not-sender`, `no-authority`,
+`already-expired` and `signature-invalid` and before it reads the addressed message, whether or
+not the reply names an `authority` (`generated/rust/inbox/src/behaviour.rs`, lines 148-167), and
+the context the listener builds for a request with the header answers it `true` when the reply's
+`on_behalf_of` is not the person, before it asks the verifier about the `authority`. So the
+model's order holds, and each broken member of a reply has one outcome: `from` not the agent is
+`not-sender`; an `on_behalf_of` other than `from` with no `authority` is `no-authority`; an
+`expires` at or before `created` is `already-expired`; a signature that does not verify is
+`signature-invalid`; an `on_behalf_of` other than the person is `authority-invalid`; an `authority`
+that is no live delegation of the pair (agent, person) is `authority-invalid`. A reply that breaks
+two of them is answered by the first in that order: `from` and `on_behalf_of` both wrong is
+`not-sender`; `on_behalf_of` wrong and the signature bad is `signature-invalid`; `on_behalf_of`
+wrong in a reply to an id no message carries, or to a message of another inbox, is
+`authority-invalid`, before the message is read, so it tells nothing about the message. Refusing
+before the generated `dispatch` instead would answer `authority-invalid` ahead of the 4 refusals
+before it, and a case could not state one outcome per broken member.
+
+The rule is the service's and not the model's: the model knows of the inbox a request acts for
+only `caller.inbox`, and binds no member of a reply to it, so it cannot say that the reply speaks
+for the owner of that inbox. The conformance run over HTTP sends no header, and the run against
+the core builds no context with one, so neither is touched by it. Without the header nothing
+changes: a reply `on_behalf_of` another principal with a live `authority`, in the signer's own
+inbox, is answered as before.
+
+Everything else of the reply stays the model's. The request admits no particular delegation, so
+a reply `on_behalf_of` the person whose `authority` names another live delegation of the pair
+than any the request was admitted by is `answered`, and one whose `authority` names a lapsed
+delegation of the pair is `authority-invalid`, though another live one admitted the request.
+
+**A close closes the caller's own inbox.** A `close-inbox` whose address is an inbox the service
+holds and is not the caller's `inbox` is answered `not-owner`: `403`
+`{"outcome":"not-owner","published":[],"error":"inbox.messaging.NotRecipient"}`, the generated
+answer of the model's own `not-owner`, and nothing changes. The model checks only `owner !=
+caller.principal`, and makes the agent the `owner` of an inbox it opens under the header (Open 4
+A), so without the rule the agent would close that inbox also without the header, after its
+delegation lapsed too, again after every reopen by the person, and every post to the person
+would then be refused until a new start. With the rule the agent closes it only under the header
+while its delegation is live, and under the header it does not close its own inbox, which is
+not the caller's `inbox` in that request. Without the header and for the caller's own inbox
+nothing changes: a caller without the header has its own address as `inbox`, so the rule refuses
+it only addresses the model refuses it too, except the inbox an agent opened for a person.
+
+The rule answers at the model's step for `not-owner`, after `unknown-inbox`: an address no inbox
+has is `unknown-inbox` (`404`) with the header and without it, as the model answers it, so the
+rule tells a caller nothing about which inboxes exist that the model did not tell it before; a
+body the route refuses (`400`) is refused as before. The listener decides it inside the
+backend's section, before the generated `dispatch`, from the decoded body and the row it reads
+there (`closes_another_inbox` in `crates/inbox-server/src/service.rs`), and not in
+`RequestContext`, because the generated `CloseInbox` asks its context no branch, only
+`try_caller_principal`. Cases: `crates/inbox-server/tests/delegation.rs` and
+`crates/inbox-server/tests/security_delegation.rs`.
+
+The other commands under the header carry no member of this kind. A `post` is the agent's own
+envelope: its `from` is the agent (`not-sender`), its `on_behalf_of` and `authority` are checked as
+in a post without the header, against the delegation the `authority` names, and the inbox the
+request acts for enters neither the post nor the stored message, so the recipient reads whose
+word the post is from the envelope alone, as before the header. `refuse` takes a message id and a
+reason and names no principal; the refused message records the reason, not who refused (above).
+`collect` takes a message id and is decided by the caller's `principal` alone, so the header
+changes nothing there. `mark-delivered` and `read` take a message id only. `open-inbox` names an
+address, which must be the person's, and records the agent as owner (Open 4 A, above);
+`close-inbox` names an address, which must be the person's too (the rule over a close, above).
+The rule of a reply under the header is `RequestContext` of `crates/inbox-server/src/service.rs`,
+a context around the core's `ServiceContext`; the core is not changed by it. Cases:
+`crates/inbox-server/tests/delegation.rs`.
+
+The caller is the sender: a `post` or an
 `answer` whose envelope's `from` is not the caller's `principal` is the specification's
 `not-sender` (`403`, `NotSender`), answered before every other refusal of the command and
 storing nothing. The rule is the model's (`ess/domains/messaging.yaml`); the listener holds no
@@ -343,6 +535,15 @@ The waiting request does not hold the backend's section: it reads the view insid
 leaves it, and sleeps until a command has been answered on another connection, then reads again.
 Each connection has its own thread, so a waiting request does not hold another request; it holds
 one of `max_connections` while it waits.
+
+A wait is one request: step 3 authenticated it once, at the clock reading of its start, and each
+read of the view during the wait is made for the caller of that start, with no second check of
+the key or of a delegation. So a delegation that lapses while a wait of its agent on the person's
+inbox sleeps (its `valid_until` passes during the wait) ends at the latest when that wait ends,
+`max_wait` after its start at the most (60 s by default): until then a read of the wait still
+answers the person's rows, and the next request that names the inbox is refused `401`. A key
+that lapses during a wait is held the same way. With `undelivered=1` and the header, the inbox
+whose state answers `409` is the person's (the caller's `inbox`, "The caller").
 
 ## The expiry task
 

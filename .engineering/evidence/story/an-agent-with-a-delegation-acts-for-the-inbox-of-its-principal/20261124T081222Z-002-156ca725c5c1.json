@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:12:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the service's header reader trims every Unicode white space, and the client sent a value that ends in one): round 3 (3d38d76): the client refuses a value whose first or last character is white space (char::is_whitespace), and docs/design/signing.md and docs/design/service.md say what the reader trims; the service is unchanged, it honours no such value; adversary_acting_for::a_value_the_service_trims_is_wrong_usage_and_sends_nothing was red and is green",
+    "review": "review-result:adversary-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

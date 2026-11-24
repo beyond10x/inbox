@@ -16,7 +16,9 @@ Every other command is a client of that service and signs what it sends with the
 key. A client command whose answer comes from a new start of the service then opens the caller's \
 own inbox again with the adapter of its last `inbox open` (none after `inbox close`) and posts \
 the kept envelopes again, as `inbox repost` does; one line on standard error says so, and with \
-`--json` the member `reconnected` of the document.";
+`--json` the member `reconnected` of the document. With `--for <address>` a client command acts \
+for the inbox at that address, under a delegation of the caller for its principal that the key \
+file holds; it then opens no inbox again after a new start.";
 
 /// The environment variables read outside a flag: name, description, the command that reads it
 /// (every client command when `None`).

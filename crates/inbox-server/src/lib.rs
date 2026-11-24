@@ -10,8 +10,12 @@
 //!   that request's caller;
 //! - the caller: every request carries a request signature ([`KEY_ID_HEADER`],
 //!   [`TIMESTAMP_HEADER`], [`SIGNATURE_HEADER`]) checked at the [`Clock`]'s reading; its key id
-//!   resolves to the principal that is the caller's `principal` and `inbox`; a request without a
-//!   valid one is answered `401 {"refused": "unauthenticated"}`;
+//!   resolves to the principal that is the caller's `principal` and, without
+//!   [`ON_BEHALF_OF_HEADER`], its `inbox`; a request that sends that header (the signed member
+//!   `on_behalf_of`) acts for the inbox it names, which becomes the caller's `inbox`, only under
+//!   a live delegation of the pair, and a reply in it speaks for the person of that inbox; a
+//!   request without a valid signature, or naming an inbox no live delegation covers, is answered
+//!   `401 {"refused": "unauthenticated"}`;
 //! - a body in which an object carries a member name twice is refused before any command runs;
 //! - the verifier port: [`RingVerifier`] over `inbox-verify`'s key ring;
 //! - the read rule, the wait on `Pending`, the expiry task ([`sweep`]) and the limits;
@@ -37,7 +41,10 @@ mod service;
 mod signals;
 pub mod tls;
 
-pub use auth::{KEY_ID_HEADER, RingVerifier, SIGNATURE_HEADER, TIMESTAMP_HEADER, request_headers};
+pub use auth::{
+    KEY_ID_HEADER, ON_BEHALF_OF_HEADER, RingVerifier, SIGNATURE_HEADER, TIMESTAMP_HEADER,
+    request_headers, request_headers_for,
+};
 pub use clock::{Clock, ManualClock, StartedClock, SystemClock, format_instant, format_reading};
 pub use config::Config;
 pub use expiry::sweep;

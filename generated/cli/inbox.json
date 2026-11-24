@@ -2,7 +2,7 @@
   "format": "b10x-cli-reference/1",
   "binary": "inbox",
   "about": "The inbox: one durable, addressable inbox per agent or person",
-  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. Every other command is a client of that service and signs what it sends with the caller's own key. A client command whose answer comes from a new start of the service then opens the caller's own inbox again with the adapter of its last `inbox open` (none after `inbox close`) and posts the kept envelopes again, as `inbox repost` does; one line on standard error says so, and with `--json` the member `reconnected` of the document.",
+  "description": "`inbox serve` runs the HTTP service of the inbox on a loopback address: plain HTTP by default, TLS with `--tls-file` and the certificate `inbox tls new` makes. Every other command is a client of that service and signs what it sends with the caller's own key. A client command whose answer comes from a new start of the service then opens the caller's own inbox again with the adapter of its last `inbox open` (none after `inbox close`) and posts the kept envelopes again, as `inbox repost` does; one line on standard error says so, and with `--json` the member `reconnected` of the document. With `--for <address>` a client command acts for the inbox at that address, under a delegation of the caller for its principal that the key file holds; it then opens no inbox again after a new start.",
   "globalOptions": [
     {
       "name": "json",
@@ -307,6 +307,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "adapter",
           "kind": "option",
           "long": "adapter",
@@ -353,6 +360,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         }
       ]
     },
@@ -393,6 +407,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         },
         {
           "name": "to",
@@ -547,6 +568,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "inbox",
           "kind": "option",
           "long": "inbox",
@@ -592,6 +620,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         },
         {
           "name": "inbox",
@@ -649,6 +684,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "follow",
           "kind": "switch",
           "long": "follow",
@@ -693,6 +735,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         },
         {
           "name": "chat_channel",
@@ -772,6 +821,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "message_id",
           "kind": "positional",
           "valueName": "MESSAGE_ID",
@@ -819,6 +875,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "message_id",
           "kind": "positional",
           "valueName": "MESSAGE_ID",
@@ -851,7 +914,7 @@
           "kind": "option",
           "long": "on-behalf-of",
           "valueName": "ON_BEHALF_OF",
-          "help": "The principal whose word this is; the caller by default"
+          "help": "The principal whose word this is; the caller by default, and under --for the address of --for"
         },
         {
           "name": "authority",
@@ -919,6 +982,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "message_id",
           "kind": "positional",
           "valueName": "MESSAGE_ID",
@@ -972,6 +1042,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         }
       ]
     },
@@ -1012,6 +1089,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         },
         {
           "name": "message_id",
@@ -1061,6 +1145,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "thread",
           "kind": "positional",
           "valueName": "THREAD",
@@ -1108,6 +1199,13 @@
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
         },
         {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
+        },
+        {
           "name": "thread",
           "kind": "positional",
           "valueName": "THREAD",
@@ -1153,6 +1251,13 @@
           "valueName": "OUTBOX",
           "env": "INBOX_OUTBOX",
           "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "acting_for",
+          "kind": "option",
+          "long": "for",
+          "valueName": "ADDRESS",
+          "help": "Act for the inbox at this address, the inbox of the principal with the same text: every request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the service answers the caller as the owner of that inbox while the key file holds a live delegation of the caller for that principal; without one every request is refused as one signed with a key the service does not hold. It is then the caller's inbox in the command: the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value, one with white space at either end and one with a control character are wrong usage. `open`, `close`, `wake` and `bridge` do not take it"
         }
       ]
     }

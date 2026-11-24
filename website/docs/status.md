@@ -36,7 +36,7 @@ principals of one operator. Read [the limits](limits.md) before you use it.
 |---|---|
 | Ed25519 key pairs. The secret key file has mode 0600 and is never overwritten | `inbox key new` |
 | One key file the service reads, each entry signed with the operator key | `inbox keyfile add-key` |
-| A delegation: one principal may speak for another | `inbox keyfile add-delegation`, `inbox post --on-behalf-of --authority` |
+| A delegation: one principal may speak for another, and act for its inbox: read, mark, answer and refuse its messages in its place | `inbox keyfile add-delegation`, `inbox post --on-behalf-of --authority`, `inbox <command> --for <address>` |
 | The service checks the signature of every request and of every envelope, and the delegation when there is one, before it stores anything | |
 | A message is shown to its recipient and its sender only. Any other caller is answered as for a message that does not exist | |
 

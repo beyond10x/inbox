@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:12:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a CR or LF in --for is sent, so the request head gains a header line of the caller's choosing): round 3 (3d38d76): the client refuses a --for value that holds any control character with exit 2 before any request and any file (acting_for_address in crates/inbox-cli/src/main.rs), and the function that writes a request head (request_head in crates/inbox-cli/src/client.rs) makes no head with a line break in any of its parts, an error and not a panic; adversary_acting_for::a_line_break_in_for_is_wrong_usage_and_sends_nothing was red and is green; the unit case client::tests::the_head_holds_no_line_break_a_caller_passes holds the head",
+    "review": "review-result:adversary-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

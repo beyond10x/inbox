@@ -130,7 +130,7 @@ types:
   - name: inbox.messaging.DelegationEntry
     kind: struct
     naming:
-      summary: "One delegation of the key file: `agent` may speak for `on_behalf_of` until `valid_until`. It covers every message the agent sends for that principal; version 1 has no narrower scope and no chain. The operator key signs the entry."
+      summary: "One delegation of the key file: until `valid_until`, `agent` may speak for `on_behalf_of` in every message it sends, and act as the owner of the inbox whose address has the text of `on_behalf_of` in every request that names that inbox. Version 1 has no narrower scope and no chain. The operator key signs the entry."
     fields:
       - {name: delegation_id, type: inbox.messaging.DelegationId, summary: "The id an envelope's `authority` names."}
       - {name: agent, type: inbox.messaging.Principal}
@@ -187,7 +187,7 @@ types:
 entities:
   - name: inbox.messaging.Inbox
     naming:
-      summary: A named address that messages are posted to. It belongs to the principal the address names; only a caller authenticated for the address opens it, closes it or handles its messages.
+      summary: "A named address that messages are posted to. Only a caller whose `inbox` is the address opens it or handles its messages; only its `owner`, the principal that opened it, closes it."
     identity:
       name: address
       type: inbox.messaging.Address
@@ -252,7 +252,7 @@ entities:
 actors:
   - name: inbox.messaging.Client
     naming:
-      summary: "A session, a bridge or a person's tool that talks to the service. `principal` is who the service authenticated the request as, and `inbox` is the address of the inbox that principal owns. In version 1 the two are the same text."
+      summary: "A session, a bridge or a person's tool that talks to the service. `principal` is who the service authenticated the request as, and `inbox` is the address of the inbox the request acts for: the address with the text of `principal`, or, in a request that names an inbox under a live delegation of `principal`, the address it names."
     attributes:
       - {name: principal, type: inbox.messaging.Principal}
       - {name: inbox, type: inbox.messaging.Address}

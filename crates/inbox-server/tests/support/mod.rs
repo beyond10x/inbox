@@ -10,15 +10,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use inbox::messaging::{
-    Address, Body, DedupKey, KeyEntry, KeyFile, Kind, MessageId, PostMessage, Principal, Signature,
-    ThreadId,
+    Address, Body, DedupKey, DelegationEntry, DelegationId, KeyEntry, KeyFile, Kind, MessageId,
+    PostMessage, Principal, Signature, ThreadId,
 };
 use inbox::primitives::Timestamp;
 use inbox::server::json::{self, Value};
 use inbox::server::wire;
 use inbox_core::MemoryBackend;
-use inbox_server::{Config, ManualClock, Running, Server, format_instant, request_headers};
-use inbox_verify::{Instant, KeyRing, SecretKey, sign_envelope, sign_key_entry};
+use inbox_server::{
+    Config, KEY_ID_HEADER, ManualClock, Running, SIGNATURE_HEADER, Server, TIMESTAMP_HEADER,
+    format_instant, request_headers, request_headers_for,
+};
+use inbox_verify::{
+    Instant, KeyRing, Request, SecretKey, sign_delegation_entry, sign_envelope, sign_key_entry,
+    sign_request_for,
+};
 
 pub const AGENT: &str = "agent:host-a/session-one";
 pub const OTHER: &str = "agent:host-b/session-two";
@@ -53,6 +59,12 @@ fn generate() -> SecretKey {
 
 impl World {
     pub fn new() -> Self {
+        Self::with_delegations(&[])
+    }
+
+    /// A world whose key file holds, beside the keys of the 3 members, one delegation entry per
+    /// `(delegation_id, agent, on_behalf_of, valid_until)`, signed by the operator key.
+    pub fn with_delegations(delegations: &[(&str, &str, &str, &str)]) -> Self {
         let operator = generate();
         let members: Vec<Member> = [AGENT, OTHER, THIRD]
             .into_iter()
@@ -77,10 +89,21 @@ impl World {
                 entry
             })
             .collect();
-        let file = KeyFile {
-            keys,
-            delegations: Vec::new(),
-        };
+        let delegations = delegations
+            .iter()
+            .map(|&(id, agent, on_behalf_of, valid_until)| {
+                let mut entry = DelegationEntry {
+                    delegation_id: DelegationId(id.to_owned()),
+                    agent: Principal(agent.to_owned()),
+                    on_behalf_of: Principal(on_behalf_of.to_owned()),
+                    valid_until: Timestamp(valid_until.to_owned()),
+                    operator_signature: String::new(),
+                };
+                sign_delegation_entry(&mut entry, &operator);
+                entry
+            })
+            .collect();
+        let file = KeyFile { keys, delegations };
         let mut text = String::new();
         wire::encode_inbox_messaging_key_file(&file, &mut text);
         let ring = KeyRing::parse(&text, &operator.public_key()).expect("the key file reads");
@@ -206,6 +229,75 @@ impl World {
         );
         let headers: Vec<(&str, String)> = headers.into_iter().collect();
         send_raw_answer(address, method, target, &headers, body)
+    }
+
+    /// Sends a request signed by `principal` at the clock's reading that acts for the inbox
+    /// `on_behalf_of` names: the sixth member signed and the header `Inbox-On-Behalf-Of` sent.
+    pub fn send_for(
+        &self,
+        address: SocketAddr,
+        principal: &str,
+        on_behalf_of: &str,
+        method: &str,
+        target: &str,
+        body: &[u8],
+    ) -> Reply {
+        self.send_answer_for(address, principal, on_behalf_of, method, target, body)
+            .1
+    }
+
+    /// [`World::send_for`], answering the head of the answer beside it.
+    pub fn send_answer_for(
+        &self,
+        address: SocketAddr,
+        principal: &str,
+        on_behalf_of: &str,
+        method: &str,
+        target: &str,
+        body: &[u8],
+    ) -> (String, Reply) {
+        let member = self.member(principal);
+        let headers = request_headers_for(
+            method,
+            target,
+            body,
+            &member.key_id,
+            &member.key,
+            &self.timestamp(),
+            Some(on_behalf_of),
+        );
+        send_raw_answer(address, method, target, &headers, body)
+    }
+
+    /// The 3 headers that sign a request of `principal` at the clock's reading, the signature
+    /// over the sixth member `on_behalf_of` when it is `Some`. The header that carries the member
+    /// is not among them: a case adds what it sends.
+    pub fn signed_headers(
+        &self,
+        principal: &str,
+        method: &str,
+        target: &str,
+        body: &[u8],
+        on_behalf_of: Option<&str>,
+    ) -> Vec<(&'static str, String)> {
+        let member = self.member(principal);
+        let timestamp = self.timestamp();
+        let signature = sign_request_for(
+            &Request {
+                method,
+                path: target,
+                body,
+                key_id: &member.key_id,
+                timestamp: &timestamp,
+            },
+            on_behalf_of,
+            &member.key,
+        );
+        vec![
+            (KEY_ID_HEADER, member.key_id.clone()),
+            (TIMESTAMP_HEADER, timestamp),
+            (SIGNATURE_HEADER, signature),
+        ]
     }
 
     /// Opens `principal`'s own inbox and asserts it was opened.

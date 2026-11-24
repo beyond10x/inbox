@@ -10,6 +10,16 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ### Added
 
+- A delegation now also lets its agent act for the inbox of the principal it names:
+  `inbox <command> --for <address>` sends the request header `Inbox-On-Behalf-Of` with that
+  address, signed as a sixth member of the request, and while the key file holds a live
+  delegation of the pair the service answers the agent as the owner of that inbox: it reads,
+  marks, answers and refuses the person's messages (`inbox answer --for` answers on behalf of the
+  person; `--authority` names the delegation). Without a live delegation such a request is
+  refused as one with a bad signature (`401`). Under the header a reply on behalf of anybody but
+  the person is `authority-invalid`, and a `close-inbox` closes only the caller's inbox of that
+  request. `inbox open`, `inbox close`, `inbox wake` and `inbox bridge` do not take `--for` yet.
+  A request without `--for` is the one of before, byte for byte.
 - `inbox bridge`, the chat bridge of a person's inbox: it posts each message of the inbox into
   the chat channel of its binding (`--chat-channel`, `--allowed-chat-user`, `--chat-connector`)
   through `connectors`, one post per message with the body in a block of literal text, records

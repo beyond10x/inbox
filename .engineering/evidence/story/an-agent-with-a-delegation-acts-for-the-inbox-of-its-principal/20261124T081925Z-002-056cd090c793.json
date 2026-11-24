@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:19:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (no case fails when the request head is made after the connection is opened): the case of the pass, adversary_acting_for::a_line_break_in_the_key_id_opens_no_connection, is kept in the story's tree; it is red under that mutant; the code was right",
+    "review": "review-result:adversary-delegation-acts-pass-2",
+    "outcome": "fixed"
+  }
+}

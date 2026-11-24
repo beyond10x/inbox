@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Inbox",
-  "description": "A named address that messages are posted to. It belongs to the principal the address names; only a caller authenticated for the address opens it, closes it or handles its messages.",
+  "description": "A named address that messages are posted to. Only a caller whose `inbox` is the address opens it or handles its messages; only its `owner`, the principal that opened it, closes it.",
   "x-ess-name": "inbox.messaging.Inbox",
   "x-ess-kind": "entity",
   "type": "object",
@@ -30,7 +30,7 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:561ceec9c8de9bf96812e810db7b11b2051bcab6c9ae21e51351ce85491442a6",
+    "contract_digest": "slice-sha256/2:580fa3bd9ab539ffff7db0cd480ff8f5033c40a7356321ab6ec571e2c16edecc",
     "regenerate": "ess generate"
   },
   "$defs": {

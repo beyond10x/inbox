@@ -4,13 +4,13 @@
   "x-ess-provenance": {
     "system": "inbox",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:b084eb882cc2545452161fd23b0e97fa7bd7c5f2da1d1aceb89559c804dca40c",
+    "contract_digest": "slice-sha256/2:bac3f4eea5bed820e1fec4354ea6eec16be6e275f567854133b359a323bc167a",
     "regenerate": "ess generate"
   },
   "$defs": {
     "inbox.messaging.DelegationEntry": {
       "title": "DelegationEntry",
-      "description": "One delegation of the key file: `agent` may speak for `on_behalf_of` until `valid_until`. It covers every message the agent sends for that principal; version 1 has no narrower scope and no chain. The operator key signs the entry.",
+      "description": "One delegation of the key file: until `valid_until`, `agent` may speak for `on_behalf_of` in every message it sends, and act as the owner of the inbox whose address has the text of `on_behalf_of` in every request that names that inbox. Version 1 has no narrower scope and no chain. The operator key signs the entry.",
       "x-ess-name": "inbox.messaging.DelegationEntry",
       "x-ess-kind": "struct",
       "type": "object",

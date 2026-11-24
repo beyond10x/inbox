@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:59:03Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (under the header the agent can answer a decision it sent itself to the person's inbox, and the design does not say whether that is intended): decided, no rule of the service refuses it. Version 1 has no scope narrower than the pair of a delegation, so an agent with a live delegation answers any message of the person's inbox in the person's place, one it sent itself included, and the record says the person answered; a sender that must not answer its own question holds no delegation of the person it asks. The design says so (docs/design/signing.md, A delegation) and the limits page names it (website/docs/limits.md); a scope on a delegation entry is a change of the key file's format and is not in this story",
+    "review": "review-result:security-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -134,14 +134,52 @@ Each can be changed; the alternative is named where there is one.
    message its agent sends for its principal until `valid_until`: version 1 has no narrower scope
    and no chain. Alternative: a delegation that names the kinds it covers. General agent identity
    belongs to Mandate.
-5. **Ownership.** A caller carries a `principal` and an `inbox` address, the same text in
-   version 1. Only the caller whose `inbox` is the address opens it; only the owner closes it,
-   marks, reads, answers or refuses its messages; only the sender collects. A post or an answer
+   A delegation covers more than the messages its agent sends: until `valid_until` it also lets
+   its agent act as the owner of the inbox of its `on_behalf_of` (the address with the text of
+   that principal), in each request that names that inbox in its signed member `on_behalf_of`
+   (`docs/design/signing.md`, "Request" and "A delegation"): read its views, mark, read, answer
+   and refuse its messages, as decision 5 says. A reply in such a request speaks for the person
+   of that inbox: one `on_behalf_of` anybody else, the agent included, is refused
+   `authority-invalid`, a rule of the service the model cannot state (`docs/design/service.md`,
+   "The caller"). A request that names an inbox no live delegation
+   of the pair covers is refused as a request with a bad signature, and a request that names none
+   is answered as before. Taken on 2026-11-23 on the operator's answer B
+   (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner), so that a chat bridge
+   holds a key of its own and answers for a person under a delegation. Alternatives: (A) the
+   bridge holds a key whose entry names the person as principal: no change of the service, but a
+   reply of the bridge cannot be told from one the person signed, and the key speaks as the person
+   in every command; (C) the bridge reads and marks with such a key and signs only the reply with
+   its own, which `not-sender` of `Answer` refuses unless the model changes. The service and
+   `inbox-verify` hold it, and the client names the inbox it acts for with `--for <address>`
+   (`docs/design/service.md`, "The request signature"). Not built yet: `inbox wake` and `inbox
+   bridge` under a delegation, which do not take `--for`
+   (story:the-chat-bridge-runs-with-its-own-key-under-a-delegation).
+5. **Ownership.** A caller carries a `principal` and an `inbox` address. `principal` is who
+   signed the request; `inbox` is the address with the same text, or, in a request that names an
+   inbox under a live delegation (decision 4), the address it names: the two differ then. Taken on
+   2026-11-23 on the operator's answer B
+   (approval-record:d81-a-delegation-grants-acting-as-the-inbox-owner); before it they were the
+   same text in every request. The model decides each command and view by one of the two or by
+   both (`docs/design/service.md`, "The caller", lists them): by `inbox` who opens an inbox and
+   who marks, reads, answers or refuses a message in it (its `to` is the caller's `inbox`); by
+   `principal` who sends (`not-sender`), who collects, the `owner` an inbox records when it is
+   opened, and who closes it; the read rule keeps a row whose `to` is the caller's `inbox` or
+   whose `from` is its `principal`. So an inbox an agent opens under a delegation is owned by the
+   agent, and the person's own key does not close it (the model as it stands; the alternative,
+   an owner set from the caller's `inbox`, changes `ess/`). The service adds one rule to the
+   close: an address that is not the caller's `inbox` is `not-owner` too, so the agent closes
+   that inbox only under the header while its delegation is live, and not without it
+   (`docs/design/service.md`, "The caller"). After the delegation lapses nobody closes it until a
+   new start of the service.
+   Only the caller whose `inbox` is the address opens it; only the owner, in a request whose
+   `inbox` is the address, closes it; only the
+   caller whose `inbox` is a message's `to` marks, reads, answers or refuses it; only the sender
+   collects. A post or an answer
    whose `from` is not the caller's `principal` is refused `not-sender` (`NotSender`) before every
    other refusal of the command, so a principal that holds another's signed envelope cannot send
    it again as its own request, and learns nothing about a stored message from the answer. With
-   a delegation the caller is still `from`; `on_behalf_of` is not compared. A caller that is
-   neither the owner of the inbox in `to` nor the sender in `from` of a stored message gets
+   a delegation the caller is still `from`; `on_behalf_of` is not compared. A caller whose
+   `inbox` is not the `to` and whose `principal` is not the `from` of a stored message gets
    `foreign-message` (error `UnknownMessage`) from `MarkDelivered`, `MarkRead`, `Answer`,
    `Refuse` and `Collect`, after `unknown-message` and before `not-recipient`, `not-sender` and
    every refusal of the message's state; the core answers it as `unknown-message`

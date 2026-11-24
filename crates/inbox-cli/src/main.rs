@@ -251,15 +251,44 @@ struct ClientArgs {
     /// $HOME/.local/state/inbox/outbox.jsonl.
     #[arg(long, env = "INBOX_OUTBOX")]
     outbox: Option<PathBuf>,
+    /// Act for the inbox at this address, the inbox of the principal with the same text: every
+    /// request carries it in the header Inbox-On-Behalf-Of, signed with the caller's key, and the
+    /// service answers the caller as the owner of that inbox while the key file holds a live
+    /// delegation of the caller for that principal; without one every request is refused as one
+    /// signed with a key the service does not hold. It is then the caller's inbox in the command:
+    /// the default of --inbox, and of --on-behalf-of of `answer`. Sent as given; an empty value,
+    /// one with white space at either end and one with a control character are wrong usage.
+    /// `open`, `close`, `wake` and `bridge` do not take it.
+    #[arg(long = "for", value_name = "ADDRESS")]
+    acting_for: Option<String>,
 }
 
 impl ClientArgs {
     fn client(&self) -> Result<Client, Failure> {
+        if let Some(address) = &self.acting_for {
+            acting_for_address(address)?;
+        }
         Ok(Client::new(
             Service::from_url(self.url.as_deref(), self.tls_pin.as_deref())?,
             keys::caller(self.secret_key_file.as_deref())?,
             outbox::Outbox::locate(self.outbox.as_deref())?,
-        ))
+        )
+        .acting_for(self.acting_for.clone()))
+    }
+
+    /// Ends the process with exit 2 and one line when `--for` is given to `command`, which keeps
+    /// state on this host keyed by the caller's own address (the record of the opened inbox, the
+    /// wake lock, the record of the chat posts) and so does not take it in this version.
+    fn refuse_for(&self, command: &str, json: bool) {
+        if self.acting_for.is_none() {
+            return;
+        }
+        let failure = Failure::Usage(format!("inbox {command} does not take --for"));
+        if json {
+            output::print_document(&failure.document());
+        }
+        output::warn(&format!("inbox {command}: does not take --for"));
+        std::process::exit(failure.status());
     }
 
     /// Runs the client command `command` (`typed`), and hands back the client for the reconnect
@@ -273,6 +302,22 @@ impl ClientArgs {
         let result = command(&client);
         (result.map(Some), Some((client, typed)))
     }
+}
+
+/// Refuses a value of `--for` the service never honours, as wrong usage before any request: an
+/// empty one, one with white space at either end (the service's reader trims every white space,
+/// `char::is_whitespace`, so it would read another text than the signed one), and one that holds
+/// a control character (`char::is_control`; a line break would also end the header line on the
+/// wire). The value is named in its escaped form, on one line.
+fn acting_for_address(address: &str) -> Result<(), Failure> {
+    let padded = address.starts_with(char::is_whitespace) || address.ends_with(char::is_whitespace);
+    if address.is_empty() || padded || address.contains(char::is_control) {
+        return Err(Failure::Usage(format!(
+            "--for {address:?} is no address: empty, white space at either end, or a control \
+             character"
+        )));
+    }
+    Ok(())
 }
 
 /// What a command did, and for a client command the client and the command it ran, for the
@@ -483,7 +528,8 @@ struct AnswerArgs {
     /// The option of a decision chosen.
     #[arg(long)]
     option: Option<String>,
-    /// The principal whose word this is; the caller by default.
+    /// The principal whose word this is; the caller by default, and under --for the address of
+    /// --for.
     #[arg(long)]
     on_behalf_of: Option<String>,
     /// The delegation that lets the caller speak for --on-behalf-of.
@@ -825,6 +871,13 @@ fn main() {
         }
     };
     let json = cli.json;
+    match &cli.command {
+        Command::Open { client, .. } => client.refuse_for("open", json),
+        Command::Close { client } => client.refuse_for("close", json),
+        Command::Wake { client, .. } => client.refuse_for("wake", json),
+        Command::Bridge { client, .. } => client.refuse_for("bridge", json),
+        _ => {}
+    }
     // `inbox wake` writes its own output: the rows before the marks, and the reconnects as they
     // run.
     if let Command::Wake { client, follow } = &cli.command {

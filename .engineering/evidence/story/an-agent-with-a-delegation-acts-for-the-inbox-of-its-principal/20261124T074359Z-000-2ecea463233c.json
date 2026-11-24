@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:43:59Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 18,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (an agent whose delegation lapsed still closes, without the header, the inbox it opened for the person): round 1b (ea37f40) adds a rule of the service: close-inbox for an inbox that exists and is not the caller's inbox is answered not-owner, byte for byte the model's own not-owner, and an address no inbox has is still unknown-inbox; the reviewer's case security_delegation::a_lapsed_delegation_leaves_its_agent_no_close_of_the_persons_inbox was red (left closed, right not-owner) and is green; delegation::after_the_lapse_the_persons_inbox_stays_open_and_nobody_closes_it holds the state after the lapse; 3 mutants of the rule are each red in a named case",
+    "review": "review-result:security-delegation-acts-pass-1",
+    "outcome": "fixed"
+  }
+}

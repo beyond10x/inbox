@@ -10,7 +10,7 @@ use std::time::Duration;
 use inbox::server::inbox_service::ROUTES;
 use inbox::server::json::{self, Value};
 use inbox_server::tls::{self, Pin};
-use inbox_server::{Clock, EPOCH_HEADER, SystemClock, format_instant, request_headers};
+use inbox_server::{Clock, EPOCH_HEADER, SystemClock, format_instant, request_headers_for};
 
 use crate::failure::Failure;
 use crate::keys::Caller;
@@ -136,29 +136,37 @@ impl Service {
 
     /// Sends one request signed by `caller` at the clock reading and reads the whole answer. Over
     /// TLS the handshake is complete, and the certificate held to the pin, before a byte of the
-    /// request is written.
+    /// request is written. With `on_behalf_of` (`--for`) the request carries the header
+    /// `Inbox-On-Behalf-Of` with that address and signs it as the sixth member of the signed
+    /// request object (`docs/design/signing.md`, "Request"); without it the request is the one
+    /// of before the header, byte for byte.
     ///
     /// # Errors
     ///
     /// [`Failure::Transport`] when the service cannot be reached or the answer is not HTTP;
-    /// [`Failure::Certificate`] when its certificate does not match the pin or it speaks no TLS.
+    /// [`Failure::Certificate`] when its certificate does not match the pin or it speaks no TLS;
+    /// [`Failure::Usage`] when a part of the head holds a line break ([`request_head`]), before a
+    /// connection is opened.
     pub fn send(
         &self,
         caller: &Caller,
+        on_behalf_of: Option<&str>,
         method: &str,
         target: &str,
         body: &[u8],
         wait: Duration,
     ) -> Result<Reply, Failure> {
         let timestamp = format_instant(SystemClock.now());
-        let headers = request_headers(
+        let headers = request_headers_for(
             method,
             target,
             body,
             &caller.key_id,
             &caller.key,
             &timestamp,
+            on_behalf_of,
         );
+        let head = request_head(method, target, &self.host, body.len(), &headers)?;
         let socket = self.connect()?;
         let peer = socket
             .peer_addr()
@@ -188,16 +196,6 @@ impl Service {
                 })?)
             }
         };
-        let mut head = format!(
-            "{method} {target} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\n\
-             Content-Length: {}\r\nConnection: close\r\n",
-            self.host,
-            body.len()
-        );
-        for (name, value) in headers {
-            head.push_str(&format!("{name}: {value}\r\n"));
-        }
-        head.push_str("\r\n");
         stream.write_all(head.as_bytes()).map_err(transport)?;
         stream.write_all(body).map_err(transport)?;
         stream.flush().map_err(transport)?;
@@ -211,6 +209,45 @@ impl Service {
             }
         })
     }
+}
+
+/// The head of a request, up to and with its empty line: the request line, `Host`, the fixed
+/// headers and `headers` in their order. A CR or LF in any part (`method`, `target`, `host`, a
+/// name or a value of `headers`) would end a line on the wire where the signed text goes on, so
+/// it is refused as [`Failure::Usage`] and no head is made, whatever the caller passes.
+fn request_head(
+    method: &str,
+    target: &str,
+    host: &str,
+    length: usize,
+    headers: &[(&str, String)],
+) -> Result<String, Failure> {
+    let parts = [
+        ("the method", method),
+        ("the target", target),
+        ("the host", host),
+    ];
+    let named = headers
+        .iter()
+        .flat_map(|(name, value)| [("a header name", *name), ("a header value", value.as_str())]);
+    if let Some((part, _)) = parts
+        .into_iter()
+        .chain(named)
+        .find(|(_, text)| text.contains(['\r', '\n']))
+    {
+        return Err(Failure::Usage(format!(
+            "{part} holds a line break; no request is sent"
+        )));
+    }
+    let mut head = format!(
+        "{method} {target} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/json\r\n\
+         Content-Length: {length}\r\nConnection: close\r\n"
+    );
+    for (name, value) in headers {
+        head.push_str(&format!("{name}: {value}\r\n"));
+    }
+    head.push_str("\r\n");
+    Ok(head)
 }
 
 /// The epoch of one start of the service, as its answers name it in [`EPOCH_HEADER`]: 32
@@ -391,7 +428,8 @@ pub fn query_value(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Epoch, Reply, Service, query_value, route};
+    use super::{Epoch, Reply, Service, query_value, request_head, route};
+    use crate::failure::Failure;
 
     const EPOCH: &str = "0123456789abcdef0123456789abcdef";
 
@@ -452,6 +490,34 @@ mod tests {
         assert_eq!(whole(read("Transfer-Encoding: gzip, Chunked\r\n")), None);
         let no_head = Reply::read(b"HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n");
         assert!(matches!(no_head, Err((None, _))), "{no_head:?}");
+    }
+
+    /// A CR or LF in any part of the head, a value of `Inbox-On-Behalf-Of` among them, is an
+    /// error and makes no head; without one the head is the lines as given.
+    #[test]
+    fn the_head_holds_no_line_break_a_caller_passes() {
+        let header = |value: &str| vec![("Inbox-On-Behalf-Of", value.to_owned())];
+        let head = request_head("GET", "/p", "127.0.0.1:1", 0, &header("agent:test/bob")).unwrap();
+        assert_eq!(
+            head,
+            "GET /p HTTP/1.1\r\nHost: 127.0.0.1:1\r\nContent-Type: application/json\r\n\
+             Content-Length: 0\r\nConnection: close\r\nInbox-On-Behalf-Of: agent:test/bob\r\n\r\n"
+        );
+        for broken in ["a\r\nX-Injected: 1", "a\nX", "a\rX", "\n"] {
+            for (method, target, host, headers) in [
+                (broken, "/p", "h", header("a")),
+                ("GET", broken, "h", header("a")),
+                ("GET", "/p", broken, header("a")),
+                ("GET", "/p", "h", header(broken)),
+                ("GET", "/p", "h", vec![("X\r\nY", "a".to_owned())]),
+            ] {
+                let made = request_head(method, target, host, 0, &headers);
+                assert!(
+                    matches!(made, Err(Failure::Usage(_))),
+                    "{broken:?} {method:?} {target:?} {host:?}: {made:?}"
+                );
+            }
+        }
     }
 
     /// Every wire name the client sends to, by method.

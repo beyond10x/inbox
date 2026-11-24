@@ -187,22 +187,43 @@ fn entry_bytes(encoded: &str) -> Vec<u8> {
         .unwrap_or_else(|error| unreachable!("an entry of strings canonicalizes: {error}"))
 }
 
-/// The bytes a request signature covers.
+/// The bytes a request signature covers, for a request that acts for the inbox `on_behalf_of`
+/// names (the sixth member, between `method` and `path`) or, with `None`, for none: then the
+/// bytes of [`request_bytes`], byte for byte. An empty `on_behalf_of` is a member, never absent.
 #[must_use]
-pub fn request_bytes(request: &Request<'_>) -> Vec<u8> {
+pub fn request_bytes_for(request: &Request<'_>, on_behalf_of: Option<&str>) -> Vec<u8> {
     let text = |value: &str| Value::Text(value.to_owned());
-    let value = Value::Object(vec![
+    let mut members = vec![
         (
             "body_sha256".to_owned(),
             text(&encode(&Sha256::digest(request.body))),
         ),
         ("key_id".to_owned(), text(request.key_id)),
         ("method".to_owned(), text(request.method)),
-        ("path".to_owned(), text(request.path)),
-        ("timestamp".to_owned(), text(request.timestamp)),
-    ]);
-    prefixed(REQUEST_CONTEXT, &value)
-        .unwrap_or_else(|error| unreachable!("five distinct strings canonicalize: {error}"))
+    ];
+    if let Some(on_behalf_of) = on_behalf_of {
+        members.push(("on_behalf_of".to_owned(), text(on_behalf_of)));
+    }
+    members.push(("path".to_owned(), text(request.path)));
+    members.push(("timestamp".to_owned(), text(request.timestamp)));
+    prefixed(REQUEST_CONTEXT, &Value::Object(members))
+        .unwrap_or_else(|error| unreachable!("distinct members of strings canonicalize: {error}"))
+}
+
+/// [`sign_request`] over [`request_bytes_for`].
+#[must_use]
+pub fn sign_request_for(
+    request: &Request<'_>,
+    on_behalf_of: Option<&str>,
+    key: &SecretKey,
+) -> String {
+    encode(&key.sign(&request_bytes_for(request, on_behalf_of)))
+}
+
+/// The bytes a request signature covers: the five members of a request that acts for no inbox.
+#[must_use]
+pub fn request_bytes(request: &Request<'_>) -> Vec<u8> {
+    request_bytes_for(request, None)
 }
 
 /// Signs an envelope with the sender's key: sets `signature.key_id` to `key_id` and

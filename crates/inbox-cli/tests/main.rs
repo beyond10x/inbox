@@ -1,8 +1,10 @@
 //! The cases of `inbox-cli`, in one test binary: each file of this directory is a module.
 
 mod acceptance;
+mod acting_for;
 mod adversary;
 mod adversary2;
+mod adversary_acting_for;
 mod adversary_argument_not_utf_8;
 mod adversary_argument_not_utf_8_2;
 mod adversary_bridge;

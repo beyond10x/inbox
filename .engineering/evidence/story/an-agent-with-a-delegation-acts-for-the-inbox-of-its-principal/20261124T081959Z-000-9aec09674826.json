@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T08:19:59Z",
+  "actor": "agent:inbox",
+  "artifact": "story:an-agent-with-a-delegation-acts-for-the-inbox-of-its-principal",
+  "kind": "story",
+  "revision": 20,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (a key file whose key id holds a line break, which inbox key new makes without complaint, fails every client command with exit 2 and a line that names no key file): not changed in this story. The key file is the caller's own; that inbox key new accepts such a key id was so before this story, and a check where the file is read would take away the only part of a request head the case of finding 3 can reach. Filed as the draft story:a-key-id-with-a-control-character-is-refused-where-it-is-made, which waits until the planned waves are delivered",
+    "review": "review-result:adversary-delegation-acts-pass-2",
+    "outcome": "escalated"
+  }
+}
