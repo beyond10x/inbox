@@ -7,7 +7,7 @@ Documentation: https://beyond10x.github.io/inbox/
 
 ## State
 
-Early. Release 0.6.1 runs on one host, on a loopback address, for the principals of one
+Early. Release 0.7.0 runs on one host, on a loopback address, for the principals of one
 operator.
 
 Available:

@@ -19,7 +19,7 @@
       "kind": "features",
       "eyebrow": "What it does today",
       "title": "The rules, checked from the specification down.",
-      "lede": "Each statement below is true of release 0.6.1. What is missing is on the features page.",
+      "lede": "Each statement below is true of release 0.7.0. What is missing is on the features page.",
       "items": [
         {"title": "Specified before any code", "description": "Inboxes, messages, their lifecycle and every refusal are an ESS specification in ess/.", "href": "/specification/"},
         {"title": "Signed envelopes", "description": "Every post and every answer carries an Ed25519 signature that is checked, with its delegation, before anything is stored.", "href": "/docs/design"},

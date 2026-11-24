@@ -31,6 +31,10 @@ Release 0.6.1 is release 0.6.0 with the changes its `CHANGELOG.md` section lists
 that ends with 4 and marks nothing when its reader is gone, a change of a file beside the outbox
 that loses no line and follows no link, a text output that shows the characters of no width as
 their escapes, and ESS 0.98.0.
+Release 0.7.0 is release 0.6.1 with the changes its `CHANGELOG.md` section lists: a delegation
+that lets its agent act for the inbox of its principal (`--for` on every client command),
+`inbox bridge`, the chat bridge of the inbox of a person, which was not run on a real channel
+yet, and the check of the gate that fails on a breaking change of the specification.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 
