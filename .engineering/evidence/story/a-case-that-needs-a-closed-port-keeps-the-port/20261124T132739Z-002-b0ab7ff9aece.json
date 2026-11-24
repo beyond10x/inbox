@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T13:27:39Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-case-that-needs-a-closed-port-keeps-the-port",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the helper's own case binds the port again after the drop, which a listener of another case can take in between): the coordinator removed that bind and its assertion; the case is support::closed_port::a_closed_port_is_held_while_its_value_lives and holds the failed second bind and the refused connect; that a drop gives the port back is held by no case",
+    "review": "review-result:adversary-closed-port-pass-1",
+    "outcome": "fixed"
+  }
+}

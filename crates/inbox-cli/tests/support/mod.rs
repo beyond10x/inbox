@@ -14,6 +14,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use inbox::server::json::{self, Value};
 
+mod closed_port;
+
+pub use closed_port::ClosedPort;
+
 /// The binary under test.
 pub const BIN: &str = env!("CARGO_BIN_EXE_inbox");
 

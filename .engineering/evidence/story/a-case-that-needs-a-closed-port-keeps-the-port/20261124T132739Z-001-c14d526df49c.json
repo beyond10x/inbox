@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T13:27:39Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-case-that-needs-a-closed-port-keeps-the-port",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (bridge::a_bridge_started_before_the_service_answers_says_so_and_keeps_trying counts its lines before the second try): the case's count is unchanged by this story, which changed only where the case gets its address; filed as the draft story:the-case-of-the-early-bridge-counts-its-lines-after-a-second-try; the mutant is red in adversary_bridge::a_bridge_that_waits_for_the_service_says_so_once_and_ends_on_a_signal",
+    "review": "review-result:adversary-closed-port-pass-1",
+    "outcome": "escalated"
+  }
+}

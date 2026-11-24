@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T14:26:54Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-key-id-with-a-control-character-is-refused-where-it-is-made",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}
