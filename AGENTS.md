@@ -35,6 +35,10 @@ Release 0.7.0 is release 0.6.1 with the changes its `CHANGELOG.md` section lists
 that lets its agent act for the inbox of its principal (`--for` on every client command),
 `inbox bridge`, the chat bridge of the inbox of a person, which was not run on a real channel
 yet, and the check of the gate that fails on a breaking change of the specification.
+Release 0.8.0 is release 0.7.0 with the changes its `CHANGELOG.md` section lists: a key id with
+a control character is refused where a key is made and where a key file is read, an `INBOX`
+variable that is not UTF-8 is a usage error that names it, and a control character in the host
+or port of `INBOX_URL` is refused before the resolver.
 The gate (see Rules) is open for principals of one operator. Stages 2 to 6 are the epics in
 `.engineering/planning/epic/`.
 

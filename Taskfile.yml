@@ -88,7 +88,7 @@ tasks:
       SUITE: '{{.OUT}}/coverage/suite.json'
       CORE: inbox-core
       SERVE: inbox-serve
-      RUNNER: inbox-conformance@0.7.0
+      RUNNER: inbox-conformance@0.8.0
     cmds:
       - task: coverage
       - mkdir -p {{.OUT}}/conform

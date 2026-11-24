@@ -8,6 +8,8 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-24
+
 ### Changed
 
 - A client command given a secret key file whose `key_id` holds a control character that is not
