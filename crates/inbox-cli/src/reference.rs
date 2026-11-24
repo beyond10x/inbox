@@ -20,7 +20,7 @@ the kept envelopes again, as `inbox repost` does; one line on standard error say
 
 /// The environment variables read outside a flag: name, description, the command that reads it
 /// (every client command when `None`).
-const ENVIRONMENT: [(&str, &str, Option<&str>); 3] = [
+const ENVIRONMENT: [(&str, &str, Option<&str>); 4] = [
     (
         "INBOX_BACKEND",
         "The backend `inbox serve` keeps the inboxes in. `memory`, the default, is the only one.",
@@ -38,6 +38,12 @@ const ENVIRONMENT: [(&str, &str, Option<&str>); 3] = [
          `$HOME/.local/state/inbox/outbox.jsonl`.",
         None,
     ),
+    (
+        "PATH",
+        "`inbox bridge` posts through the first executable `connectors` in it, and refuses to \
+         start without one.",
+        Some("bridge"),
+    ),
 ];
 
 const EXIT_STATUSES: [(i32, &str); 6] = [
@@ -45,16 +51,19 @@ const EXIT_STATUSES: [(i32, &str); 6] = [
     (REFUSED, "The service refused; the output names the error."),
     (
         USAGE,
-        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin beside an `http://` URL.",
+        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin, a pin beside an `http://` URL, and an `inbox bridge` without its binding.",
     ),
     (
         TRANSPORT,
         "The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal.",
     ),
-    (LOCAL, "A local file could not be read, written or created."),
+    (
+        LOCAL,
+        "A local file could not be read, written or created, or `inbox bridge` found no `connectors` on `PATH`.",
+    ),
     (
         ANOTHER_WAKE,
-        "`inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent.",
+        "`inbox wake` and `inbox bridge` only: another `inbox wake` or `inbox bridge` of the same inbox with the same outbox file runs on this host; nothing was sent.",
     ),
 ];
 

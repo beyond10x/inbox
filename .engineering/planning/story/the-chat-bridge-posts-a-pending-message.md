@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-chat-bridge-posts-a-pending-message
 kind: story
-status: proposed
+status: implemented
 title: The chat bridge posts each message of a person's inbox into the chat channel and marks it delivered
 summary: 'First story of stage 4: a long-running client command posts each row of the person''s Pending through connectors and sends MarkDelivered; tested against a stand-in of connectors.'
 relations:
@@ -44,9 +44,11 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 8
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-23T10:15:44Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-11-23T10:25:51Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-11-24T00:25:37Z", actor: "agent:inbox", revision: 11, decided_on: {"recorded":{"test_result":1,"review_outcome":11}}}
 ---
 ## Outcome
 
@@ -291,3 +293,104 @@ Documents:
 - `website/docs/first-use.md`: a section for the bridge: cited
 - `website/docs/limits.md`: what the bridge does not do: cited
 - `CHANGELOG.md`: not edited; the coordinator of a release writes it: cited
+
+## Decisions
+
+- The 8 items of Open are answered at their defaults (the operator accepted the 7 stories of
+  the stage with every open item at its default, 2026-11-23): the bridge is the command `inbox
+  bridge` of the binary; one binding per bridge by flags; one allowed chat user id per binding;
+  the adapter `slack`, and `inbox wake --follow` and the bridge refuse an inbox the other
+  opened; one `connectors invoke` child per post with the input on standard input; the record
+  of the chat posts is a file beside the outbox file and the nouns stay in
+  `docs/design/bridge.md`; one chat post per message with the body in a block of literal text;
+  no listener.
+- What a write needs (Open 5): a standing grant of `connectors`, built in `connectors` (the
+  operator's decision, 2026-11-23, recorded as
+  approval-record:d89-the-chat-bridge-posts-under-a-standing-grant-of-connectors). The bridge
+  passes no approval and runs no approval command. Until a `connectors` with standing grants is
+  released, a released `connectors` refuses every post of the bridge; the cases run against a
+  stand-in that answers in the shape of the contract of `connectors` (refusal: exit 1, the
+  failure on standard error, the codes `approval_required`, `rate_limited`,
+  `idempotency_conflict`, `unavailable`). The run on a real channel is
+  story:the-operator-runs-the-chat-bridge-on-the-real-channel.
+- `--chat-connector` is a required flag: the bridge has no default connector. Options: A
+  required (taken); B a default name, which would put the name of one provider's connection
+  into the binary.
+- No ESS document of the bridge in this story: `ChatChannelBinding` and `ChatPost` are drafted
+  in `docs/design/bridge.md`, with the one relation not answered marked `UNMAPPED:`. Options: A
+  the design document (taken, the default of Open 6); B a domain under `ess/` now, with a
+  relation guessed.
+- A bridge ended by SIGINT or SIGTERM during a post ends the process group of its `connectors`
+  child before it ends (adversary pass 1, finding 1, and pass 2, finding 1). Options: A end it
+  (taken); B name it as a limit.
+- The signal to the group needs a function that is not `unsafe`: the dependency `rustix`
+  (features `process` and `std`; with it `linux-raw-sys` and `bitflags` in `Cargo.lock`).
+  Options: A the dependency (taken); B a `kill` program started from the signal path; C
+  `unsafe` in one module.
+- A post that ended by itself is not signalled: a helper a finished `connectors` leaves behind
+  is not the bridge's to end. A helper that left the group outlives the bridge. Both are named
+  in the design and on the limits page.
+- A hang-up of the bridge's terminal (SIGHUP) ends the bridge by its default action and, with
+  the child in a group of its own, no longer reaches a running child, which goes on as after a
+  SIGKILL. Options: A the limit, named in the design and on the limits page (taken); B SIGHUP
+  in the signal path, which would end a wake or a bridge started with the signal ignored
+  (`nohup`).
+- A bridge ended by SIGKILL leaves the child running; the limits page says so. The crate
+  forbids `unsafe`, which the kernel's signal at the death of a parent would need; the next
+  bridge posts with the same key, which `connectors` answers as a replay. Options: A the limit
+  (taken); B `unsafe` in one module.
+- The record of the chat posts is not pruned in this story (adversary pass 1, finding 6). At
+  its bound of 64 MiB every post ends the bridge with 4 after the post was made, until the
+  operator removes or shortens the record; the design and the limits page say so. The lifetime
+  of an entry is settled by the stories that read the record. Options: A no pruning now
+  (taken); B prune by age now, before any story reads the record.
+- Finding 2 of adversary pass 2 (the hold of the watch at the end of `run` in `wake.rs`, a
+  mutant no case kills) was there before this story: it is
+  story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes (draft).
+
+## Measured
+
+- Red first: the cases of the bridge against a build without the command (`base.log` of round
+  1), run with fail-fast: 4 of the 126 cases that ran failed, each a case of `bridge` (the post
+  in the order of pending, the failed post, the block of literal text, the record before the
+  mark).
+- Mutants of the 3 rounds, each red in a named case of `bridge` or `adversary_bridge`: 13 of
+  round 1 (m1 to m13: the mark before the post, the mark after a failed post, the record after
+  the mark, no escape of the provider's characters, no backtick rule, no lock, no refusal of a
+  URL outside loopback, a key per try, any classification taken as not attempted, no wait on
+  `rate_limited`, no code named, the failure read on standard output, no bound on a stream); 6
+  of round 2 (m14 to m19: a failed post that goes on to the next message, the cut one byte late,
+  a signal that leaves the child, the read after the exit without a bound, the open at the start
+  not tried again, `unavailable` not named); 2 of round 3 (g1: the signal to the process id
+  alone; g2: the child without a group of its own; each red in
+  `a_signal_to_the_bridge_leaves_no_process_of_the_post_running` and
+  `a_signal_during_a_post_ends_the_group_of_the_connectors_child_with_the_bridge`).
+- Adversary pass 1 on round 1 (review-result:adversary-chat-bridge-posts-pass-1): 5 cases added,
+  3 red, 7 findings (6 introduced, 1 there before); all 7 have an outcome. Pass 2 on round 2
+  (review-result:adversary-chat-bridge-posts-pass-2): 4 cases added, 1 red, 2 findings (1
+  introduced and fixed in round 3; 1 there before, filed as
+  story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes). One mutant of pass 2 is
+  equivalent (the wait after the kill in the signal path: without it the child is a zombie
+  until the bridge ends) and one survives on a race the case cannot decide (a read of 0 s after
+  the exit still gets the bytes already in the pipe).
+- Adversary pass 3 on round 3 (review-result:adversary-chat-bridge-posts-pass-3): no finding, no
+  case added, 0 red of 336 in the crate. It changed 3 of its cases to wait for the fact (a
+  process that has ended, up to 10 s) where they looked once after 200 ms or held 2 s. The
+  mutant "the signal to the process id alone" is red in
+  `a_signal_to_the_bridge_leaves_no_process_of_the_post_running` and in
+  `a_signal_during_a_post_ends_the_group_of_the_connectors_child_with_the_bridge`. Not run as
+  a case: a child that calls `setsid`, and a hang-up of a real terminal.
+- The cases: 25 cases of the bridge in the gate run of round 3 (12 in `bridge`, 9 in
+  `adversary_bridge`, 4 unit cases in the binary). Over 5 s in that run, at a load average of 76
+  to 105 on 20 CPUs: `bridge::a_post_connectors_did_not_admit_sends_no_mark_and_names_its_code`
+  6.0 s (8 runs of the stand-in: 4 refusals, each tried again after the pause of a failure, one
+  of them not before the 1 s the stand-in names) and
+  `bridge::each_kind_of_failed_run_of_connectors_is_named_on_its_own_line` 5.4 s (10 runs of
+  the stand-in: 5 kinds of a failed run, each tried again after the pause). Every other case of
+  the bridge took under 4 s.
+- The gate runs of the rounds (`task check`, exit 0): round 1 909 passed, 8 skipped, the test
+  step 30 s; round 2 951 passed, 8 skipped, 68 s; round 3 958 passed, 8 skipped, 99 s at a load
+  average of 76 to 105.
+- `task check` on the branch, on top of `plan/stage-3`, 2026-11-24T00:04:28Z to 2026-11-24T00:25:22Z, load average 96 to 102
+  on 20 CPUs: exit 0, `958 tests run: 958 passed, 8 skipped`, the test step 83 s of
+  its bound of 120 s.

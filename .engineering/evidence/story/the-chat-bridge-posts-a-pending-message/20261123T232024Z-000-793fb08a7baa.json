@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T23:20:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding P2-F1 (a helper the connectors child started outlives a bridge ended by SIGTERM): the child of a post leads a process group of its own and the signal path ends the group, then the child, then waits, without unsafe code (rustix kill_process_group); cases a_signal_to_the_bridge_leaves_no_process_of_the_post_running and a_signal_during_a_post_ends_the_group_of_the_connectors_child_with_the_bridge; both red under the 2 mutants (the kill of the pid alone; process_group(0) removed); a helper that left the group, a post that ended by itself, SIGKILL and a hang-up of the terminal are named in docs/design/bridge.md and on the limits page",
+    "review": "review-result:adversary-chat-bridge-posts-pass-2",
+    "outcome": "fixed"
+  }
+}

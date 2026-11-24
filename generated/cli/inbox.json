@@ -658,6 +658,67 @@
     },
     {
       "path": [
+        "bridge"
+      ],
+      "about": "The chat bridge, for the inbox of a person: post each message of the caller's own inbox into the chat channel of the binding through `connectors`, one post per message, then mark it delivered, until SIGINT or SIGTERM. It opens the inbox with the adapter slack and takes the lock of `inbox wake`; an inbox this host opened with another adapter ends it with 1. A post that fails is tried again after a pause, and the message stays undelivered until it succeeds. A released `connectors` refuses the posts until the operator gave it a standing approval of the post operation into the channel: the bridge passes no approval proof",
+      "arguments": [
+        {
+          "name": "url",
+          "kind": "option",
+          "long": "url",
+          "valueName": "URL",
+          "env": "INBOX_URL",
+          "help": "The service: http://<host>:<port>, or https://<host>:<port> with --tls-pin"
+        },
+        {
+          "name": "tls_pin",
+          "kind": "option",
+          "long": "tls-pin",
+          "valueName": "TLS_PIN",
+          "env": "INBOX_TLS_PIN",
+          "help": "The pin of the service's TLS certificate, as `inbox tls new` printed it: with an https:// URL the client accepts that certificate only, and sends nothing to a service with another"
+        },
+        {
+          "name": "secret_key_file",
+          "kind": "option",
+          "long": "secret-key-file",
+          "valueName": "SECRET_KEY_FILE",
+          "env": "INBOX_SECRET_KEY_FILE",
+          "help": "The file of the caller's secret key (`inbox key new --key-id … --principal …`); it names the key id and the principal, which is also the address of the caller's inbox"
+        },
+        {
+          "name": "outbox",
+          "kind": "option",
+          "long": "outbox",
+          "valueName": "OUTBOX",
+          "env": "INBOX_OUTBOX",
+          "help": "The outbox file; default $XDG_STATE_HOME/inbox/outbox.jsonl, else $HOME/.local/state/inbox/outbox.jsonl"
+        },
+        {
+          "name": "chat_channel",
+          "kind": "option",
+          "long": "chat-channel",
+          "valueName": "CHAT_CHANNEL",
+          "help": "The chat channel the messages are posted into: its id, such as C0000000001"
+        },
+        {
+          "name": "allowed_chat_user",
+          "kind": "option",
+          "long": "allowed-chat-user",
+          "valueName": "ALLOWED_CHAT_USER",
+          "help": "The one chat user allowed to act on the posts: its id, such as U0000000001. Recorded; nothing compares it with a user yet"
+        },
+        {
+          "name": "chat_connector",
+          "kind": "option",
+          "long": "chat-connector",
+          "valueName": "CONNECTOR[/INSTANCE]",
+          "help": "The target `connectors invoke` is called with: a connector, or a connector and its instance"
+        }
+      ]
+    },
+    {
+      "path": [
         "read"
       ],
       "about": "Mark a message read: a note is handled and removed, a request or decision waits for its answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1; the expiry task removes it or decides it on silence",
@@ -1097,6 +1158,15 @@
     {
       "name": "HOME",
       "description": "Without `XDG_STATE_HOME` either, the outbox file is `$HOME/.local/state/inbox/outbox.jsonl`."
+    },
+    {
+      "name": "PATH",
+      "description": "`inbox bridge` posts through the first executable `connectors` in it, and refuses to start without one.",
+      "commands": [
+        [
+          "bridge"
+        ]
+      ]
     }
   ],
   "exitStatuses": [
@@ -1110,7 +1180,7 @@
     },
     {
       "code": 2,
-      "meaning": "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin beside an `http://` URL."
+      "meaning": "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin, a pin beside an `http://` URL, and an `inbox bridge` without its binding."
     },
     {
       "code": 3,
@@ -1118,11 +1188,11 @@
     },
     {
       "code": 4,
-      "meaning": "A local file could not be read, written or created."
+      "meaning": "A local file could not be read, written or created, or `inbox bridge` found no `connectors` on `PATH`."
     },
     {
       "code": 5,
-      "meaning": "`inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent."
+      "meaning": "`inbox wake` and `inbox bridge` only: another `inbox wake` or `inbox bridge` of the same inbox with the same outbox file runs on this host; nothing was sent."
     }
   ]
 }

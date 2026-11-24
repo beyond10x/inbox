@@ -78,6 +78,40 @@ record out.
 - One request per connection: no keep-alive and no pipelining.
 - The key file is not reloaded while the service runs.
 
+## The chat bridge
+
+`inbox bridge` posts each message of a person's inbox into a chat channel through `connectors`
+and marks it delivered. What it does not do:
+
+- **It cannot post through a released `connectors` yet.** `connectors` refuses each post until
+  the operator gave it a standing approval of posts into the channel, and that approval is not
+  released. The bridge passes no approval of its own.
+- The operator's approval of the posts has an end time: once it has ended, posts wait as
+  undelivered until the operator renews it.
+- The approval allows a number of posts per hour: over it, posts wait as undelivered until the
+  hour's cap frees.
+- It reads nothing from the channel: no reaction, no reply, no decision. The person reads and
+  answers with `inbox read` and `inbox answer`.
+- A posted message is marked delivered whether or not anyone reads the channel.
+- A message posted and not marked delivered, such as when the bridge was stopped between the
+  two, is posted again by the next bridge, with the same idempotency key; `connectors` answers
+  that as a replay of the first post, not as a second post.
+- Stopping the bridge with SIGINT or SIGTERM ends a post that is still running: its `connectors`
+  and the processes that `connectors` started, unless one of them left its process group. A
+  SIGKILL of the bridge or a hang-up of its terminal does not: the running `connectors` goes on
+  alone, and what it posts is not recorded.
+- A process that a finished `connectors` left behind is not ended by the bridge.
+- The record of the posts is never shortened. Once it reaches 64 MiB, about 700 thousand posts,
+  every post ends the bridge after the post was made, and each restart posts the same message
+  again and ends again, until the operator removes or shortens the record.
+- A body over 3000 bytes of text is cut in the post, with a line that names the message;
+  `inbox pending` shows it whole.
+- How the post escapes a mention and the block of literal text is not checked against the chat
+  provider.
+- A `connectors` that never ends holds the bridge; there is no time bound on a post.
+- One bridge serves one inbox and one channel; `inbox wake` and the bridge do not serve one
+  inbox with one outbox file on a host at the same time.
+
 ## `inbox repost` can deliver a read note once more
 
 A note stays in its sender's outbox file until it expires, 24 hours by default. `repost`

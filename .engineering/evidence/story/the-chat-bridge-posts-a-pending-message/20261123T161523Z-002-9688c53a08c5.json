@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (a bridge started before the service answers ends): the open at the start runs through the tries and pauses of the wake and prints the line of the wake under the name of the bridge once; a refusal that is no passing failure still ends the bridge (cases a_bridge_started_before_the_service_answers_waits_for_it and a_bridge_started_before_the_service_answers_says_so_and_keeps_trying; mutant m18 red)",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "fixed"
+  }
+}

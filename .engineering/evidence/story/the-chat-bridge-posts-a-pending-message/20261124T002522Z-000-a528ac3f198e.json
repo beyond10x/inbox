@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T00:25:22Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

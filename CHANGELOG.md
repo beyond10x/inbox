@@ -8,6 +8,16 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Added
+
+- `inbox bridge`, the chat bridge of a person's inbox: it posts each message of the inbox into
+  the chat channel of its binding (`--chat-channel`, `--allowed-chat-user`, `--chat-connector`)
+  through `connectors`, one post per message with the body in a block of literal text, records
+  the post beside the outbox file, then marks the message delivered; a post that fails is tried
+  again after a pause. It opens the inbox with the adapter `slack` and takes the lock of
+  `inbox wake`. It passes no approval to `connectors`, so a released `connectors` refuses its
+  posts until it holds the operator's standing approval for the channel.
+
 ## [0.6.1] - 2026-11-23
 
 ### Changed

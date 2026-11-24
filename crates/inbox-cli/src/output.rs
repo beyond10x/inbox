@@ -190,12 +190,110 @@ fn print_checked(line: &str) -> std::io::Result<()> {
 /// sequence, a line of its own, text shown in another order or text that is there and not seen.
 /// Text without such characters is unchanged.
 pub fn visible(text: &str) -> Cow<'_, str> {
-    escaped(text, |character| {
-        (character.is_control() && character != '\n')
-            || matches!(character, '\u{2028}' | '\u{2029}')
-            || bidirectional(character)
-            || unseen(character)
-    })
+    escaped(text, hidden)
+}
+
+/// Whether [`visible`] shows `character` as its escape.
+fn hidden(character: char) -> bool {
+    (character.is_control() && character != '\n')
+        || matches!(character, '\u{2028}' | '\u{2029}')
+        || bidirectional(character)
+        || unseen(character)
+}
+
+/// The most bytes of the text of a body in the block of literal text of a chat post
+/// ([`chat_post`]): a longer one is cut.
+pub const MOST_CHAT_BODY_BYTES: usize = 3000;
+
+/// The text of the chat post of `row`, a row of `Pending`, for `inbox bridge`: a head line
+/// `<kind> from <sender>[ on behalf of <principal>] expires <expires> message <message id>`, then
+/// the body in one block of literal text between 2 lines of 3 backticks, the delimiter of the
+/// provider's block. Every character of the message is written as [`visible`] shows it (its
+/// escape `\u{1b}`), a line end in the head line as `\u{a}`, a backtick in the head line and each
+/// backtick of a run of 3 or more in the body as `\u{60}` (so no text of a sender ends the block
+/// or opens one), then the provider's 3 escapes, `&` as `&amp;`, `<` as `&lt;` and `>` as `&gt;`
+/// (so a mention of the provider, `<!channel>`, arrives as text). A body whose text would be over
+/// [`MOST_CHAT_BODY_BYTES`] in the block is cut before the first character whose text would pass
+/// it, so no escape is cut in half, and a line after the block says so and names the message id
+/// and `inbox pending`, which shows it whole.
+pub fn chat_post(row: &Value) -> String {
+    let field = |name: &str| text(row, name);
+    let mut out = String::new();
+    chat_head(&mut out, field("kind"));
+    out.push_str(" from ");
+    chat_head(&mut out, field("from"));
+    if field("on_behalf_of") != field("from") {
+        out.push_str(" on behalf of ");
+        chat_head(&mut out, field("on_behalf_of"));
+    }
+    out.push_str(" expires ");
+    chat_head(&mut out, field("expires"));
+    out.push_str(" message ");
+    chat_head(&mut out, field("message_id"));
+    out.push_str("\n```\n");
+    let body: Vec<char> = field("body").chars().collect();
+    let mut cut = false;
+    let mut taken = 0;
+    let mut piece = String::new();
+    let mut at = 0;
+    while at < body.len() && !cut {
+        // A run of backticks, or one other character.
+        let run = if body[at] == '`' {
+            body[at..].iter().take_while(|held| **held == '`').count()
+        } else {
+            1
+        };
+        for character in &body[at..at + run] {
+            piece.clear();
+            chat_character(&mut piece, *character, run >= 3, false);
+            if taken + piece.len() > MOST_CHAT_BODY_BYTES {
+                cut = true;
+                break;
+            }
+            taken += piece.len();
+            out.push_str(&piece);
+        }
+        at += run;
+    }
+    out.push_str("\n```");
+    if cut {
+        out.push_str("\ncut at ");
+        out.push_str(&MOST_CHAT_BODY_BYTES.to_string());
+        out.push_str(" bytes: inbox pending shows the whole message ");
+        chat_head(&mut out, field("message_id"));
+    }
+    out
+}
+
+/// Appends `text`, a value of a message in the head line of a chat post, as [`chat_post`] says.
+fn chat_head(out: &mut String, text: &str) {
+    for character in text.chars() {
+        chat_character(out, character, true, true);
+    }
+}
+
+/// Appends `character` of a message to a chat post: its escape where [`visible`] shows one (and a
+/// line end `in_line`), `\u{60}` for a backtick that is `quoted`, and the provider's escape of
+/// `&`, `<` and `>`.
+fn chat_character(out: &mut String, character: char, quoted: bool, in_line: bool) {
+    match character {
+        '`' if quoted => out.push_str("\\u{60}"),
+        '&' => out.push_str("&amp;"),
+        '<' => out.push_str("&lt;"),
+        '>' => out.push_str("&gt;"),
+        '\n' if in_line => out.extend(character.escape_unicode()),
+        _ if hidden(character) => out.extend(character.escape_unicode()),
+        _ => out.push(character),
+    }
+}
+
+/// Captures the standard output and the standard error of `command`, a child process the client
+/// starts (`connectors` of `inbox bridge`): nothing of it reaches the client's own standard
+/// output or standard error as it is, which this file alone writes.
+pub fn captured(command: &mut std::process::Command) {
+    command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 }
 
 /// The bidirectional controls of Unicode, which make a terminal show the text after them in
@@ -438,7 +536,101 @@ mod tests {
 
     use inbox::server::json;
 
-    use super::{document, plain_document, rows_text, visible};
+    use super::{MOST_CHAT_BODY_BYTES, chat_post, document, plain_document, rows_text, visible};
+
+    /// A row of `Pending` with `from`, `on_behalf_of`, `kind` and `body` as given.
+    fn chat_row(from: &str, on_behalf_of: &str, kind: &str, body: &str) -> json::Value {
+        let text = |value: &str| json::Value::Text(value.to_owned());
+        json::Value::Object(vec![
+            ("message_id".to_owned(), text("01J00000000000000000000001")),
+            ("kind".to_owned(), text(kind)),
+            ("from".to_owned(), text(from)),
+            ("on_behalf_of".to_owned(), text(on_behalf_of)),
+            ("expires".to_owned(), text("2099-01-01T00:00:00Z")),
+            ("body".to_owned(), text(body)),
+        ])
+    }
+
+    /// The text of the block of literal text of a chat post, and what follows the block.
+    fn block(post: &str) -> (&str, &str) {
+        let (_, rest) = post.split_once("\n```\n").expect("a block");
+        rest.rsplit_once("\n```").expect("the end of the block")
+    }
+
+    /// The head line holds no backtick and no line end of a sender, and names the principal a
+    /// message speaks for when it is not the sender; its `<`, `>` and `&` are the provider's
+    /// escapes, its control characters their escapes.
+    #[test]
+    fn the_head_line_of_a_chat_post_holds_no_backtick_and_no_line_end_of_a_sender() {
+        let post = chat_post(&chat_row(
+            "agent:test/a`b\nc<d>&\u{1b}",
+            "human:person",
+            "note",
+            "Hi",
+        ));
+        let head = post.lines().next().unwrap();
+        assert_eq!(
+            head,
+            "note from agent:test/a\\u{60}b\\u{a}c&lt;d&gt;&amp;\\u{1b} on behalf of human:person \
+             expires 2099-01-01T00:00:00Z message 01J00000000000000000000001"
+        );
+        assert_eq!(post.matches("```").count(), 2, "{post}");
+        let plain = chat_post(&chat_row("agent:test/a", "agent:test/a", "request", "Hi"));
+        assert!(
+            plain.starts_with("request from agent:test/a expires "),
+            "{plain}"
+        );
+        assert_eq!(block(&plain), ("Hi", ""));
+    }
+
+    /// In the body a backtick of a run of 3 or more is `\u{60}`, a run of 1 or 2 stays; line ends
+    /// stay; `&`, `<`, `>` are the provider's escapes; every character `visible` escapes is its
+    /// escape.
+    #[test]
+    fn a_run_of_3_backticks_in_a_body_is_escaped_and_a_shorter_one_stays() {
+        let post = chat_post(&chat_row(
+            "agent:test/a",
+            "agent:test/a",
+            "note",
+            "a``b```c````d`e\n<!here> & \u{202e}x\u{7}",
+        ));
+        let q = "\\u{60}";
+        assert_eq!(
+            block(&post),
+            (
+                format!("a``b{q}{q}{q}c{q}{q}{q}{q}d`e\n&lt;!here&gt; &amp; \\u{{202e}}x\\u{{7}}")
+                    .as_str(),
+                ""
+            )
+        );
+    }
+
+    /// A body whose text in the block would pass the bound is cut before the first character
+    /// whose text does not fit, never inside an escape, and a line after the block names the
+    /// message and `inbox pending`; a body whose text fits exactly is not cut.
+    #[test]
+    fn a_body_over_the_bound_is_cut_at_a_whole_character_and_names_the_message() {
+        let fits = "é".repeat(MOST_CHAT_BODY_BYTES / 2);
+        let post = chat_post(&chat_row("agent:test/a", "agent:test/a", "note", &fits));
+        assert_eq!(block(&post), (fits.as_str(), ""));
+        for (body, kept) in [
+            (format!("{fits}é"), fits.clone()),
+            ("&".repeat(1000), "&amp;".repeat(MOST_CHAT_BODY_BYTES / 5)),
+            (
+                format!("{}\u{1b}", "a".repeat(MOST_CHAT_BODY_BYTES - 1)),
+                "a".repeat(MOST_CHAT_BODY_BYTES - 1),
+            ),
+        ] {
+            let post = chat_post(&chat_row("agent:test/a", "agent:test/a", "note", &body));
+            let (shown, after) = block(&post);
+            assert_eq!(shown, kept);
+            assert_eq!(
+                after,
+                "\ncut at 3000 bytes: inbox pending shows the whole message \
+                 01J00000000000000000000001"
+            );
+        }
+    }
 
     /// A forged head line, as a sender would put it after a line end to start a message of
     /// another principal.

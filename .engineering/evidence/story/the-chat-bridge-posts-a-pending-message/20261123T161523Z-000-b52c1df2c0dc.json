@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a signal to the bridge during a post leaves the connectors child running): the bridge starts the child while it holds a slot the signal path reads; on SIGINT and SIGTERM the signal path ends the child, waits for it, and then ends the bridge (cases a_signal_to_the_bridge_leaves_no_connectors_child_running and a_signal_during_a_post_ends_the_connectors_child_with_the_bridge; mutant m16 red); a bridge ended by SIGKILL still leaves a running child, named in docs/design/bridge.md and on the limits page; the next bridge posts with the same key, which connectors answers as a replay",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "fixed"
+  }
+}

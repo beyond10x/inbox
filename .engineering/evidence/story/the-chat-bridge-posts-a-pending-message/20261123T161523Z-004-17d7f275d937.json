@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (mutant M15, the cut of the body moves one byte, survives the cases of the story): the adversary's case a_body_of_3001_bytes_is_cut_to_3000_and_one_of_3000_is_whole is in the tree and is the one case red under M15 on the merged tree",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "fixed"
+  }
+}

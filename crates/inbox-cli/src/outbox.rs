@@ -39,6 +39,12 @@
 //! so nothing is opened for them. A change of it that cannot read it fails as a change of the
 //! epochs file does, and a missing file is read as empty.
 //!
+//! The record of the chat posts of an address beside it (`<outbox>.chat.<16 hex digits>`,
+//! [`Outbox::record_chat_post`]) holds one JSON line per message `inbox bridge` posted into a
+//! chat channel: its message id, the provider's reference of the post and the state `posted`. It
+//! is changed under the same lock and replaced the same way, and a file that cannot be read fails
+//! the change instead of being read as holding nothing.
+//!
 //! No read of these files blocks or fails a command that only reads them
 //! ([`Outbox::read_or_nothing`]): each is opened without blocking, read only when it is a
 //! regular file, and only up to a bound; anything else holds nothing, and one line on standard
@@ -438,6 +444,51 @@ impl Outbox {
             );
         })?;
         Ok(recorded)
+    }
+
+    /// Records a `ChatPost` in the record of the chat posts of `address` beside the outbox file,
+    /// `<outbox>.chat.<16 hex digits>` (the digits of the lock of the wake,
+    /// [`crate::wake::digits`]): the message `message_id` is shown by the chat post `reference`,
+    /// in the state `posted`. One JSON line per message id, `{"message_id","reference","state"}`,
+    /// in place of the line that id had; the other lines are kept as they are. Changed under the
+    /// lock of the outbox file and replaced whole, as the other files beside it (mode 0600).
+    ///
+    /// # Errors
+    ///
+    /// [`Failure::Local`] when the file cannot be read (also when it is no regular file or over
+    /// its bound: its lines are never given up for a new one) or written.
+    pub fn record_chat_post(
+        &self,
+        address: &str,
+        message_id: &str,
+        reference: &str,
+    ) -> Result<(), Failure> {
+        let path = beside(
+            &self.path,
+            &format!(".chat.{}", crate::wake::digits(address)),
+        );
+        let local =
+            |why: &dyn std::fmt::Display| Failure::Local(format!("{}: {why}", path.display()));
+        let lock = self.lock()?;
+        let text = read_bounded(&path, MOST_BYTES)
+            .map_err(|why| local(&why))?
+            .unwrap_or_default();
+        let mut lines: Vec<String> = text
+            .lines()
+            .filter(|line| chat_post_id(line).as_deref() != Some(message_id))
+            .map(str::to_owned)
+            .collect();
+        let mut line = String::from("{");
+        json::member(&mut line, "message_id");
+        json::push_text(&mut line, message_id);
+        json::member(&mut line, "reference");
+        json::push_text(&mut line, reference);
+        json::member(&mut line, "state");
+        json::push_text(&mut line, "posted");
+        line.push('}');
+        lines.push(line);
+        replace(&path, &lines).map_err(|error| local(&error))?;
+        lock.unlock().map_err(|error| local(&error))
     }
 
     /// Runs `change` over the records of the file of the opened inbox under the lock, and
@@ -943,6 +994,15 @@ fn record(line: &str) -> Option<(String, Opened)> {
         None => None,
     };
     Some((inbox, Opened { adapter, epoch }))
+}
+
+/// The message id a line of the record of the chat posts names, when it is a JSON object with
+/// the text member `message_id`.
+fn chat_post_id(line: &str) -> Option<String> {
+    match json::parse(line).ok()?.member("message_id") {
+        Some(json::Value::Text(message_id)) => Some(message_id.clone()),
+        _ => None,
+    }
 }
 
 /// The envelope a line holds, read by the generated decoder, or why it does not read.

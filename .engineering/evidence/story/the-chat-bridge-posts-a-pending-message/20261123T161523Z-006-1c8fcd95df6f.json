@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (the staged file of the record, pre-existing in the shared replace): after the merge of main the record goes through the replace of main, which removes what is at the name of the staged file and creates it anew with mode 0600; case a_link_at_the_staged_place_of_the_record_is_removed_not_followed",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T23:20:24Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding P2-F2 (the hold of the watch at the end of run in wake.rs has no case; pre-existing on main): not in this story; filed as story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes (draft)",
+    "review": "review-result:adversary-chat-bridge-posts-pass-2",
+    "outcome": "escalated"
+  }
+}

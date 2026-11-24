@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (the record of the chat posts is never pruned): no pruning in this story by the coordinator's decision; the lifetime of an entry is settled by the stories that read the record; docs/design/bridge.md and the limits page say what happens at the bound of 64 MiB: every post ends the bridge with 4 after the post was made, and a restart posts the same message again as a replay at connectors, until the operator removes or shortens the record",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "no-op"
+  }
+}

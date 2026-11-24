@@ -52,10 +52,16 @@
 //!   this host's record of an `inbox open` of the caller names another adapter it ends with 1
 //!   ([`Failure::OtherAdapter`]): at the start, before the lock and before any request, and in
 //!   every round, before the rows of the round are written.
+//! - `inbox bridge` (`src/bridge.rs`) runs the same rounds ([`rounds`]) with the chat channel as
+//!   its [`Surface`]: the same reads, reconnect, tries, pauses, signals and lock, so a wake and a
+//!   bridge of one inbox and outbox file on a host exclude each other (exit 5). The watch of the
+//!   reader belongs to the surface that writes to standard output ([`Surface::watched`]): the
+//!   bridge writes no row there and has none.
 
 use std::fs::{DirBuilder, File, OpenOptions, TryLockError};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::process::Child;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -191,6 +197,112 @@ fn no_reader() -> Failure {
     ))
 }
 
+/// Where the rounds ([`rounds`]) hand their rows: standard output for `inbox wake` and `inbox
+/// wake --follow`, the chat channel of a binding for `inbox bridge` (`src/bridge.rs`).
+pub trait Surface {
+    /// The name each of its lines on standard error starts with: `inbox wake`, `inbox bridge`.
+    fn name(&self) -> &'static str;
+
+    /// Whether it runs on after the marks of a round (`--follow`, the bridge) instead of exiting.
+    fn follows(&self) -> bool;
+
+    /// Whether this host's record of an `inbox open` of the caller lets it serve the inbox
+    /// ([`only`]): asked at the start, before the lock and any request, and, when it follows, in
+    /// every round before the rows of the round are handed over.
+    ///
+    /// # Errors
+    ///
+    /// The failure that ends it.
+    fn admits(&self, client: &Client) -> Result<(), Failure>;
+
+    /// Runs after the signals are taken and before the lock: the surface that writes to standard
+    /// output starts the watch of its reader here ([`Watch`]); the chat channel has none.
+    ///
+    /// # Errors
+    ///
+    /// The failure that ends it.
+    fn watched(&self) -> Result<(), Failure> {
+        Ok(())
+    }
+
+    /// Runs once the lock is held, before the first read. A failure that may pass
+    /// ([`tried_again`]) is tried again after the pause of a failure, with the line of the wake
+    /// that says so; every other failure ends it.
+    ///
+    /// # Errors
+    ///
+    /// The failure that ends it.
+    fn started(&mut self, _client: &Client) -> Result<(), Failure> {
+        Ok(())
+    }
+
+    /// Hands the rows of `answer` over and marks each one it handed over delivered. Answers the
+    /// first failure of a row, after which the next round of a surface that follows starts after
+    /// the pause of a failure, and the message ids whose mark succeeded.
+    ///
+    /// # Errors
+    ///
+    /// The failure that ends it.
+    fn deliver(
+        &mut self,
+        client: &Client,
+        answer: &Value,
+        reconnected: Option<&str>,
+    ) -> Result<(Option<Failure>, Vec<String>), Failure>;
+}
+
+/// Standard output, the surface of `inbox wake` and, with `follow`, of `inbox wake --follow`,
+/// with the watch of its reader: started before the lock ([`Surface::watched`]) and held by each
+/// round from the write of its rows to its last mark ([`deliver`]).
+struct Output {
+    json: bool,
+    follow: bool,
+    watch: Arc<Watch>,
+}
+
+impl Surface for Output {
+    fn name(&self) -> &'static str {
+        "inbox wake"
+    }
+
+    fn follows(&self) -> bool {
+        self.follow
+    }
+
+    fn admits(&self, client: &Client) -> Result<(), Failure> {
+        if self.follow {
+            only(
+                client,
+                TERMINAL,
+                "inbox wake --follow",
+                "to show its messages in this terminal",
+            )
+        } else {
+            Ok(())
+        }
+    }
+
+    fn watched(&self) -> Result<(), Failure> {
+        self.watch.start(self.json)
+    }
+
+    fn deliver(
+        &mut self,
+        client: &Client,
+        answer: &Value,
+        reconnected: Option<&str>,
+    ) -> Result<(Option<Failure>, Vec<String>), Failure> {
+        deliver(
+            client,
+            self.json,
+            self.follow,
+            answer,
+            reconnected,
+            &self.watch,
+        )
+    }
+}
+
 /// Runs `inbox wake` for `client`, with `follow` `inbox wake --follow`, and answers its exit
 /// status. Every line it writes to standard error starts with `inbox wake: `, but the
 /// reconnect's own line.
@@ -221,15 +333,46 @@ fn wake(client: &Client, json: bool, follow: bool, watch: &Arc<Watch>) -> Result
             "standard output: {error}: nothing is asked of the service"
         )));
     }
-    if follow {
-        terminal_only(client)?;
-    }
+    rounds(
+        client,
+        &mut Output {
+            json,
+            follow,
+            watch: Arc::clone(watch),
+        },
+    )
+}
+
+/// The rounds of a wake for `surface`: whether it admits the inbox, the signals, the watch of the
+/// surface, the lock of the wake, its start (tried again while the service does not answer), then
+/// a read of `Pending` that holds a row in `Sent` ([`held`]) and the rows handed to the
+/// surface, once, or, for a surface that follows, again and again until a failure or a signal
+/// ends it. A round of a surface that follows in which a row failed, or that got a row the round
+/// before marked delivered, is followed by the pause of a failure.
+///
+/// # Errors
+///
+/// The failure that ends it: [`Failure::AnotherWake`] when another process holds the lock.
+pub fn rounds(client: &Client, surface: &mut dyn Surface) -> Result<i32, Failure> {
+    surface.admits(client)?;
     end_on_signal()?;
-    watch.start(json)?;
+    surface.watched()?;
     let address = client.caller.principal.clone();
     let _lock = lock(client.outbox.path(), &address)?.ok_or_else(|| {
         Failure::AnotherWake(format!("another wake of {address} runs on this host"))
     })?;
+    // The start (the bridge's open) waits for the service as a read of `Pending` does.
+    let mut failures = 0_u32;
+    loop {
+        match surface.started(client) {
+            Ok(()) => break,
+            Err(failure) if tried_again(&failure) => {
+                say_once(&mut failures, &failure, surface.name());
+            }
+            Err(failure) => return Err(failure),
+        }
+    }
+    let follow = surface.follows();
     // Rounds in a row of `--follow` in which a mark failed, or that got a row the round before
     // marked delivered: the row may still be in `Sent`, and the next round may get it again at
     // once.
@@ -237,19 +380,18 @@ fn wake(client: &Client, json: bool, follow: bool, watch: &Arc<Watch>) -> Result
     // The rows the round before marked delivered, only those: no set grows over a long run.
     let mut marked: Vec<String> = Vec::new();
     loop {
-        let (answer, reconnected) = held(client)?;
+        let (answer, reconnected) = held(client, surface.name())?;
         if follow {
             // The record may have changed since the start: an inbox opened with another adapter
             // meanwhile gets no row of this round, and the end of the process frees the lock.
-            terminal_only(client)?;
+            surface.admits(client)?;
         }
         let again = output::rows(&answer).iter().any(|row| {
             marked
                 .iter()
                 .any(|id| id == output::text(row, "message_id"))
         });
-        let (first, now_marked) =
-            deliver(client, json, follow, &answer, reconnected.as_deref(), watch)?;
+        let (first, now_marked) = surface.deliver(client, &answer, reconnected.as_deref())?;
         if !follow {
             return Ok(first.map_or(0, |failure| failure.status()));
         }
@@ -263,17 +405,22 @@ fn wake(client: &Client, json: bool, follow: bool, watch: &Arc<Watch>) -> Result
     }
 }
 
-/// `inbox wake --follow` is the adapter `terminal`: when this host's record of an `inbox open`
-/// of the caller names another adapter (the inbox is a Claude Code session's, say), it ends with
-/// [`Failure::OtherAdapter`] and does not take the lock that adapter's wake takes. Without a
-/// record it goes on as `inbox wake` does.
-fn terminal_only(client: &Client) -> Result<(), Failure> {
+/// A mode that is the adapter `adapter` (`inbox wake --follow` is `terminal`, `inbox bridge` is
+/// `slack`): when this host's record of an `inbox open` of the caller names another adapter (the
+/// inbox is a Claude Code session's, say), it ends with [`Failure::OtherAdapter`], whose line
+/// names the mode `mode` and the `inbox open` that gives the inbox to it, followed by `purpose`,
+/// and does not take the lock that adapter's wake takes. Without a record it goes on as `inbox
+/// wake` does.
+///
+/// # Errors
+///
+/// [`Failure::OtherAdapter`].
+pub fn only(client: &Client, adapter: &str, mode: &str, purpose: &str) -> Result<(), Failure> {
     let principal = &client.caller.principal;
     match client.outbox.opened(principal) {
-        Some(record) if record.adapter != TERMINAL => Err(Failure::OtherAdapter(format!(
-            "{principal} was opened on this host with the adapter {}, and `inbox wake --follow` \
-             is the adapter {TERMINAL}: run `inbox open --adapter {TERMINAL}` to show its \
-             messages in this terminal",
+        Some(record) if record.adapter != adapter => Err(Failure::OtherAdapter(format!(
+            "{principal} was opened on this host with the adapter {}, and `{mode}` is the \
+             adapter {adapter}: run `inbox open --adapter {adapter}` {purpose}",
             record.adapter
         ))),
         _ => Ok(()),
@@ -350,7 +497,7 @@ fn deliver(
 /// Reads `Pending` until it has a row in `Sent`, as the module says: answers that answer with its
 /// rows in `Sent` only, and the document of the last reconnect that ran. A `409 inbox not open`
 /// runs the reconnect and is handled by what its open came to ([`Reopen`]), as the module says.
-fn held(client: &Client) -> Result<(Value, Option<String>), Failure> {
+fn held(client: &Client, name: &str) -> Result<(Value, Option<String>), Failure> {
     let mut wait = 0;
     let mut failures = 0_u32;
     let mut quick = 0_u32;
@@ -408,7 +555,7 @@ fn held(client: &Client) -> Result<(Value, Option<String>), Failure> {
                     Some(Reopen::Failed(failure)) if tried_again(&failure) => {
                         // The open did not reach the service, or got an answer that may pass:
                         // as a failure of the read, and the next read runs the reconnect again.
-                        say_once(&mut failures, &failure);
+                        say_once(&mut failures, &failure, name);
                         reopened = false;
                         wait = 0;
                     }
@@ -444,7 +591,7 @@ fn held(client: &Client) -> Result<(Value, Option<String>), Failure> {
                 }
             }
             Err(failure) if tried_again(&failure) => {
-                say_once(&mut failures, &failure);
+                say_once(&mut failures, &failure, name);
                 wait = 0;
             }
             Err(failure) => return Err(failure),
@@ -454,10 +601,10 @@ fn held(client: &Client) -> Result<(Value, Option<String>), Failure> {
 
 /// One failure of a run of them that is tried again: one line on standard error at the first of
 /// the run, then the pause for the run's length so far.
-fn say_once(failures: &mut u32, failure: &Failure) {
+fn say_once(failures: &mut u32, failure: &Failure, name: &str) {
     if *failures == 0 {
         output::warn(&format!(
-            "inbox wake: {}; trying again until the service answers",
+            "{name}: {}; trying again until the service answers",
             failure.message()
         ));
     }
@@ -491,9 +638,21 @@ fn in_sent(answer: Value) -> Value {
     )
 }
 
+/// The child process a surface waits for while it runs (the `connectors` of a post of `inbox
+/// bridge`): the signal path ends it before the process ends ([`end_on_signal`]).
+static CHILD: Mutex<Option<Child>> = Mutex::new(None);
+
+/// The slot of the child process a surface waits for ([`CHILD`]). A surface puts its child there
+/// while it holds the slot, before the signal path can look, and takes it out once it has ended.
+pub fn child() -> MutexGuard<'static, Option<Child>> {
+    CHILD.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// SIGINT and SIGTERM end the process at once by their default action, also when it was started
-/// with them ignored: a thread waits for either and takes it by its default action. The `flock`
-/// is the kernel's to release.
+/// with them ignored: a thread waits for either, ends the child in [`CHILD`] with its process group
+/// ([`end_group`]) and waits for it, and takes the signal by its default action. So no process of
+/// the group of a running post of the bridge outlives a bridge ended by one of them. The `flock` is
+/// the kernel's to release.
 fn end_on_signal() -> Result<(), Failure> {
     let mut signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|error| Failure::Local(format!("the signal handlers: {error}")))?;
@@ -501,6 +660,9 @@ fn end_on_signal() -> Result<(), Failure> {
         .name("inbox-wake-signals".to_owned())
         .spawn(move || {
             if let Some(signal) = signals.forever().next() {
+                if let Some(running) = child().take() {
+                    end_group(running);
+                }
                 let _ = signal_hook::low_level::emulate_default_handler(signal);
                 signal_hook::low_level::exit(128 + signal);
             }
@@ -509,11 +671,29 @@ fn end_on_signal() -> Result<(), Failure> {
     Ok(())
 }
 
+/// Ends `running`, the leader of a process group of its own, with that group: SIGKILL to the
+/// group, so the processes the child started end with it, then to the child alone in case it left
+/// its group, then waits for it. The child is not yet waited for while it is in [`CHILD`], so its
+/// id names it and its group and no other process. A process that left the group (a session of
+/// its own) is not reached.
+fn end_group(mut running: Child) {
+    let group = rustix::process::Pid::from_child(&running);
+    let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+    let _ = running.kill();
+    let _ = running.wait();
+}
+
 /// The lock file of the wake of `address` beside the outbox file `outbox`.
 fn lock_path(outbox: &Path, address: &str) -> PathBuf {
     let mut path = outbox.as_os_str().to_owned();
-    path.push(format!(".wake.{:016x}", fnv1a(address.as_bytes())));
+    path.push(format!(".wake.{}", digits(address)));
     PathBuf::from(path)
+}
+
+/// The 16 hex digits of `address` in the names of the files beside the outbox file that are of one
+/// address: the lock of the wake, the record of the chat posts of `inbox bridge`.
+pub fn digits(address: &str) -> String {
+    format!("{:016x}", fnv1a(address.as_bytes()))
 }
 
 /// The 64-bit FNV-1a hash of `bytes`: a name of fixed length for any address.

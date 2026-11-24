@@ -13,10 +13,11 @@ pub const USAGE: i32 = 2;
 /// The exit status of a transport failure: the service could not be reached, or its answer could
 /// not be read or was neither a success nor a refusal.
 pub const TRANSPORT: i32 = 3;
-/// The exit status of a local failure: a file that cannot be read, written or created.
+/// The exit status of a local failure: a file that cannot be read, written or created, or no
+/// `connectors` on `PATH` for `inbox bridge`.
 pub const LOCAL: i32 = 4;
-/// The exit status of an `inbox wake` that found another wake of the same inbox with the same
-/// outbox file running on this host: it sent nothing.
+/// The exit status of an `inbox wake` or `inbox bridge` that found another wake or bridge of the
+/// same inbox with the same outbox file running on this host: it sent nothing.
 pub const ANOTHER_WAKE: i32 = 5;
 
 /// Why a command failed.
@@ -60,18 +61,20 @@ pub enum Failure {
     /// pin names, or the peer speaks no TLS. Said and exited as [`Failure::Transport`]; apart
     /// from it so that `inbox wake` does not try again against such a service.
     Certificate(String),
-    /// A local file could not be read, written or created.
+    /// A local file could not be read, written or created; for `inbox bridge` also: no
+    /// `connectors` on `PATH`, or a post it made that cannot be recorded.
     Local(String),
-    /// `inbox wake`: another wake of the caller's inbox with the same outbox file runs on this
-    /// host.
+    /// `inbox wake` and `inbox bridge`: another wake or bridge of the caller's inbox with the same
+    /// outbox file runs on this host (it holds the lock of the wake).
     AnotherWake(String),
     /// `inbox wake`: the service answered that the caller's inbox is not open, and the wake does
     /// not open it: this host has no record of an `inbox open` of it (never opened here, or closed
     /// by `inbox close`), the service refused the reconnect's open, or it is still not open right
     /// after an open that succeeded. Exits as a refusal.
     NotOpen(String),
-    /// `inbox wake --follow`: this host's record of the caller's `inbox open` names another
-    /// adapter than `terminal`. Exits as a refusal, before the lock and before any request.
+    /// `inbox wake --follow` and `inbox bridge`: this host's record of the caller's `inbox open`
+    /// names another adapter than the mode's own (`terminal`, `slack`). Exits as a refusal,
+    /// before the lock and before any request.
     OtherAdapter(String),
     /// The command did its work at the service, and what it took from there is printed, but a
     /// step after it failed: `done` is printed, then `cause` is reported and decides the exit.

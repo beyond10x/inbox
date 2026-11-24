@@ -3,11 +3,12 @@
 //!
 //! Exit statuses: 0 done; 1 the service refused (the model's error name for a declared refusal,
 //! the service's own `refused` text otherwise); 2 wrong usage; 3 transport failure; 4 a local
-//! file that cannot be read, written or created; 5 (`inbox wake` only) another wake of the same
-//! inbox with the same outbox file runs on this host.
+//! file that cannot be read, written or created; 5 (`inbox wake` and `inbox bridge` only) another
+//! wake or bridge of the same inbox with the same outbox file runs on this host.
 
 #![forbid(unsafe_code)]
 
+mod bridge;
 mod client;
 mod clock_file;
 mod collected;
@@ -125,6 +126,28 @@ enum Command {
         /// waits with the next arrival, which is not shown: run `inbox open --adapter terminal`.
         #[arg(long)]
         follow: bool,
+    },
+    /// The chat bridge, for the inbox of a person: post each message of the caller's own inbox
+    /// into the chat channel of the binding through `connectors`, one post per message, then mark
+    /// it delivered, until SIGINT or SIGTERM. It opens the inbox with the adapter slack and takes
+    /// the lock of `inbox wake`; an inbox this host opened with another adapter ends it with 1. A
+    /// post that fails is tried again after a pause, and the message stays undelivered until it
+    /// succeeds. A released `connectors` refuses the posts until the operator gave it a standing
+    /// approval of the post operation into the channel: the bridge passes no approval proof.
+    Bridge {
+        #[command(flatten)]
+        client: ClientArgs,
+        /// The chat channel the messages are posted into: its id, such as C0000000001.
+        #[arg(long)]
+        chat_channel: Option<String>,
+        /// The one chat user allowed to act on the posts: its id, such as U0000000001. Recorded;
+        /// nothing compares it with a user yet.
+        #[arg(long)]
+        allowed_chat_user: Option<String>,
+        /// The target `connectors invoke` is called with: a connector, or a connector and its
+        /// instance.
+        #[arg(long, value_name = "CONNECTOR[/INSTANCE]")]
+        chat_connector: Option<String>,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
     /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
@@ -465,7 +488,9 @@ fn run(command: Command, json: bool) -> Ran {
         Command::Serve(_) | Command::Key(_) | Command::Keyfile(_) | Command::Tls(_) => {
             return (local(command, json), None);
         }
-        Command::Wake { .. } => unreachable!("main runs inbox wake itself"),
+        Command::Wake { .. } | Command::Bridge { .. } => {
+            unreachable!("main runs inbox wake and inbox bridge itself")
+        }
     };
     // The body is read before the client is made, as before the reconnect.
     let body = match &command {
@@ -531,7 +556,8 @@ fn client_command(command: &Command, body: String, client: &Client) -> Result<Do
         | Command::Key(_)
         | Command::Keyfile(_)
         | Command::Tls(_)
-        | Command::Wake { .. } => {
+        | Command::Wake { .. }
+        | Command::Bridge { .. } => {
             unreachable!("run sends only a client command here")
         }
     }
@@ -612,7 +638,8 @@ fn local(command: Command, json: bool) -> Result<Option<Done>, Failure> {
         | Command::Thread { .. }
         | Command::Replies { .. }
         | Command::Repost { .. }
-        | Command::Wake { .. } => unreachable!("run sends a client command to client_command"),
+        | Command::Wake { .. }
+        | Command::Bridge { .. } => unreachable!("run sends a client command to client_command"),
     };
     Ok(Some(done))
 }
@@ -781,6 +808,25 @@ fn main() {
         };
         std::process::exit(status);
     }
+    // So does `inbox bridge`, which runs the rounds of the wake.
+    if let Command::Bridge {
+        client,
+        chat_channel,
+        allowed_chat_user,
+        chat_connector,
+    } = &cli.command
+    {
+        let given = bridge::Given {
+            chat_channel: chat_channel.as_deref(),
+            allowed_chat_user: allowed_chat_user.as_deref(),
+            chat_connector: chat_connector.as_deref(),
+        };
+        let status = match client.client() {
+            Ok(client) => bridge::run(&client, json, given),
+            Err(failure) => bridge::report(&failure, json),
+        };
+        std::process::exit(status);
+    }
     let (result, after) = run(cli.command, json);
     // Text: the command's own lines are written before the reconnect starts. `--json`: the one
     // document waits for the reconnect, whose member `reconnected` it carries.
@@ -892,6 +938,7 @@ mod tests {
                 "pending",
                 "wait",
                 "wake",
+                "bridge",
                 "read",
                 "answer",
                 "refuse",

@@ -229,8 +229,8 @@ the story starts the service with `--max-wait 1` for the end of a wait and the n
 
 ## What it leaves out
 
-- No adapter but `claude_code` and `terminal`, which are built: each other adapter is a story of
-  its own and a section below (`metaharness`).
+- No adapter but `claude_code`, `terminal` and `slack` (`inbox bridge`, `docs/design/bridge.md`),
+  which are built: each other adapter is a story of its own and a section below (`metaharness`).
 - No wake for one message id or one kind; every row of `Pending` in `Sent` wakes it.
 - `inbox wait` stays as it is: one held read, its answer printed, nothing marked.
 
@@ -569,8 +569,11 @@ above, byte for byte.
   read the adapter.
 
 What it leaves out: whether anyone looks at the terminal (a message shown in a terminal no one
-watches is `Delivered` all the same, and `inbox pending` lists it until it is read), and a person
-inbox of its own (epic:human-inbox builds on this mode).
+watches is `Delivered` all the same, and `inbox pending` lists it until it is read). The inbox of
+a person is served through a chat channel by `inbox bridge` (`docs/design/bridge.md`,
+epic:human-inbox), which runs the rounds of this mode with the chat channel as its surface and
+takes the same lock: a bridge and this mode of one inbox and outbox file on a host exclude each
+other (exit 5), and this mode ends with 1 on an inbox the bridge opened (the adapter `slack`).
 
 The cases are `crates/inbox-cli/tests/terminal_adapter.rs` and
 `crates/inbox-cli/tests/adversary_terminal.rs`, against a real `inbox serve` and stand-ins for

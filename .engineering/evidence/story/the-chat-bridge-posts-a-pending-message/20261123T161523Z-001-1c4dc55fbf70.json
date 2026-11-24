@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-23T16:15:23Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-posts-a-pending-message",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a process that inherited the pipes of an ended child holds the post): the bridge takes the exit of the child as the end of the post, keeps at most 256 KiB of each stream and reads on for at most 1 s after the exit (case a_grandchild_holding_the_pipes_does_not_hold_the_post_of_an_ended_child, 1.4 s green; mutant m17 red); the sentence of docs/design/bridge.md is corrected",
+    "review": "review-result:adversary-chat-bridge-posts-pass-1",
+    "outcome": "fixed"
+  }
+}
