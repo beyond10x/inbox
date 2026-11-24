@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T13:11:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:no-case-of-the-bounded-run-waits-on-a-real-tool",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the fixture key leaves out the repository's .cargo/config.toml and the environment that reaches the build): round 2 (bd89461): the key holds the bytes of .cargo/config.toml (a marker when the file is absent) and the values of RUSTFLAGS and CARGO_ENCODED_RUSTFLAGS as the test process sees them (a marker for an unset one, so an empty value is another key than an absent one); 3 unit cases with made-up inputs hold the 3 members, red 3 of 3 before the change; the wrapper is not a member, since it does not change what is built",
+    "review": "review-result:adversary-bounded-run-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -18,6 +18,11 @@
 //! entry's `ess/` (path, executable bit, bytes), else the real `ess`. Either way a case that
 //! changes the specification before it synthesizes runs its own synthesis.
 //!
+//! One changed specification has an entry of its own: `ess/` with [`add_an_optional_field`]
+//! applied, for `drift::an_optional_field_added_to_the_specification_is_drift`. The case applies
+//! the same function to its copy and passes `synthesize_changed`, which answers from that entry
+//! and fails for any other `ess/`; it starts no `ess`.
+//!
 //! The key is the SHA-256 of all the synthesis reads: the script's text, the arguments, the real
 //! `ess` (its `--version`, path, length and modification time) and every file of `ess/` (path,
 //! executable bit, bytes). Another specification or another `ess` release is another entry. A
@@ -26,8 +31,13 @@
 //! Several processes ask at once. An entry directory only ever appears complete: the first
 //! process that finds none takes an exclusive lock on `<key>.lock`, writes `<key>.partial` (a
 //! leftover of a killed run is removed first) and renames it to `<key>`; the others wait on the
-//! lock, find the entry, and read it. `task test` runs `the_entry_of_the_repository_is_made`
-//! alone before its bounded run, so no case of the run waits for the synthesis.
+//! lock, find the entry, and read it. `task test` runs `the_entry_of_the_repository_is_made` and
+//! `the_entry_of_the_changed_specification_is_made` before its bounded run, so no case of the run
+//! waits for a synthesis it reads.
+//!
+//! An entry that lost its `ess/` or a file a reader names is not built anew: the setup cases,
+//! `synthesize` and `synthesize_changed` fail with a line that names the entry by its path in the
+//! tree and says that removing that directory makes the next run build it anew.
 
 use std::env;
 use std::ffi::OsString;
@@ -75,16 +85,86 @@ fn repository() -> PathBuf {
         .to_path_buf()
 }
 
+fn cache() -> PathBuf {
+    Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthesis")
+}
+
+/// The `ess` on `PATH`.
+fn real() -> &'static PathBuf {
+    static REAL: OnceLock<PathBuf> = OnceLock::new();
+    REAL.get_or_init(|| fs::canonicalize(on_path("ess")).unwrap())
+}
+
 /// The entry of the repository's `ess/` and the `ess` on `PATH`, made on first use, and that
 /// `ess`.
 fn repository_entry() -> &'static (PathBuf, PathBuf) {
     static ENTRY: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
     ENTRY.get_or_init(|| {
-        let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("synthesis");
-        let real = fs::canonicalize(on_path("ess")).unwrap();
-        let entry = entry(&cache, &repository().join(SPECIFICATION), &real);
+        let real = real().clone();
+        let entry = entry(&cache(), &repository().join(SPECIFICATION), &real);
         (entry, real)
     })
+}
+
+/// The change of the specification the case `drift::an_optional_field_added_to_the_specification_is_drift`
+/// makes, applied to `spec` (a directory named `ess`): an optional field `label` after the field
+/// `adapter` in `domains/messaging.yaml`. The entry of the changed specification is made with
+/// this function too, so the case and the entry cannot hold two different changes.
+pub fn add_an_optional_field(spec: &Path) {
+    let domain = spec.join("domains/messaging.yaml");
+    let text = fs::read_to_string(&domain).unwrap();
+    let anchor = "      - {name: adapter, type: inbox.messaging.Adapter}\n";
+    assert!(
+        text.contains(anchor),
+        "{} holds no {anchor:?}",
+        domain.display()
+    );
+    let changed = text.replacen(
+        anchor,
+        &format!("{anchor}      - {{name: label, type: Optional<String>}}\n"),
+        1,
+    );
+    fs::write(&domain, changed).unwrap();
+}
+
+/// The entry of the repository's `ess/` with [`add_an_optional_field`] applied, made on first use
+/// from a copy of `ess/` that this process stages and removes again.
+fn changed_entry() -> &'static PathBuf {
+    static ENTRY: OnceLock<PathBuf> = OnceLock::new();
+    ENTRY.get_or_init(|| {
+        let staging = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join("synthesis-changed")
+            .join(std::process::id().to_string());
+        if staging.exists() {
+            fs::remove_dir_all(&staging).unwrap();
+        }
+        let spec = staging.join(SPECIFICATION);
+        copy_tree(&repository().join(SPECIFICATION), &spec);
+        add_an_optional_field(&spec);
+        let entry = entry(&cache(), &spec, real());
+        fs::remove_dir_all(&staging).unwrap();
+        entry
+    })
+}
+
+/// The synthesis to pass to `drift_with` for a root whose `ess/` is the repository's with
+/// [`add_an_optional_field`] applied: `crate/` of the entry of that specification. A root with
+/// another `ess/` is an error, never a synthesis of its own: the case reads the product made
+/// before the run.
+pub fn synthesize_changed(root: &Path, out: &Path) -> Result<(), String> {
+    let entry = changed_entry();
+    if let Some(line) = damage(entry) {
+        return Err(line);
+    }
+    let spec = root.join(SPECIFICATION);
+    if !spec.is_dir() || files(&spec) != files(&entry.join(SPECIFICATION)) {
+        return Err(format!(
+            "{} is not the specification of the cache entry {}",
+            spec.display(),
+            entry.display()
+        ));
+    }
+    copy_out(entry, out)
 }
 
 /// The synthesis to pass to `generate_with` and `drift_with`: `crate/` of the entry of the
@@ -102,12 +182,48 @@ pub fn path() -> OsString {
     env::join_paths(std::iter::once(first).chain(env::split_paths(&rest))).unwrap()
 }
 
+/// The files of an entry that a reader of it reads by name.
+const ENTRY_FILES: [&str; 3] = ["crate/Cargo.toml", "crate/src/lib.rs", "bin/ess"];
+
+/// The line a reader of `entry` fails with when the entry lacks its `ess/` or one of
+/// [`ENTRY_FILES`]; `None` when it holds them all.
+fn damage(entry: &Path) -> Option<String> {
+    if !entry.join(SPECIFICATION).is_dir() {
+        return Some(damaged_entry(entry, &format!("{SPECIFICATION}/")));
+    }
+    ENTRY_FILES
+        .into_iter()
+        .find(|file| !entry.join(file).is_file())
+        .map(|file| damaged_entry(entry, file))
+}
+
+/// The line for a cache entry under `target/` (a synthesis, or the fixture of
+/// `tools::test_step`) that lacks `what`: the entry by its path relative to the tree, and that
+/// removing it has the next run build it anew. Nothing builds a damaged entry again by itself.
+pub fn damaged_entry(entry: &Path, what: &str) -> String {
+    let root = repository();
+    let shown = entry.strip_prefix(&root).unwrap_or(entry);
+    format!(
+        "the cache entry {} holds no {what}; removing that directory makes the next run build it \
+         anew",
+        shown.display()
+    )
+}
+
 /// What `synthesize` does, for the entry `entry` made with the program `real`.
 fn answer(entry: &Path, real: &Path, root: &Path, out: &Path) -> Result<(), String> {
+    if let Some(line) = damage(entry) {
+        return Err(line);
+    }
     let spec = root.join(SPECIFICATION);
     if !spec.is_dir() || files(&spec) != files(&entry.join(SPECIFICATION)) {
         return synthesize_with(root, real, out);
     }
+    copy_out(entry, out)
+}
+
+/// `crate/` of `entry` copied to `out`, in place of what `out` held.
+fn copy_out(entry: &Path, out: &Path) -> Result<(), String> {
     if out.exists() {
         fs::remove_dir_all(out).map_err(|e| format!("remove {}: {e}", out.display()))?;
     }
@@ -330,17 +446,67 @@ fn setup(name: &str) -> Setup {
 #[test]
 fn the_entry_of_the_repository_is_made() {
     let (entry, real) = repository_entry();
+    if let Some(line) = damage(entry) {
+        panic!("{line}");
+    }
     assert_eq!(
         files(&entry.join(SPECIFICATION)),
         files(&repository().join(SPECIFICATION))
     );
-    assert!(entry.join("crate/Cargo.toml").is_file());
-    assert!(entry.join("crate/src/lib.rs").is_file());
     let script = fs::read_to_string(entry.join("bin/ess")).unwrap();
     assert!(
         script.contains(&format!("real='{}'", real.display())),
         "{script}"
     );
+}
+
+/// The setup step of `task test` runs this case before the bounded run as well, so the entry of
+/// the changed specification is there before `drift::an_optional_field_added_to_the_specification_is_drift`
+/// reads it.
+#[test]
+fn the_entry_of_the_changed_specification_is_made() {
+    let entry = changed_entry();
+    if let Some(line) = damage(entry) {
+        panic!("{line}");
+    }
+    let unchanged = files(&repository().join(SPECIFICATION));
+    let changed = files(&entry.join(SPECIFICATION));
+    let differing: Vec<&PathBuf> = changed
+        .iter()
+        .filter(|file| !unchanged.contains(file))
+        .map(|(path, _, _)| path)
+        .collect();
+    assert_eq!(
+        differing,
+        [&PathBuf::from("domains/messaging.yaml")],
+        "the entry's specification differs from the repository's in another way"
+    );
+    assert_eq!(changed.len(), unchanged.len());
+    let messaging = fs::read_to_string(entry.join("crate/src/messaging.rs")).unwrap();
+    assert!(
+        messaging.contains("label"),
+        "no field `label` was synthesized"
+    );
+}
+
+/// An entry that lost a file of `crate/`: the synthesis fails with a line that names the entry by
+/// its path in the tree and how to have it built anew, and runs no `ess`.
+#[test]
+fn a_damaged_entry_is_named_with_the_way_to_build_it_anew() {
+    let s = setup("damaged");
+    let done = entry(&s.cache, &s.spec, &s.real);
+    assert_eq!(damage(&done), None);
+    fs::remove_file(done.join("crate/src/lib.rs")).unwrap();
+    let root = root_with(&s.spec, &s.dir.join("root"));
+    let error = answer(&done, &s.real, &root, &root.join("out")).unwrap_err();
+    assert!(
+        error.contains("crate/src/lib.rs")
+            && error.contains("target/tmp/synthesis-cases/damaged/cache/")
+            && error.contains("removing that directory makes the next run build it anew")
+            && !error.contains(&repository().display().to_string()),
+        "{error}"
+    );
+    assert_eq!(calls(&s.real), 1, "the damaged entry ran ess");
 }
 
 /// A repository root of its own holding a copy of `spec` as `ess/`.

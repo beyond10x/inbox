@@ -247,12 +247,15 @@ fn a_redirect_answer_is_not_reported_as_posted() {
     );
 }
 
-/// The claim: an entry leaves the outbox file when its `expires` is at or before now. An envelope
-/// whose body is over the model's 65536 bytes is refused `400` by the service (kept, as a service
-/// refusal) and does not read back through the generated decoder, so it must still leave once its
-/// `expires` has passed.
+/// The claim: an entry leaves the outbox file when its `expires` is at or before now. First, an
+/// envelope whose body is over the model's 65536 bytes does not read back through the generated
+/// decoder, so `post` refuses it before it keeps it (exit 2) and it is never kept. Then a second,
+/// small envelope, posted to an address where no service listens, is kept after the transport
+/// failure (exit 3); the case waits until the wall clock has passed the `expires` of the kept
+/// entry, and `repost`, which reaches no service either, drops it by the client's own clock
+/// before it sends it: it exits 0, reposts nothing, and the outbox file is empty.
 #[test]
-fn an_envelope_over_the_body_limit_leaves_the_outbox_when_it_expires() {
+fn an_envelope_no_service_took_leaves_the_outbox_when_it_expires() {
     let world = World::new("adv-big-body");
     world.client("bob", &["open"]).ok();
     fs::write(world.dir.join("big.txt"), "a".repeat(65_537)).expect("the body file");
@@ -277,17 +280,66 @@ fn an_envelope_over_the_body_limit_leaves_the_outbox_when_it_expires() {
         world.kept("alice").is_empty(),
         "what the decoder refuses is never kept"
     );
-    std::thread::sleep(Duration::from_secs(4));
-    let reposted = world.client("alice", &["repost", "--json"]);
+
+    let nowhere = [("INBOX_URL", "http://127.0.0.1:1")];
+    let short = expires_in_a_second();
+    let kept = world.client_env(
+        "alice",
+        &["post", "--to", BOB, "--body", "short", "--expires", &short],
+        &nowhere,
+    );
+    assert_eq!(kept.status, support::TRANSPORT, "{kept:#?}");
+    let lines = fs::read_to_string(world.outbox("alice")).expect("the outbox file");
+    assert_eq!(
+        lines.lines().count(),
+        1,
+        "a post that reached no service is kept"
+    );
+    let entry = json::parse(lines.lines().next().unwrap()).expect("an outbox line is JSON");
+    let deadline = Instant::parse(&text(&entry, "expires")).expect("the kept expires reads");
+    let waited = Clock::now();
+    while Instant::from_system_time(std::time::SystemTime::now()) <= deadline {
+        assert!(
+            waited.elapsed() < Duration::from_secs(10),
+            "the wall clock did not pass {short} within 10 s"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let reposted = world.client_env("alice", &["repost", "--json"], &nowhere);
     assert!(
         world.kept("alice").is_empty(),
-        "expires {expires} has passed and the entry is still in the outbox file; post: exit {} \
-         {}; repost: exit {} {}",
+        "expires {short} has passed and the entry is still in the outbox file; post of the big \
+         body: exit {} {} (expires {expires}); repost: exit {} {}",
         posted.status,
         text(&posted.json(), "error"),
         reposted.status,
         reposted.stdout.trim()
     );
+    // Dropped before it is sent: a repost that sent it would end in transport (exit 3), and the
+    // line would leave the file all the same, by the mark of the failure written after it.
+    assert_eq!(
+        reposted.status, 0,
+        "repost sent the expired envelope: {reposted:#?}"
+    );
+    match reposted.json().member("reposted") {
+        Some(Value::Array(entries)) => assert!(
+            entries.is_empty(),
+            "repost sent the expired envelope: {reposted:#?}"
+        ),
+        other => panic!("`reposted` is {other:?}: {reposted:#?}"),
+    }
+}
+
+/// The instant one second from now, in milliseconds: an `--expires` after the `created` the
+/// client writes when it starts within that second, so the wait for it is at most one second.
+fn expires_in_a_second() -> String {
+    let at = std::time::SystemTime::now() + Duration::from_secs(1);
+    let whole = inbox_server::format_instant(Instant::from_system_time(at));
+    let millis = at
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after 1970")
+        .subsec_millis();
+    format!("{}.{millis:03}Z", whole.trim_end_matches('Z'))
 }
 
 /// `repost` drops an envelope the service refuses with a declared error other than

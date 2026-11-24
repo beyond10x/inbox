@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T13:11:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:no-case-of-the-bounded-run-waits-on-a-real-tool",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a mistyped or renamed setup case of task test is run by nobody and cargo-nextest exits 0): the adversary's case adversary_bounded_run::every_setup_case_of_task_test_is_a_case_of_the_binary stays in the suite; round 2 (bd89461) ran the mutant (one setup name mistyped in Taskfile.yml) and the case is red and names the mistyped case; no change of Taskfile.yml",
+    "review": "review-result:adversary-bounded-run-pass-1",
+    "outcome": "fixed"
+  }
+}

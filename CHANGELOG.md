@@ -17,6 +17,15 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   that names the file and the remedy. A key made with such a key id is replaced by a new key:
   `inbox key new`, then `inbox keyfile add-key`.
 
+- 3 slow cases of the test step changed. The drift case that adds a field reads a product made
+  once per run: the setup step of `task test` makes the synthesis of its changed `ess/` (a cache
+  entry under `target/tmp/`, keyed by the SHA-256 of its sources). The case of an envelope no
+  service took waits on the clock until the `expires` of its own envelope has passed, where it
+  slept 4 s. The case of the test step that ends a run over its bound still runs cargo-nextest,
+  on a fixture package now built once per run, and keeps its fixed waits (the bound of 2 s, then
+  1.5 s). In `task test` on the build node the 3 cases took 0.15 to 0.24, 4.0 to 4.1 and 3.9 to
+  5.6 s, and take 0.04 to 0.06, 1.02 to 1.09 and 3.52 to 3.55 s. No shipped code changes.
+
 ### Fixed
 
 - `inbox key new` now refuses a `--key-id` that holds a control character (a line break, another

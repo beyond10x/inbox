@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T13:11:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:no-case-of-the-bounded-run-waits-on-a-real-tool",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (case 3 never asserts the exit or the empty reposted list of its repost): round 2 (bd89461): the case asserts that repost exits 0 and that its reposted list is empty; the mutant of the pass (the outbox read of repost_each 60 s behind the clock) is red in the case itself, at crates/inbox-cli/tests/adversary.rs:319, and in the adversary's case",
+    "review": "review-result:adversary-bounded-run-pass-1",
+    "outcome": "fixed"
+  }
+}

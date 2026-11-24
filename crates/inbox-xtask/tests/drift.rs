@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use inbox_xtask::{Difference, GENERATED, differences, drift_with, generate_with, repository_root};
 
-use crate::synthesis::synthesize;
+use crate::synthesis::{add_an_optional_field, synthesize, synthesize_changed};
 
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -322,17 +322,8 @@ fn drift_names_generated_rust_and_every_changed_path() {
 #[test]
 fn an_optional_field_added_to_the_specification_is_drift() {
     let root = synthesized_root("drift-specification");
-    let domain = root.join("ess/domains/messaging.yaml");
-    let text = fs::read_to_string(&domain).unwrap();
-    let anchor = "      - {name: adapter, type: inbox.messaging.Adapter}\n";
-    assert!(text.contains(anchor));
-    let changed = text.replacen(
-        anchor,
-        &format!("{anchor}      - {{name: label, type: Optional<String>}}\n"),
-        1,
-    );
-    fs::write(&domain, changed).unwrap();
-    let error = drift_with(&root, synthesize).unwrap_err();
+    add_an_optional_field(&root.join("ess"));
+    let error = drift_with(&root, synthesize_changed).unwrap_err();
     assert!(error.starts_with("generated/rust/inbox drifted"), "{error}");
     assert!(error.contains("  edited: src/messaging.rs"), "{error}");
 }

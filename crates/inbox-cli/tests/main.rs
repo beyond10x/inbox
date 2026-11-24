@@ -19,6 +19,7 @@ mod adversary_collect_record_2;
 mod adversary_control_sequences;
 mod adversary_deadline;
 mod adversary_key_id_control;
+mod adversary_outbox_expiry;
 mod adversary_printer;
 mod adversary_reader_gone;
 mod adversary_reconnect;

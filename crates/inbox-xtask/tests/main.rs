@@ -2,6 +2,7 @@
 
 mod adversary;
 mod adversary2;
+mod adversary_bounded_run;
 mod adversary_spec_compat;
 mod drift;
 mod spec_compat;

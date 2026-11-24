@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T15:28:34Z",
+  "actor": "agent:inbox",
+  "artifact": "story:no-case-of-the-bounded-run-waits-on-a-real-tool",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}
