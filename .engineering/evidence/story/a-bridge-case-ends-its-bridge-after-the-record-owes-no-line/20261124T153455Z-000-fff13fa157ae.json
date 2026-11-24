@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T15:34:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-bridge-case-ends-its-bridge-after-the-record-owes-no-line",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "1 note, verdict INFEASIBLE: the wait reads an empty text also for a missing entry; both entries exist through the case, no change",
+    "review": "review-result:adversary-bridge-owed-pass-1",
+    "outcome": "no-op"
+  }
+}

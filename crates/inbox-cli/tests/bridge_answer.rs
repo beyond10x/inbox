@@ -376,6 +376,12 @@ fn a_reply_that_is_not_taken_gets_one_line_and_sends_nothing() {
     wait_for("the decision is answered", || {
         sent_state(&world, &url, &decision) == "Answered"
     });
+    // The stand-in counts a line when it is invoked; the bridge drops `owed` from its record only
+    // after that. A bridge ended in between owes the line, and the next one writes it again under
+    // the same key, which the real `connectors` answers as a replay of the first write.
+    wait_for("the record owes no line", || {
+        recorded(&world, &decision, "owed").is_empty() && recorded(&world, &note, "owed").is_empty()
+    });
     let key = |message_id: &str, ts: &str| format!("inbox-{message_id}-reply-{ts}");
     let mut expected = vec![
         (
