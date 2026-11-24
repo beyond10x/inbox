@@ -8,6 +8,31 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ## [Unreleased]
 
+### Changed
+
+- A client command given a secret key file whose `key_id` holds a control character that is not
+  a line break (a tab, another C0 character, DEL or a C1 character) sent its requests with that
+  key id before, and a service whose key file held the same key id took them (`inbox keyfile
+  add-key` checks no key id). Now it ends with exit status 4 before any connection, and one line
+  that names the file and the remedy. A key made with such a key id is replaced by a new key:
+  `inbox key new`, then `inbox keyfile add-key`.
+
+### Fixed
+
+- `inbox key new` now refuses a `--key-id` that holds a control character (a line break, another
+  C0 character, DEL or a C1 character) with exit status 2 and one line that names `--key-id`, and
+  writes no file; before, it wrote the key file. A client command given a secret key file whose
+  `key_id` holds a line break now ends with exit status 4 and one line that names the file,
+  before any connection; before, it ended with exit status 2 and a line about a header value
+  that named neither the file nor the key id. Both lines show at most the first 64 characters of
+  the key id and say how many more there are.
+- A client command whose `INBOX_URL` (or `--url`) holds a control character in its host or port
+  ends with exit status 2 and one line that names `INBOX_URL`, before the host is handed to the
+  resolver. Before, a host name with one was handed to the resolver (one in the port was refused
+  as a URL not of the form), and when it resolved to a loopback address, a line break in it was
+  refused when the request head was made and another control character was written into the
+  `Host` header.
+
 ## [0.7.0] - 2026-11-24
 
 ### Added

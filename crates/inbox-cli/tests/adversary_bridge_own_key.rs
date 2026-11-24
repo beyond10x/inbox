@@ -156,14 +156,14 @@ fn odd_characters_in_the_ids_keep_the_refused_end_one_line_on_both_streams() {
     assert_eq!(text(&parsed, "error"), "key refused", "{printed:?}");
 }
 
-/// Pass 2, attack 1: a key id in the secret key file with a line separator, a right-to-left
-/// override and an escape sequence (a line end cannot reach the service: the client refuses it
-/// in a header). The service answers the unknown key `401`; the refused end is one line that
-/// shows each of them as its escape.
+/// Pass 2, attack 1: a key id in the secret key file with a line separator and a right-to-left
+/// override (a control character cannot reach the service: `inbox key new` refuses it, and so
+/// does the client in a key file). The service answers the unknown key `401`; the refused end is
+/// one line that shows each of them as its escape.
 #[test]
 fn odd_characters_in_the_key_id_keep_the_refused_end_one_line() {
     let (dir, operator_public_key) = keys_only("adv-own-key-odd-key-id");
-    let key_id = "odd\u{2028}key\u{202e}1\u{1b}[1m";
+    let key_id = "odd\u{2028}key\u{202e}1";
     let made = support::run(
         &dir.path,
         &[
@@ -216,7 +216,7 @@ fn odd_characters_in_the_key_id_keep_the_refused_end_one_line() {
     assert!(held.is_empty(), "raw {held:?} in {said:?}");
     assert!(
         line.starts_with(
-            "inbox bridge: the service refused the key odd\\u{2028}key\\u{202e}1\\u{1b}[1m acting \
+            "inbox bridge: the service refused the key odd\\u{2028}key\\u{202e}1 acting \
              for agent:test/bob under the delegation chat-bridge-for-bob (401)"
         ),
         "{said:?}"

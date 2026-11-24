@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T12:37:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-key-id-with-a-control-character-is-refused-where-it-is-made",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the client case of the story asserts only exit 4, the file named and one line, so the line without its remedy or its cause passes it): round 2 (7b51c23): adversary_acting_for::a_line_break_in_the_key_id_opens_no_connection asserts the cause and the remedy for each of its 3 files and 3 commands; the mutant that removes the remedy is red in it; the 8 cases of the adversary stay in the suite",
+    "review": "review-result:adversary-key-id-control-pass-1",
+    "outcome": "fixed"
+  }
+}

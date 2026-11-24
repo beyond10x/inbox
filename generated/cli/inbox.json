@@ -128,7 +128,7 @@
           "kind": "option",
           "long": "key-id",
           "valueName": "KEY_ID",
-          "help": "The key id of this key's entry in the key file (a client key)"
+          "help": "The key id of this key's entry in the key file (a client key); one with a control character is wrong usage, and no key is made"
         },
         {
           "name": "principal",
@@ -1308,7 +1308,7 @@
     },
     {
       "code": 2,
-      "meaning": "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin, a pin beside an `http://` URL, and an `inbox bridge` without its binding or with only one of `--for` and `--authority`."
+      "meaning": "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address or whose host holds a control character, an `https://` URL without a pin, a pin beside an `http://` URL, an `inbox key new` whose `--key-id` holds a control character, and an `inbox bridge` without its binding or with only one of `--for` and `--authority`."
     },
     {
       "code": 3,
@@ -1316,7 +1316,7 @@
     },
     {
       "code": 4,
-      "meaning": "A local file could not be read, written or created, or `inbox bridge` found no `connectors` on `PATH`."
+      "meaning": "A local file could not be read, written or created, a secret key file's key id holds a control character, or `inbox bridge` found no `connectors` on `PATH`."
     },
     {
       "code": 5,

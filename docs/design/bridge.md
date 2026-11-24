@@ -77,12 +77,15 @@ same for every cause:
 inbox bridge: the service refused the key <key id> acting for <address> under the delegation <delegation id> (401): its key file holds no live key entry <key id> or no live delegation <delegation id> of <principal> for <address>; add the missing one with `inbox keyfile add-key` or `inbox keyfile add-delegation` and start the service again: it reads the key file at its start only
 ```
 
-The ids in it are not checked on the client: the delegation id comes as `--authority` was typed,
-the key id and the principal as the secret key file holds them. Each is written with its line
-ends as `\u{a}`, and the line, as every line the client writes, with each other control character,
-each character that changes the direction of text and each one a reader cannot see as its escape
-(`crates/inbox-cli/src/output.rs`), so it stays one line, shown in the order it was written,
-whatever the ids hold.
+Of the ids in it the client checks only that the key id holds no control character (`inbox key
+new` writes none, and a client command refuses a secret key file that holds one with exit 4,
+before any request): the delegation id comes as `--authority` was typed, the key id and the
+principal as the secret key file holds them, so the key id may still hold U+2028, U+2029 or a
+character that changes the direction of text, and the other two anything. Each is written with
+its line ends as `\u{a}`, and the line, as every line the client writes, with each other control
+character, each character that changes the direction of text and each one a reader cannot see as
+its escape (`crates/inbox-cli/src/output.rs`), so it stays one line, shown in the order it was
+written, whatever the ids hold.
 
 It posts nothing after it. The client of the rounds and the client of the poll both end the
 process on it, and a thread that starts a request after it waits for the end and sends nothing;

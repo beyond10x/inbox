@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T12:37:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-key-id-with-a-control-character-is-refused-where-it-is-made",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (the bullet of CHANGELOG.md says a client with such a key file ended with exit 2 before, which holds only for a line break): round 2 (7b51c23): the bullet under Fixed says a line break for that clause, and a new bullet under Changed says that a key id with a tab, another C0 character, DEL or a C1 character was sent before and now ends with exit 4, with the remedy; the Outcome of the story says the same",
+    "review": "review-result:adversary-key-id-control-pass-1",
+    "outcome": "fixed"
+  }
+}

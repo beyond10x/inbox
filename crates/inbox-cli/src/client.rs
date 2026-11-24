@@ -59,8 +59,9 @@ impl Service {
     ///
     /// # Errors
     ///
-    /// [`Failure::Usage`] when no URL is given, it is not of that form, its host does not
-    /// resolve, or it resolves to an address that is not loopback; when the pin is not one, an
+    /// [`Failure::Usage`] when no URL is given, it is not of that form, its host or port holds a
+    /// control character ([`host_holds_no_control`], before anything is resolved), its host does
+    /// not resolve, or it resolves to an address that is not loopback; when the pin is not one, an
     /// `https://` URL comes without a pin, or a pin with an `http://` URL.
     pub fn from_url(url: Option<&str>, pin: Option<&str>) -> Result<Self, Failure> {
         let url = url.ok_or_else(|| {
@@ -97,6 +98,8 @@ impl Service {
             }
             _ => {}
         }
+        // Before the resolver is handed anything: a control character in the host or its port.
+        host_holds_no_control(host)?;
         let host = host.strip_suffix('/').unwrap_or(host);
         if host.is_empty() || host.contains(['/', '?', '#', '@']) {
             return Err(refused());
@@ -209,6 +212,22 @@ impl Service {
             }
         })
     }
+}
+
+/// `host`, the text of `INBOX_URL` after its scheme (the host, its port and a trailing `/`), is
+/// fine when it holds no control character (`char::is_control`); one that holds one is wrong
+/// usage, shown as [`output::quoted_cut`] shows a value: the host is the value of the header
+/// `Host`, and the resolver is never handed such a name. It reads the text alone and resolves
+/// nothing.
+fn host_holds_no_control(host: &str) -> Result<(), Failure> {
+    if host.contains(char::is_control) {
+        return Err(Failure::Usage(format!(
+            "INBOX_URL: its host {} holds a control character, which no request can carry; no \
+             request is sent",
+            output::quoted_cut(host)
+        )));
+    }
+    Ok(())
 }
 
 /// The head of a request, up to and with its empty line: the request line, `Host`, the fixed
@@ -428,8 +447,57 @@ pub fn query_value(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Epoch, Reply, Service, query_value, request_head, route};
+    use super::{Epoch, Reply, Service, host_holds_no_control, query_value, request_head, route};
     use crate::failure::Failure;
+
+    /// A host with TAB, ESC, DEL, NEL (U+0085), CR or LF, anywhere in the host or its port, is
+    /// wrong usage: one line that names `INBOX_URL` and shows the host escaped, no raw control
+    /// character; a long one is cut to its first 64 characters. A host with U+2028 (no control
+    /// character) and a plain one pass. The function reads the text only: nothing is resolved.
+    #[test]
+    fn a_host_with_a_control_character_is_wrong_usage() {
+        for host in [
+            "in\tbox:7700",
+            "in\u{1b}box:7700",
+            "in\u{7f}box:7700",
+            "in\u{85}box:7700",
+            "in\rbox:7700",
+            "in\nbox:7700",
+            "inbox:77\t00",
+            "inbox:7700/\u{1b}",
+        ] {
+            match host_holds_no_control(host) {
+                Err(Failure::Usage(line)) => {
+                    assert!(line.starts_with("INBOX_URL"), "{host:?}: {line:?}");
+                    assert!(line.contains(&format!("{host:?}")), "{host:?}: {line:?}");
+                    assert!(!line.contains(char::is_control), "{host:?}: {line:?}");
+                }
+                other => panic!("{host:?}: {other:?}"),
+            }
+        }
+        let long = format!("{}\t:7700", "h".repeat(1 << 20));
+        match host_holds_no_control(&long) {
+            Err(Failure::Usage(line)) => {
+                assert!(line.len() < 1024, "{} bytes", line.len());
+                assert!(
+                    line.contains(&format!(
+                        "{:?} (and 1048518 more characters)",
+                        "h".repeat(64)
+                    )),
+                    "{line:?}"
+                );
+            }
+            other => panic!("long: {other:?}"),
+        }
+        for host in [
+            "in\u{2028}box:7700",
+            "localhost:7700",
+            "127.0.0.1:7700",
+            "[::1]:7700",
+        ] {
+            assert!(host_holds_no_control(host).is_ok(), "{host:?}");
+        }
+    }
 
     const EPOCH: &str = "0123456789abcdef0123456789abcdef";
 

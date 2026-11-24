@@ -32,7 +32,7 @@ use inbox_verify::{
 use zeroize::Zeroizing;
 
 use crate::failure::Failure;
-use crate::output::Done;
+use crate::output::{self, Done};
 
 /// The version member of a secret key file.
 const VERSION_MEMBER: &str = "inbox_secret_key";
@@ -197,8 +197,11 @@ fn optional_text(value: &Value, name: &str) -> Option<String> {
 ///
 /// # Errors
 ///
-/// [`Failure::Usage`] when neither names a file; [`Failure::Local`] as [`read_secret`], and for a
-/// key file that names no key id or principal (an operator key).
+/// [`Failure::Usage`] when neither names a file; [`Failure::Local`] as [`read_secret`], for a
+/// key file that names no key id or principal (an operator key), and for one whose key id holds
+/// a control character (`char::is_control`), which `inbox key new` does not write: it would be a
+/// header value of every request. The line shows the key id as [`output::quoted_cut`] does, its
+/// first 64 characters.
 pub fn caller(path: Option<&Path>) -> Result<Caller, Failure> {
     let path = path.ok_or_else(|| {
         Failure::Usage(
@@ -208,6 +211,14 @@ pub fn caller(path: Option<&Path>) -> Result<Caller, Failure> {
     })?;
     let secret = read_secret(path)?;
     match (secret.key_id, secret.principal) {
+        (Some(key_id), Some(_)) if key_id.contains(char::is_control) => {
+            Err(Failure::Local(format!(
+                "{}: its key id {} holds a control character, which no request can carry; make \
+                 a client key with `inbox key new --key-id <id> --principal <principal>`",
+                path.display(),
+                output::quoted_cut(&key_id)
+            )))
+        }
         (Some(key_id), Some(principal)) => Ok(Caller {
             key: secret.key,
             key_id,
@@ -226,8 +237,18 @@ pub fn caller(path: Option<&Path>) -> Result<Caller, Failure> {
 ///
 /// # Errors
 ///
-/// [`Failure::Local`] when `out` exists (never overwritten) or cannot be written.
+/// [`Failure::Usage`] when the key id holds a control character (`char::is_control`), before a
+/// key is made or a file exists; [`Failure::Local`] when `out` exists (never overwritten) or
+/// cannot be written.
 pub fn new(out: &Path, identity: Option<(&str, &str)>) -> Result<Done, Failure> {
+    if let Some((key_id, _)) = identity
+        && key_id.contains(char::is_control)
+    {
+        return Err(Failure::Usage(format!(
+            "--key-id {} holds a control character, which no request can carry; no key is made",
+            output::quoted_cut(key_id)
+        )));
+    }
     let key = SecretKey::generate().map_err(|error| Failure::Local(error.to_string()))?;
     let public_key = key.public_key().to_base64();
     // Large enough from the start (a character escaped takes at most 6 bytes), so the buffer

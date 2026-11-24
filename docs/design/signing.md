@@ -255,6 +255,15 @@ followed, a directory there is a failure), create that file anew with the mode o
 they replace (0666 narrowed by the umask for a new key file, which holds no secret bytes), write
 the whole file to it and rename it over the key file.
 
+The key id of a client's secret key file is the one its requests name in a header: `inbox key new`
+refuses a `--key-id` with a control character (`char::is_control`: C0, DEL, C1) as wrong usage
+(exit 2) and writes no file, and a client command given a secret key file whose `key_id` holds one
+exits 4 with one line that names the file, before any connection; U+2028, U+2029 and the
+characters that change the direction of text pass. Not checked by
+story:a-key-id-with-a-control-character-is-refused-where-it-is-made: the `principal` of a key, the
+key id of `inbox keyfile add-key`, the delegation id of `inbox keyfile add-delegation`, an empty
+key id and one with white space around it.
+
 ## Instants
 
 Every check takes the instant as an argument; the library reads no clock.

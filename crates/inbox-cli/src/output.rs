@@ -201,6 +201,24 @@ fn hidden(character: char) -> bool {
         || unseen(character)
 }
 
+/// The most characters of a value a line that refuses it shows ([`quoted_cut`]).
+pub const MOST_SHOWN_CHARACTERS: usize = 64;
+
+/// `value` as a line that refuses it shows it: its first [`MOST_SHOWN_CHARACTERS`] characters
+/// between double quotes, escaped as `{:?}` escapes a text (a control character as `\u{1b}`), and,
+/// when `value` is longer, ` (and <n> more characters)` after the closing quote. The characters
+/// are cut before they are escaped, so no escape is cut in half; a line stays short whatever the
+/// value holds.
+pub fn quoted_cut(value: &str) -> String {
+    let mut characters = value.chars();
+    let first: String = characters.by_ref().take(MOST_SHOWN_CHARACTERS).collect();
+    match characters.count() {
+        0 => format!("{first:?}"),
+        1 => format!("{first:?} (and 1 more character)"),
+        more => format!("{first:?} (and {more} more characters)"),
+    }
+}
+
 /// The most bytes of the text of a body in the block of literal text of a chat post
 /// ([`chat_post`]): a longer one is cut.
 pub const MOST_CHAT_BODY_BYTES: usize = 3000;
@@ -620,7 +638,31 @@ mod tests {
 
     use inbox::server::json;
 
-    use super::{MOST_CHAT_BODY_BYTES, chat_post, document, plain_document, rows_text, visible};
+    use super::{
+        MOST_CHAT_BODY_BYTES, chat_post, document, plain_document, quoted_cut, rows_text, visible,
+    };
+
+    /// A value of up to 64 characters is shown whole; a longer one shows its first 64 and how
+    /// many more there are; the cut comes before the escape, so 65 escapes show 64 whole ones.
+    #[test]
+    fn a_value_shown_in_a_refusal_is_cut_at_64_characters_before_its_escape() {
+        let k = |n: usize| "k".repeat(n);
+        assert_eq!(quoted_cut(&k(63)), format!("\"{}\"", k(63)));
+        assert_eq!(quoted_cut(&k(64)), format!("\"{}\"", k(64)));
+        assert_eq!(
+            quoted_cut(&k(65)),
+            format!("\"{}\" (and 1 more character)", k(64))
+        );
+        assert_eq!(
+            quoted_cut(&k(66)),
+            format!("\"{}\" (and 2 more characters)", k(64))
+        );
+        assert_eq!(quoted_cut("a\u{1b}\""), r#""a\u{1b}\"""#);
+        assert_eq!(
+            quoted_cut(&"\u{1b}".repeat(65)),
+            format!("\"{}\" (and 1 more character)", r"\u{1b}".repeat(64))
+        );
+    }
 
     /// A row of `Pending` with `from`, `on_behalf_of`, `kind` and `body` as given.
     fn chat_row(from: &str, on_behalf_of: &str, kind: &str, body: &str) -> json::Value {

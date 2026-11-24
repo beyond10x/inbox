@@ -389,7 +389,8 @@ enum KeyCommand {
         /// The secret key file to create.
         #[arg(long)]
         out: PathBuf,
-        /// The key id of this key's entry in the key file (a client key).
+        /// The key id of this key's entry in the key file (a client key); one with a control
+        /// character is wrong usage, and no key is made.
         #[arg(long, requires = "principal")]
         key_id: Option<String>,
         /// The principal of this key's entry in the key file (a client key).

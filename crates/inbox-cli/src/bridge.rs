@@ -200,8 +200,10 @@ pub fn run(client: Client, json: bool, given: Given<'_>) -> i32 {
 /// its start. It takes the slot of the `connectors` child and holds it to the end, ends a running
 /// child with its group as the signal path does ([`wake::end_group`]), writes the failure
 /// ([`report`]) and exits 1: no post and no further request. The ids come as typed
-/// (`--authority`) and as the secret key file holds them (the key id, the principal), checked by
-/// nobody on the client: each is written with its line ends as `\u{a}` ([`output::inline`]), and
+/// (`--authority`) and as the secret key file holds them (the key id, the principal); of them the
+/// client checks only that the key id holds no control character ([`crate::keys::caller`]), so the key
+/// id may still hold U+2028, U+2029 or a character that changes the direction of text, and the
+/// others anything: each is written with its line ends as `\u{a}` ([`output::inline`]), and
 /// the line as every line ([`output::warn`]: each other control character, each character that
 /// changes the direction of text and each one a reader cannot see as its escape), so it stays one
 /// line in the order it was written.

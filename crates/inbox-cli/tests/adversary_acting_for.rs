@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 
-use support::{ALICE, BOB, USAGE, keys_only, run};
+use support::{ALICE, BOB, LOCAL, USAGE, keys_only, run};
 
 const UNAUTHENTICATED: &str = r#"{"refused":"unauthenticated"}"#;
 
@@ -248,40 +248,55 @@ fn the_refusal_line_shows_no_raw_character_of_the_value() {
 }
 
 /// Pass 2. A key id with a line break, from the caller's own key file, is a header value the
-/// client writes: the head is refused before a connection is opened (the stand-in sees no
-/// connection at all), with exit 2 and the line that says no request is sent.
+/// client writes. story:a-key-id-with-a-control-character-is-refused-where-it-is-made: `inbox key
+/// new` no longer writes such a key id, so the case writes it into a key file made with an
+/// ordinary one; beside it a key id with ESC and one with a C1 character, which no head refuses.
+/// The key file is refused where its key id becomes the caller's, before a connection is opened
+/// (the stand-in sees no connection at all): exit 4 and one line that names the file, the cause
+/// (`control character`) and the remedy (`inbox key new --key-id`).
 #[test]
 fn a_line_break_in_the_key_id_opens_no_connection() {
     let dir = support::Dir::new("adv-key-id-crlf");
-    let made = run(
-        &dir.path,
-        &[
-            "key",
-            "new",
-            "--out",
-            "broken.key",
-            "--key-id",
-            "k\r\nX-Injected: 1",
-            "--principal",
-            ALICE,
-        ],
-        &[],
-    );
-    assert_eq!(made.status, 0, "the key is made: {made:#?}");
-    let (url, heads) = recording();
-    let env = [
-        ("INBOX_URL", url.as_str()),
-        ("INBOX_SECRET_KEY_FILE", "broken.key"),
-        ("INBOX_OUTBOX", "alice.outbox"),
+    support::key_new(&dir.path, "made.key", Some(("k-1", ALICE)));
+    let made = std::fs::read_to_string(dir.join("made.key")).expect("the key file");
+    assert!(made.contains(r#""key_id":"k-1""#), "{made:?}");
+    let files = [
+        ("broken.key", r"k\r\nX-Injected: 1"),
+        ("escape.key", r"k\u001b[2J"),
+        ("c1.key", r"k\u0085"),
     ];
-    for command in [
-        vec!["pending"],
-        vec!["pending", "--for", BOB],
-        vec!["post", "--to", BOB, "--body", "x"],
-    ] {
-        let ran = run(&dir.path, &command, &env);
-        assert_eq!(ran.status, USAGE, "{command:?}: {ran:#?}");
-        assert!(ran.stderr.contains("line break"), "{command:?}: {ran:#?}");
+    for (file, key_id) in files {
+        // A copy keeps the mode 0600; the write then keeps it too.
+        std::fs::copy(dir.join("made.key"), dir.join(file)).expect("the key file is copied");
+        let broken = made.replace(r#""key_id":"k-1""#, &format!(r#""key_id":"{key_id}""#));
+        std::fs::write(dir.join(file), broken).expect("the key id is replaced");
+    }
+    let (url, heads) = recording();
+    for (file, _) in files {
+        let env = [
+            ("INBOX_URL", url.as_str()),
+            ("INBOX_SECRET_KEY_FILE", file),
+            ("INBOX_OUTBOX", "alice.outbox"),
+        ];
+        for command in [
+            vec!["pending"],
+            vec!["pending", "--for", BOB],
+            vec!["post", "--to", BOB, "--body", "x"],
+        ] {
+            let ran = run(&dir.path, &command, &env);
+            assert_eq!(ran.status, LOCAL, "{file} {command:?}: {ran:#?}");
+            assert!(ran.stderr.contains(file), "{file} {command:?}: {ran:#?}");
+            let line = ran.stderr.strip_suffix('\n').unwrap_or(&ran.stderr);
+            assert!(
+                !line.contains(char::is_control),
+                "{file} {command:?}: one line, no raw control character: {ran:#?}"
+            );
+            // This refusal, not another of the same file: its cause and its remedy.
+            assert!(
+                line.contains("control character") && line.contains("`inbox key new --key-id"),
+                "{file} {command:?}: the cause and the remedy: {line:?}"
+            );
+        }
     }
     // A connection the client opened and closed without a head is kept as an empty head.
     std::thread::sleep(std::time::Duration::from_millis(200));

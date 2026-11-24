@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T12:37:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-key-id-with-a-control-character-is-refused-where-it-is-made",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (the line of a key file whose key id holds a control character shows the whole key id, 1,048,743 bytes for a key id of 1 MiB): round 2 (7b51c23): output::quoted_cut shows the first 64 characters, cut before they are escaped, and says how many more there are; both key id lines use it; key_id_control::the_line_of_a_key_file_with_a_key_id_of_one_mib_is_short holds a line under 1024 bytes, and a_key_id_of_64_characters_is_shown_whole_and_one_of_65_is_cut the bound",
+    "review": "review-result:adversary-key-id-control-pass-1",
+    "outcome": "fixed"
+  }
+}
