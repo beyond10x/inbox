@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (the canonical root dropped from the rewriting of paths leaves the story's cases green): the adversary's case adversary_spec_compat::a_root_through_a_symbolic_link_is_named_relative stays in the suite; the mutant was red in it again in round 3 (86062d2)",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

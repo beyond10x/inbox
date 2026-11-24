@@ -29,6 +29,13 @@ pub fn repository() -> PathBuf {
         .to_path_buf()
 }
 
+/// The specification the cases of `spec-compat` start from: a small one of their own
+/// (`tests/fixtures/spec-compat/ess/`), not the tree's `ess/`, so that a change of `ess/` does not
+/// change what they compare.
+pub fn spec_compat_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spec-compat/ess")
+}
+
 pub fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("tools")

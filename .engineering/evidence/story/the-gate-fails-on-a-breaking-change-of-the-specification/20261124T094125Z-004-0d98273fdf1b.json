@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (a cause line of the copy of the base holds an absolute path of the host): round 2 (145a9b0): the lines of the copy name paths under .out/spec-compat/base, and every cause line of the step has the root replaced by a relative path, also where it quotes git; adversary_spec_compat::a_cause_line_holds_no_path_of_the_host is green",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

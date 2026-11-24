@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (only the first line compatibility: is held to the counts): round 3 (86062d2): exit 0 needs exactly one verdict line on standard output, compatibility: and no semantic change counted together, and the branch of no semantic change now needs the one line of the pass too; adversary_spec_compat::a_second_compatibility_line_is_no_pass is green unchanged",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

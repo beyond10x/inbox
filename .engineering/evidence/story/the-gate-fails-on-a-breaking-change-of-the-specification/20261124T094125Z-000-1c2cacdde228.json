@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (the cases copy the ess/ of the tree they run in, so one changed word of a summary there turns 8 of 14 red): round 2 (145a9b0): the cases of spec_compat and adversary_spec_compat copy a specification of their own, crates/inbox-xtask/tests/fixtures/spec-compat/ess/ (domain shelf.box, 2 commands); with one word of the summary of OpenInbox changed in the tree's ess/ the 2 modules ran 21 cases, 15 failed, before the change and 24 cases, 24 passed, after it; in the adversary's file only the lines that make the fixture and name its literals changed",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

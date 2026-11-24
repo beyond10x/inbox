@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (an origin/main whose object is missing is read as absent, and the step falls back to a stale main): round 3 (86062d2): after a silent exit 1 of rev-parse for a name of main the step asks git show-ref --verify for the reference; a reference that exists, or that git calls bad, fails the step with one line and the step does not go on to the next name; adversary_spec_compat::an_origin_main_whose_object_is_missing_is_no_fallback_to_main is green unchanged",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

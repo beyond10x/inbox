@@ -1,0 +1,93 @@
+domain: shelf.box
+
+summary: One box on a shelf.
+
+naming:
+  wire: box
+  display: Box
+
+types:
+  - name: shelf.box.Label
+    kind: newtype
+    of: String
+
+entities:
+  - name: shelf.box.Box
+    identity:
+      name: label
+      type: shelf.box.Label
+    fields:
+      - {name: owner, type: String}
+    lifecycle:
+      initial: Open
+      states: [Open, Closed]
+      terminal: [Closed]
+      transitions:
+        - {name: close, from: [Open], to: Closed}
+
+actors:
+  - name: shelf.box.Client
+    attributes:
+      - {name: principal, type: String}
+      - {name: shelf, type: shelf.box.Label}
+    may:
+      - shelf.box.OpenBox
+      - shelf.box.CloseBox
+
+errors:
+  - name: shelf.box.UnknownBox
+    summary: No box has this label.
+    fields: []
+  - name: shelf.box.NotYours
+    summary: The label is not the caller's.
+    fields: []
+
+commands:
+  - name: shelf.box.OpenBox
+    naming:
+      wire: open-box
+      summary: Open a box with a label.
+    input:
+      - {name: label, type: shelf.box.Label}
+    outcomes:
+      - name: not-yours
+        when: label != caller.shelf
+        error: shelf.box.NotYours
+      - name: opened
+        unknown_instance: true
+        creates: shelf.box.Box
+        instance: label
+        sets: {owner: {caller: principal}}
+        emits: [shelf.box.BoxOpened]
+        payload:
+          shelf.box.BoxOpened: {label: input.label}
+      - name: already-open
+        preserves: shelf.box.Box
+        instance: label
+
+  - name: shelf.box.CloseBox
+    naming:
+      wire: close-box
+      summary: Close a box.
+    input:
+      - {name: label, type: shelf.box.Label, summary: The box to close.}
+    outcomes:
+      - {name: unknown-box, unknown_instance: true, error: shelf.box.UnknownBox}
+      - name: closed
+        when_subject_state: Open
+        moves: shelf.box.Box.close
+        instance: label
+        emits: [shelf.box.BoxClosed]
+        payload:
+          shelf.box.BoxClosed: {label: input.label}
+      - name: already-closed
+        preserves: shelf.box.Box
+        instance: label
+
+events:
+  - name: shelf.box.BoxOpened
+    fields:
+      - {name: label, type: shelf.box.Label}
+  - name: shelf.box.BoxClosed
+    fields:
+      - {name: label, type: shelf.box.Label}

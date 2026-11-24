@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (the row of docs/checks.md counts 24 cases while the modules hold 25): round 3 (86062d2): the count is set from the 2 files at the end of the round, 32 cases, 20 of the story and 12 of its adversary",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

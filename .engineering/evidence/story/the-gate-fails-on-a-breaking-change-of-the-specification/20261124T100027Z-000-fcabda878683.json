@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a breaking edit that a clean filter of the repository's own configuration hides from git passes as equal to the base): round 3 (86062d2): whether ess/ equals the base's is decided on the bytes of the files (the entries of the base's tree against git hash-object --no-filters of the files git lists under ess/), not on git's difference; adversary_spec_compat::a_breaking_edit_a_clean_filter_hides_fails is green unchanged, and red again when the bytes are not compared; ident, fsmonitor and a restored modification time are covered by reading the code, without a case",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

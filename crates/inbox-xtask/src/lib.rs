@@ -4,6 +4,7 @@
 pub mod animation;
 pub mod docs_words;
 pub mod scenarios;
+pub mod spec_compat;
 
 use std::collections::BTreeMap;
 use std::fmt;

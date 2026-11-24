@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (an edit of an entry under ess/ that is marked assume-unchanged or skip-worktree is not seen, and the step says ess/ equals the base): round 2 (145a9b0): the step reads git ls-files -v for ess/ before it decides; with a marked entry it compares, so ess shows the change, and exits 1 on the mark whatever ess says, with one line that names the file, the mark and the command that clears it; adversary_spec_compat::a_breaking_edit_git_is_told_not_to_see_fails is green unchanged and spec_compat::an_entry_git_is_told_not_to_look_at_fails_with_its_mark holds both marks; clean filters, ident, line-end conversion and fsmonitor have no case",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (an ess that exits 0 with a breaking count passes the step): round 2 (145a9b0): on exit 0 with a line compatibility: the step needs that line in its 3-count form, exactly one line of the pass with its number acknowledged on standard error, and breaking plus unknown not more than that number; a line it cannot read fails the step; adversary_spec_compat::an_exit_0_with_a_breaking_count_is_no_pass is green and spec_compat::an_exit_0_is_held_to_the_number_it_acknowledged holds the rule; the lines of ess 0.98.0 it is made from are in the story's Measured",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

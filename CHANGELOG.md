@@ -63,6 +63,16 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   any post, and a `read` lost after a repost is sent again by the next poll. A reply that fails
   is sent again at a later poll under the same key and with the same text, and stops no post and
   no read.
+- The gate fails on a change of the specification that is breaking or of unknown compatibility:
+  `task spec-compat`, in `task check` right after `task spec`, runs `ess verify diff
+  --compatibility --fail-on breaking-or-unknown` from the `ess/` of the merge base with
+  `origin/main`, else with `main` (in CI the revision the job compares its changed files
+  against) to the tree's, and is not compared when `ess/` equals the base's on the bytes of its
+  files, not on git's difference. A change acknowledged in
+  `.config/ess-diff-acknowledgements.json` passes; that file holds for one comparison only. The
+  step fails closed: also on an entry under `ess/` that git is told not to look at
+  (assume-unchanged, skip-worktree), and on an exit 0 of `ess` with more breaking and unknown
+  changes than it acknowledged.
 
 ## [0.6.1] - 2026-11-23
 

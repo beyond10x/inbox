@@ -10,9 +10,10 @@ tasks:
     cmds: [{task: check}]
 
   check:
-    desc: The gate. Validate ess/, check the scenario files of ess/scenarios/ and hold ess/ess-inputs.yaml to them, the landing page's animation data to ess/ and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 6 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
+    desc: The gate. Validate ess/, fail on a change of ess/ that is breaking or of unknown compatibility against the ess/ of the base revision, check the scenario files of ess/scenarios/ and hold ess/ess-inputs.yaml to them, the landing page's animation data to ess/ and generated/ to ess/, fail on a generated scenario no authored scenario covers, run the conformance suite on the interpreted target, against inbox-core and against a running inbox serve, run the 6 acceptance checks, then format, lint, test and build the Rust workspace and the generated crate.
     cmds:
       - task: spec
+      - task: spec-compat
       - task: scenarios-drift
       - task: animation-drift
       - task: docs-words
@@ -56,6 +57,11 @@ tasks:
     cmds:
       - ess specify validate --path ess --strict-requires
       - 'if grep -rn UNMAPPED ess; then echo "task spec: ess/ holds an UNMAPPED marker: express the rule, or make it an external: outcome listed in docs/design/inbox.md" >&2; exit 1; fi'
+
+  spec-compat:
+    desc: Fail when ess/ holds a change that is breaking or of unknown compatibility against the ess/ of the base (ess verify diff --compatibility --fail-on breaking-or-unknown, inbox-xtask spec-compat). The base is the commit INBOX_SPEC_BASE names, else the merge base of HEAD with origin/main, else with main; an ess/ equal to the base's on the bytes of its files (not on git's difference) is not compared. An acknowledged change is written in .config/ess-diff-acknowledgements.json. Fails closed, also on an entry under ess/ marked assume-unchanged or skip-worktree and on an exit 0 of ess with more breaking and unknown changes than it acknowledged. Writes only .out/spec-compat.
+    cmds:
+      - cargo run -q --locked -p inbox-xtask -- spec-compat
 
   projections:
     desc: Rewrite generated/openapi, generated/asyncapi, generated/schema and generated/docs from ess/.

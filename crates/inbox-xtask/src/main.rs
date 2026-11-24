@@ -3,6 +3,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use inbox_xtask::Answer;
+use inbox_xtask::spec_compat::{self, Line, Said};
 
 #[derive(Parser)]
 #[command(about = "Repository tasks of the inbox")]
@@ -39,6 +40,10 @@ enum Task {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
+    /// Fail when ess/ holds a change that is breaking or of unknown compatibility against the
+    /// ess/ of the base: the commit INBOX_SPEC_BASE names, else the merge base of HEAD with
+    /// origin/main, else with main.
+    SpecCompat,
 }
 
 /// The tree the binary is run in: the runtime `CARGO_MANIFEST_DIR` (`cargo run` sets it), else
@@ -49,14 +54,14 @@ fn root(current: &Path) -> Result<PathBuf, String> {
 }
 
 /// Run one task. A path argument is taken from the current directory.
-fn run(task: Task) -> Result<Answer, String> {
+fn run(task: Task) -> Result<Said, String> {
     let current =
         std::env::current_dir().map_err(|e| format!("read the current directory: {e}"))?;
     let said = |line: String| Answer {
         stdout: vec![line],
         ..Answer::default()
     };
-    match task {
+    let answer = match task {
         Task::Generate => inbox_xtask::generate(&root(&current)?)
             .map(|()| said(format!("{} rewritten from ess/", inbox_xtask::GENERATED))),
         Task::Drift => inbox_xtask::drift(&root(&current)?).map(said),
@@ -66,19 +71,25 @@ fn run(task: Task) -> Result<Answer, String> {
             inbox_xtask::animation::animation(&root(&current)?, ir.as_deref(), check)
         }
         Task::DocsWords { paths } => inbox_xtask::docs_words::docs_words(&paths),
-    }
+        Task::SpecCompat => {
+            let named = std::env::var_os(spec_compat::BASE_VARIABLE)
+                .map(|value| value.to_string_lossy().into_owned());
+            return Ok(spec_compat::spec_compat(&root(&current)?, named.as_deref()));
+        }
+    };
+    answer.map(Said::from)
 }
 
 fn main() -> ExitCode {
     match run(Cli::parse().task) {
-        Ok(answer) => {
-            for line in &answer.stdout {
-                println!("{line}");
+        Ok(said) => {
+            for line in &said.lines {
+                match line {
+                    Line::Out(line) => println!("{line}"),
+                    Line::Err(line) => eprintln!("{line}"),
+                }
             }
-            for line in &answer.stderr {
-                eprintln!("{line}");
-            }
-            ExitCode::from(answer.code)
+            ExitCode::from(said.code)
         }
         Err(message) => {
             eprintln!("{message}");

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (keeping the bare root unreplaced leaves every case green): round 3 (86062d2): a line of git ends on the bare root, its refusal of a repository owned by another user; spec_compat::a_line_of_git_that_ends_on_the_root_names_it_as_dot holds that the line names the root as a dot, and is red under the mutant",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

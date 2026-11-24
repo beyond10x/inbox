@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T10:00:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 9 (in a shallow clone whose fork is beyond the depth the silent exit 1 of git merge-base is named as no merge base): round 3 (86062d2): when the repository is shallow the line says so and names the 2 ways on (fetch more, or name the base with INBOX_SPEC_BASE); spec_compat::a_shallow_history_that_ends_before_the_fork_is_named makes a clone of depth 1 and holds the line",
+    "review": "review-result:adversary-spec-compat-pass-2",
+    "outcome": "fixed"
+  }
+}

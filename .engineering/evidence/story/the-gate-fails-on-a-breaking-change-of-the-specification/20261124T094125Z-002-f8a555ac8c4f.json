@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the line added after any refusal of the acknowledgements file claims the file is for another comparison): round 2 (145a9b0): the line says that ess refused the file and points at the line refused: of ess above it; adversary_spec_compat::an_acknowledgement_of_an_absent_change_is_not_called_another_comparison is green",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

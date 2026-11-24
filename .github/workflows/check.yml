@@ -46,6 +46,7 @@ jobs:
             decision=$(sh tools/gate-paths.sh "$RUNNER_TEMP/changed.txt")
           fi
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          echo "base=$from" >> "$GITHUB_OUTPUT"
           echo "$decision: $(wc -l < "$RUNNER_TEMP/changed.txt") changed file(s)"
           cat "$RUNNER_TEMP/changed.txt"
 
@@ -129,4 +130,6 @@ jobs:
 
       - name: task check
         if: steps.paths.outputs.decision == 'run'
+        env:
+          INBOX_SPEC_BASE: ${{ steps.paths.outputs.base }}
         run: task check

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T09:41:25Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-gate-fails-on-a-breaking-change-of-the-specification",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 8 (3 mutants of the arm that reads a refusal of the acknowledgements file stay green in the story's cases): the adversary's case adversary_spec_compat::the_refusal_line_is_added_only_on_a_refusal stays in the suite, on the cases' own specification since round 2 (145a9b0); the mutants are red in it",
+    "review": "review-result:adversary-spec-compat-pass-1",
+    "outcome": "fixed"
+  }
+}

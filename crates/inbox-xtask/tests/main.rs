@@ -2,6 +2,8 @@
 
 mod adversary;
 mod adversary2;
+mod adversary_spec_compat;
 mod drift;
+mod spec_compat;
 mod synthesis;
 mod tools;
