@@ -904,6 +904,157 @@ The bridge refuses to start with one line on standard error and no request:
 It starts no listener (Open 8, answered A): it asks the provider through `connectors` for the
 reactions and for the replies ("The answer").
 
+## The operator's check
+
+story:the-operator-runs-the-chat-bridge-on-the-real-channel. The gate holds the bridge against a
+stand-in `connectors` ("Cases", below) and never starts the real one: no task, test, CI step or
+gate reaches the chat provider. The operator runs this check by hand on one real chat channel
+once for that story, and again once per release that changes the bridge (Open 1 A of the story),
+and records what was seen as evidence of the story. Not run yet: no run is recorded.
+
+Every value below that names the chat provider is a placeholder: `<channel id>` the id of the
+chat channel, `<chat user id>` the id of the allowed chat user, `<connector>/<instance>` the
+target of `connectors invoke`, `<person address>` the address of the person (`human:<name>`),
+`<sender address>` that of the sender (`agent:<host>/<name>`), `<bridge address>` that of the
+bridge (`agent:<host>/chat-bridge`) and `<delegation id>` the id of the delegation. None of
+them is written into this repository.
+
+### What the operator sets up before the run
+
+Each item is the operator's act, never the bridge's or a task's:
+
+- `connectors` 0.77.0 or later first on `PATH` in the terminal of the bridge (`connectors
+  --version`), with a connection to the chat provider whose instance may run
+  `chat.postMessage`, `conversations.history` and `conversations.replies`.
+- One standing grant of that instance for the operation `chat.postMessage` into the one channel
+  `<channel id>`, which admits the input members `/body/channel`, `/body/text` and
+  `/body/thread_ts` and no other: the bridge sends no other ("A post" for a post, "The end of a
+  message" for a line in a thread, which "The answer" writes the same way). It is made with
+  `connectors approvals grant-standing --input-file <file>`, together with the member
+  `standing_grants` of the instance in the configuration of `connectors`; the form of the file
+  is on the page "running services" of `connectors`, section "standing write grants". Its cap
+  of writes per hour leaves room for the 3 writes of the run (2 posts and 1 line), and one more
+  per reply that names no option. The bridge runs no `connectors approvals` command and passes
+  no proof.
+- The keys of the run, made for the run in an empty directory, as `website/docs/first-use.md`
+  makes them: the operator key of the key file, a key of the person, a key of the sender and a
+  key of the bridge; the key file with the 3 key entries and the delegation from the person to
+  the bridge ("The key of the bridge"). The entries are valid 30 days unless `--valid-until`
+  names a shorter end. The bridge gets only its own key; the person's key lets the operator look
+  at the person's inbox (`inbox pending --secret-key-file person.key`).
+
+  ```sh
+  OPERATOR_PUBLIC_KEY=$(inbox key new --out operator.key)
+  PERSON_PUBLIC_KEY=$(inbox key new --out person.key --key-id person-1 --principal <person address>)
+  SENDER_PUBLIC_KEY=$(inbox key new --out sender.key --key-id sender-1 --principal <sender address>)
+  BRIDGE_PUBLIC_KEY=$(inbox key new --out bridge.key --key-id chat-bridge-1 --principal <bridge address>)
+  inbox keyfile add-key --file keys.json --operator-secret-key-file operator.key --key-id person-1 --principal <person address> --public-key "$PERSON_PUBLIC_KEY"
+  inbox keyfile add-key --file keys.json --operator-secret-key-file operator.key --key-id sender-1 --principal <sender address> --public-key "$SENDER_PUBLIC_KEY"
+  inbox keyfile add-key --file keys.json --operator-secret-key-file operator.key --key-id chat-bridge-1 --principal <bridge address> --public-key "$BRIDGE_PUBLIC_KEY"
+  inbox keyfile add-delegation --file keys.json --operator-secret-key-file operator.key --delegation-id <delegation id> --agent <bridge address> --on-behalf-of <person address>
+  ```
+
+- A start of `inbox serve` on a loopback address after the key file is written, or a restart of
+  one that ran before it: the service reads the key file at its start only.
+
+  ```sh
+  inbox serve --listen 127.0.0.1:0 --key-file keys.json --operator-public-key "$OPERATOR_PUBLIC_KEY"
+  ```
+
+  In each other terminal of the run, in the same directory: `export INBOX_URL=<the URL inbox
+  serve printed>` and `export INBOX_OUTBOX="$PWD/outbox.jsonl"`, so the files the run leaves
+  beside the outbox file are in that directory.
+
+### The run
+
+1. Start the bridge with its own key for the person:
+
+   ```sh
+   inbox bridge --secret-key-file bridge.key --for <person address> --authority <delegation id> --chat-channel <channel id> --allowed-chat-user <chat user id> --chat-connector <connector>/<instance> --chat-poll-interval 5
+   ```
+
+   `--chat-poll-interval` is at least 1 and 10 by default; 5 lets a reply be seen within about
+   5 s, and a poll of the run reads the channel once and the replies of each of its 2 posts once
+   at most, about 36 calls of `connectors` a minute; the provider's rate limits are not verified,
+   and a read refused `rate_limited` waits as "The read mark" says. The bridge writes nothing
+   while it runs well. It opens the person's inbox with the adapter `slack`, and
+   `<outbox>.opened` then holds the line of `<person address>` with the adapter `slack`.
+2. The sender posts decision 1 to the person's inbox, with the default `expires` (24 hours):
+
+   ```sh
+   inbox post --secret-key-file sender.key --to <person address> --kind decision --body "Check 1 of the chat bridge: which option?" --option "A=Keep" --option "B=Change" --recommended-option A
+   ```
+
+   It prints the message id. Seen: one post in the channel, its head line `decision from <sender
+   address> expires <expires> message <message id>`, the body in a block, the lines `A: Keep
+   (recommended)`, `B: Change`, `silence takes no option: it expires at <expires>` and `reply in
+   this thread with the letter of an option` ("The text of a post"); `inbox outbox
+   --secret-key-file sender.key` shows the message `Delivered`.
+3. The person replies `B` in the thread of that post. Seen within about the poll interval:
+   `inbox outbox --secret-key-file sender.key` shows the message `Answered`, and
+
+   ```sh
+   inbox collect --secret-key-file sender.key <message id> --json
+   ```
+
+   prints a document whose `message` has `answered_by` `principal` and `decided_option` `B`, and
+   a `reply` with `option` `B`, `from` `<bridge address>`, `on_behalf_of` `<person address>` and
+   `authority` `<delegation id>`. No second post in the channel and no line in the thread.
+4. The sender posts decision 2, which silence decides (Open 2 A of the story), with an `expires`
+   5 minutes ahead in RFC 3339 (such as `2026-11-24T12:05:00Z`; the command below asks GNU
+   `date` for it):
+
+   ```sh
+   inbox post --secret-key-file sender.key --to <person address> --kind decision --body "Check 2 of the chat bridge: leave this without a reply" --option "A=Proceed" --option "B=Stop" --recommended-option B --default-on-silence A --expires "$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+   ```
+
+   Seen: one post in the channel, with `silence takes option A at <expires>`. Nobody reacts and
+   nobody replies. Seen after `expires`, within the sweep interval of the service (10 s by
+   default) and one poll: one line in the thread of that post, `taken on silence: option A,
+   Proceed` ("The end of a message", Open 2 A of story:the-chat-bridge-asks-a-decision-once).
+   Only then `inbox collect --secret-key-file sender.key <message id> --json` prints a
+   `message` with `answered_by` `silence` and `decided_option` `A`, the `default_on_silence` of
+   the post. A collect before the bridge saw the answer makes the line `expired, not answered`
+   instead ("What stays open").
+5. End the bridge with SIGINT (Ctrl-C in its terminal), then `inbox serve` the same way. Left on
+   the host, beside the outbox file: the record of the chat posts (`<outbox>.chat.<16 hex
+   digits>`, one entry per decision until a later bridge drops it at its retention), the file of
+   the lock of the wake (`<outbox>.wake.<16 hex digits>`, which holds no lock once the bridge
+   has ended), the line of the person's inbox in `<outbox>.opened` (adapter `slack`), and the
+   outbox file with its epochs file and its lock file; the keys and the key file of the run in
+   its directory. The service kept everything in memory and loses it. The 2 posts and the line
+   stay in the channel, and the standing grant stays in `connectors` until the operator revokes
+   it (`connectors approvals revoke-standing`).
+
+### What to record
+
+One evidence record of the story (`aep plan artifact evidence`, a kind from the closed list the
+command prints), written by the coordinator from what the operator hands over:
+
+- the day of the run, and the versions `inbox --version` and `connectors --version` printed;
+- each item of the run as seen or not seen: decision 1 appeared as one chat post with its
+  options by letter; its collect printed `answered_by` `principal` and option `B`; no second
+  post and no line in its thread; decision 2 was collected with `answered_by` `silence` and
+  `decided_option` `A`; its thread got the line `taken on silence: option A, Proceed`;
+- what else was seen or not seen, such as a reaction, a reply that names no option and its line,
+  a restart of the service during the run, a line of the bridge on standard error (such as a
+  refusal `approval_required` or `rate_limited`).
+
+The record holds no name of a chat workspace, a chat channel or a chat user, no chat user id, no
+token and no key, and no text of a message other than the messages made for the run.
+
+### What the check does not show
+
+The run reaches the post, the read of the replies and the line of silence. It does not reach
+what this document marks not verified beyond them: the provider's rate limits and the cost of
+one `connectors invoke`; a repeated idempotency key after a lost answer of `connectors`, and
+whether such a post arrives once; `idempotency_conflict`; a thread with more than 100 replies,
+and a channel with more than 10 pages of posts after an open post; a parent post that is gone
+(`thread_not_found`); a reply that is a file or an image (an empty `text`) and the provider's
+escapes in a reply's text; a grant that ended or reached its cap; a refused key (`401`); a
+restart of the service or a SIGKILL of the bridge during the run; the line `expired, not
+answered`; and the read mark on a reaction, which the run does not ask for.
+
 ## What stays open
 
 - Approval. `connectors` refuses every write that has neither an approval proof nor a standing
@@ -914,7 +1065,7 @@ reactions and for the replies ("The answer").
   for the channel, a policy entry that admits the post operation into one fixed channel without a
   proof per write; giving it is the operator's act, never the bridge's. With no live grant each
   post is answered `not_attempted` with the code `approval_required` and waits in `Sent`. The
-  first run on a real channel is a later story.
+  first run on a real channel is the operator's check (above), not run yet.
 - Not verified: every statement about the answers of `connectors` and of the provider, since no
   call was run, by the bridge's cases or by hand: the operations of the provider's connector and
   its input beyond what `connectors` says (above), the failure codes of the grant, the provider's
