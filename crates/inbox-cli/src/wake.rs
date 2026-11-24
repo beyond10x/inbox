@@ -62,6 +62,8 @@ use std::fs::{DirBuilder, File, OpenOptions, TryLockError};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Child;
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -143,6 +145,21 @@ struct Watch {
     /// round between its rows and its marks, and writes no second line after the wake ended in
     /// another way.
     ended: Mutex<bool>,
+    /// The looks of the watch begun and done, a debug build's only: the point before the exit
+    /// waits on them ([`Watch::before_exit`]).
+    #[cfg(debug_assertions)]
+    looks: Looks,
+}
+
+/// How many looks the watch has begun and how many it has done (a look is done when it found
+/// the reader there or the wake ended), and whether its thread runs: set where the thread is
+/// started, cleared by the watch before it returns; a debug build's only.
+#[cfg(debug_assertions)]
+#[derive(Default)]
+struct Looks {
+    begun: AtomicU64,
+    done: AtomicU64,
+    running: AtomicBool,
 }
 
 impl Watch {
@@ -150,6 +167,33 @@ impl Watch {
         Self {
             pipe: output::pipe(),
             ended: Mutex::new(false),
+            #[cfg(debug_assertions)]
+            looks: Looks::default(),
+        }
+    }
+
+    /// The point before the exit of `inbox wake --before-exit <path>`, a debug build's only, for
+    /// a case: once the wake has ended (its line written, its status known, the hold set), it
+    /// creates the file `path`, waits until the file is gone again, and then, while the watch
+    /// runs, until the watch has done a look it began after that. A case closes the reader
+    /// before it removes the file, so a watch that runs has looked at a pipe without a reader
+    /// before the process exits. A watch that has returned (it found the reader gone and the
+    /// hold set) or was never started (the wake ended before it: no reader at the start, an
+    /// inbox opened with another adapter) does not look again, and the point returns.
+    #[cfg(debug_assertions)]
+    fn before_exit(&self, path: Option<&Path>) {
+        let Some(path) = path else {
+            return;
+        };
+        if File::create_new(path).is_err() {
+            return;
+        }
+        while path.symlink_metadata().is_ok() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let begun = self.looks.begun.load(SeqCst);
+        while self.looks.running.load(SeqCst) && self.looks.done.load(SeqCst) <= begun {
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -165,26 +209,44 @@ impl Watch {
             return Ok(());
         }
         let watch = Arc::clone(self);
-        std::thread::Builder::new()
+        #[cfg(debug_assertions)]
+        self.looks.running.store(true, SeqCst);
+        let started = std::thread::Builder::new()
             .name(WATCH_THREAD.to_owned())
-            .spawn(move || watch.watch(json))
+            .spawn(move || watch.watch(json));
+        #[cfg(debug_assertions)]
+        if started.is_err() {
+            self.looks.running.store(false, SeqCst);
+        }
+        started
             .map(drop)
             .map_err(|error| Failure::Local(format!("the watch of the reader: {error}")))
     }
 
     fn watch(&self, json: bool) {
         let Some(pipe) = &self.pipe else {
+            #[cfg(debug_assertions)]
+            self.looks.running.store(false, SeqCst);
             return;
         };
         loop {
             std::thread::sleep(WATCH_PERIOD);
+            #[cfg(debug_assertions)]
+            self.looks.begun.fetch_add(1, SeqCst);
             if output::reader_gone(pipe) {
                 let ended = self.hold();
                 if *ended {
+                    #[cfg(debug_assertions)]
+                    {
+                        self.looks.done.fetch_add(1, SeqCst);
+                        self.looks.running.store(false, SeqCst);
+                    }
                     return;
                 }
                 std::process::exit(report(&no_reader(), json));
             }
+            #[cfg(debug_assertions)]
+            self.looks.done.fetch_add(1, SeqCst);
         }
     }
 }
@@ -305,15 +367,21 @@ impl Surface for Output {
 
 /// Runs `inbox wake` for `client`, with `follow` `inbox wake --follow`, and answers its exit
 /// status. Every line it writes to standard error starts with `inbox wake: `, but the
-/// reconnect's own line.
-pub fn run(client: &Client, json: bool, follow: bool) -> i32 {
+/// reconnect's own line. `before_exit` is `--before-exit` of a debug build (`Watch::before_exit`),
+/// `None` in a release build.
+pub fn run(client: &Client, json: bool, follow: bool, before_exit: Option<&Path>) -> i32 {
     let watch = Arc::new(Watch::new());
     let result = wake(client, json, follow, &watch);
     *watch.hold() = true;
-    match result {
+    let status = match result {
         Ok(status) => status,
         Err(failure) => report(&failure, json),
-    }
+    };
+    #[cfg(debug_assertions)]
+    watch.before_exit(before_exit);
+    #[cfg(not(debug_assertions))]
+    let _ = before_exit;
+    status
 }
 
 /// Writes `failure` as every command does (the document with `--json`, one line on standard

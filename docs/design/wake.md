@@ -132,10 +132,24 @@ to run the thread; on a loaded host it may take longer, and no case holds a time
 - The watch does not cut a round: from the write of a round's rows to its last mark it waits,
   and it ends the process only between rounds. A wake that ended in another way first (its marks
   sent without `--follow`, a failure) is not ended by it a second time, so it writes one line at
-  most. The check after the write (above) runs once per round: a reader that closes during the
-  write makes the write fail, and one that closes before the check is found gone (exit 4, no
-  mark either way); a reader that closes after the check, with the rows still unread in the
-  pipe, gets every mark of that round.
+  most: the end of `run` (`src/wake.rs`) sets the hold the watch takes before it ends the
+  process. Two cases hold it, in each a refused read ends the wake with 1 and one line, and its
+  reader goes before the process exits: one without `--follow`, in
+  `crates/inbox-cli/tests/wake.rs`
+  (`a_wake_ended_by_a_refusal_writes_no_second_line_when_its_reader_goes_before_the_exit`), and
+  one with `--follow` after a full round, whose rounds set no hold of their own, in
+  `crates/inbox-cli/tests/adversary_wake_hold.rs`
+  (`a_follow_wake_refused_after_a_full_round_writes_one_line_when_its_reader_goes`). They hold
+  that moment with `inbox wake --before-exit <path>`, a flag of a debug build only (the build of
+  the tests), hidden from `--help` and from the command-line reference; a release build has no
+  such flag and refuses it as wrong usage, exit 2. Once the wake has ended, its line written, it
+  creates the file, and it exits only after the file is gone again and, while the watch runs,
+  the watch has done a look it began after that (`Watch::before_exit`). A watch that has
+  returned (it found the reader gone and the hold set) or was never started (the wake ended
+  before it) looks no more, and the point exits once the file is gone. The check after the
+  write (above) runs once per round: a reader that closes during the write makes the write fail,
+  and one that closes before the check is found gone (exit 4, no mark either way); a reader that
+  closes after the check, with the rows still unread in the pipe, gets every mark of that round.
 - How it asks. `poll(2)` would tell it (an error or a hang-up for a write end without a reader),
   but needs either unsafe code, which the workspace forbids (`unsafe_code = "forbid"`), or a
   crate `Cargo.lock` does not hold (rustix, nix, mio). The watch asks the kernel through the

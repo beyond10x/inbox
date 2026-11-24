@@ -32,6 +32,7 @@ mod adversary_w8_repost;
 mod adversary_w8_repost2;
 mod adversary_wake;
 mod adversary_wake_2;
+mod adversary_wake_hold;
 mod argument_not_utf_8;
 mod bridge;
 mod bridge_answer;

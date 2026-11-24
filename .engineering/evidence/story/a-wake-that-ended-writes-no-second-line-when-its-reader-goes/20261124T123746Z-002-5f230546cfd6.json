@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T12:37:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the case of the story holds only a wake without --follow, the hold set to not follow passes it): the adversary's case adversary_wake_hold::a_follow_wake_refused_after_a_full_round_writes_one_line_when_its_reader_goes stays in the suite and docs/design/wake.md names it beside the case of the story; the mutant was red in it 10 of 10 in round 2 (474291c)",
+    "review": "review-result:adversary-wake-hold-pass-1",
+    "outcome": "fixed"
+  }
+}

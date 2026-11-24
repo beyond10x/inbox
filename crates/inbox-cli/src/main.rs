@@ -126,6 +126,13 @@ enum Command {
         /// waits with the next arrival, which is not shown: run `inbox open --adapter terminal`.
         #[arg(long)]
         follow: bool,
+        /// For tests only, in a debug build only, hidden from `--help` and the reference: once
+        /// the wake has ended, its line written, it creates this file and exits only after the
+        /// file is gone again and, while the watch of the reader runs, the watch has looked once
+        /// more (`src/wake.rs`, `Watch::before_exit`). A release build has no such flag.
+        #[cfg(debug_assertions)]
+        #[arg(long, value_name = "PATH", hide = true)]
+        before_exit: Option<PathBuf>,
     },
     /// The chat bridge, for the inbox of a person: post each message of the caller's own inbox
     /// into the chat channel of the binding through `connectors`, one post per message, then mark
@@ -879,9 +886,19 @@ fn main() {
     let json = cli.json;
     // `inbox wake` writes its own output: the rows before the marks, and the reconnects as they
     // run.
-    if let Command::Wake { client, follow } = &cli.command {
+    if let Command::Wake {
+        client,
+        follow,
+        #[cfg(debug_assertions)]
+        before_exit,
+    } = &cli.command
+    {
+        #[cfg(debug_assertions)]
+        let before_exit = before_exit.as_deref();
+        #[cfg(not(debug_assertions))]
+        let before_exit = None;
         let status = match client.client() {
-            Ok(client) => wake::run(&client, json, *follow),
+            Ok(client) => wake::run(&client, json, *follow, before_exit),
             Err(failure) => wake::report(&failure, json),
         };
         std::process::exit(status);

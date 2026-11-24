@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T12:37:46Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (the point before the exit waits for ever when the watch has returned before the point reads its counter): round 2 (474291c): a fact of a debug build, the watch runs, set where the thread is started and cleared by the watch before it returns; the point waits for a look only while it is set; adversary_wake_hold::a_reader_gone_two_looks_before_the_file_is_removed_does_not_hang_the_point is green, 10 of 10",
+    "review": "review-result:adversary-wake-hold-pass-1",
+    "outcome": "fixed"
+  }
+}

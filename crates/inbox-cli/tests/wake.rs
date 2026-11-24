@@ -618,6 +618,95 @@ fn a_reader_that_closes_during_the_marks_of_a_round_does_not_cut_the_round() {
     assert_eq!(ran.stderr.lines().count(), 1, "{ran:#?}");
 }
 
+/// A wake that ended in another way is not ended a second time by the watch of its reader
+/// (story:a-wake-that-ended-writes-no-second-line-when-its-reader-goes): the read is refused,
+/// which ends the wake with 1 and one line, and the reader of its standard output goes after
+/// that and before the process exits. The point `--before-exit` of the debug build holds the
+/// process there: it creates the file once the wake has ended, and exits only after the case
+/// has closed the reader and removed the file, and the watch has done a look it began after
+/// that. The look finds the pipe without a reader and the wake ended: one line, exit 1. A wake
+/// whose end does not hold the watch writes its second line and exits 4.
+#[test]
+fn a_wake_ended_by_a_refusal_writes_no_second_line_when_its_reader_goes_before_the_exit() {
+    let dir = bob_only("wake-ended-reader-gone");
+    let point = dir.join("before-exit");
+    let stand_in = StandIn::start(
+        None,
+        Box::new(|_, _| Some((403, r#"{"refused":"unauthenticated"}"#.to_owned()))),
+    );
+    let mut started = Started::spawn(&mut wake(
+        &dir.path,
+        &stand_in.url,
+        "bob",
+        &dir.join("bob.outbox"),
+        &["--before-exit", point.to_str().expect("a UTF-8 path")],
+    ));
+    wait_for(
+        "the wake reached the point before its exit, or ended",
+        || point.exists() || started.child().try_wait().expect("asked").is_some(),
+    );
+    if !point.exists() {
+        let (_, ran) = started.finish();
+        panic!("the wake ended before the point: {ran:#?}");
+    }
+    drop(started.child().stdout.take());
+    fs::remove_file(&point).expect("the file of the point is removed");
+    let (_, ran) = started.finish();
+    let requests = stand_in.requests();
+    assert_eq!(ran.status, REFUSED, "{ran:#?} {requests:#?}");
+    assert_eq!(
+        ran.stderr.lines().collect::<Vec<_>>(),
+        ["inbox wake: refused: unauthenticated (403)"],
+        "{ran:#?}"
+    );
+    assert_eq!(requests.len(), 1, "{requests:#?}");
+    assert!(requests[0].is_pending(), "{requests:#?}");
+}
+
+/// The point `--before-exit` of a wake that ended before its watch was started: `--follow` over
+/// an inbox this host opened with another adapter ends with 1 and one line before the watch and
+/// before any request. No watch looks, so the point exits once the file is removed.
+#[test]
+fn a_follow_wake_refused_by_another_adapter_does_not_hang_at_the_point() {
+    let dir = bob_only("wake-point-other-adapter");
+    let point = dir.join("before-exit");
+    let outbox = dir.join("bob.outbox");
+    fs::write(
+        beside(&outbox, ".opened"),
+        format!("{{\"inbox\":\"{BOB}\",\"adapter\":\"claude_code\"}}\n"),
+    )
+    .expect("the record is written");
+    let silent = TcpListener::bind("127.0.0.1:0").expect("a port");
+    let url = format!("http://{}", silent.local_addr().expect("an address"));
+    let mut started = Started::spawn(&mut wake(
+        &dir.path,
+        &url,
+        "bob",
+        &outbox,
+        &[
+            "--follow",
+            "--before-exit",
+            point.to_str().expect("a UTF-8 path"),
+        ],
+    ));
+    wait_for(
+        "the wake reached the point before its exit, or ended",
+        || point.exists() || started.child().try_wait().expect("asked").is_some(),
+    );
+    if !point.exists() {
+        let (_, ran) = started.finish();
+        panic!("the wake ended before the point: {ran:#?}");
+    }
+    fs::remove_file(&point).expect("the file of the point is removed");
+    let (_, ran) = started.finish();
+    assert_eq!(ran.status, REFUSED, "{ran:#?}");
+    let lines: Vec<&str> = ran.stderr.lines().collect();
+    assert_eq!(lines.len(), 1, "{ran:#?}");
+    assert!(lines[0].contains("claude_code"), "{ran:#?}");
+    silent.set_nonblocking(true).expect("non-blocking");
+    assert!(silent.accept().is_err(), "the wake sent a request");
+}
+
 /// Wrong usage ends the wake at once with 2, before a lock or a request.
 #[test]
 fn wrong_usage_ends_the_wake_at_once() {
