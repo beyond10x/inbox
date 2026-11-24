@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (a read that fails on a repost after MarkDelivered is never sent again; check 3): round 2 (d148ab4) makes the poll send the read again for an entry that is read and whose message Pending lists in Delivered, and clears the end of the entry before the read; the adversary's case adversary_a_read_lost_on_a_repost_leaves_the_request_delivered_for_good was red against round 1 (left Delivered, right Read) and is green",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

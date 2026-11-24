@@ -265,6 +265,23 @@ pub fn chat_post(row: &Value) -> String {
     out
 }
 
+/// The line `inbox bridge` writes into the thread of the chat post of a message that expired
+/// unanswered.
+pub const CHAT_EXPIRED: &str = "expired, not answered";
+
+/// The line `inbox bridge` writes into the thread of the chat post of a decision silence decided:
+/// `taken on silence: option <letter>, <text>`, the letter and the text of the option escaped as
+/// a value of the head line of a post ([`chat_post`]); without a text, the letter alone.
+pub fn chat_silence(letter: &str, text: Option<&str>) -> String {
+    let mut out = String::from("taken on silence: option ");
+    chat_head(&mut out, letter);
+    if let Some(text) = text {
+        out.push_str(", ");
+        chat_head(&mut out, text);
+    }
+    out
+}
+
 /// Appends `text`, a value of a message in the head line of a chat post, as [`chat_post`] says.
 fn chat_head(out: &mut String, text: &str) {
     for character in text.chars() {

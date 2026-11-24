@@ -451,6 +451,12 @@ pub fn thread(client: &Client, wire: &str, thread: &str) -> Result<Done, Failure
     Ok(view_done(&answer))
 }
 
+/// The `Thread` view of `thread`, as answered: the rows the read rule gives the caller. The poll
+/// of `inbox bridge` reads it to learn how a message that left `Pending` ended.
+pub fn thread_now(client: &Client, thread: &str) -> Result<Value, Failure> {
+    client.view("thread", &format!("thread={}", query_value(thread)))
+}
+
 /// The body of an envelope: `--body`, or `--body-file` (`-` for standard input).
 ///
 /// # Errors

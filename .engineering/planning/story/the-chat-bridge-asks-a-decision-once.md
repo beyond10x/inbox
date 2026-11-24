@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-chat-bridge-asks-a-decision-once
 kind: story
-status: proposed
+status: implemented
 title: The chat bridge asks a decision once, across restarts of the service and of the bridge
 summary: One chat post per message id across restarts; at expires the service answers a decision by silence and the bridge answers nothing in its place; under Open 2 A only, one thread line says how it ended.
 relations:
@@ -33,9 +33,11 @@ scope:
   path: website/docs/first-use.md
 - confidence: cited
   path: website/docs/limits.md
-revision: 9
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-23T10:15:44Z", actor: "agent:inbox", revision: 9, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "proposed", to: "active", at: "2026-11-24T05:19:45Z", actor: "agent:inbox", revision: 10, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "active", to: "implemented", at: "2026-11-24T07:48:00Z", actor: "agent:inbox", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":13}}}
 ---
 ## Outcome
 
@@ -202,3 +204,160 @@ Documents:
 - `docs/design/bridge.md`: a section on once and on silence: inferred
 - `website/docs/first-use.md`, `website/docs/limits.md`: the section of the bridge, and what a
   restart does to it: cited
+
+## Decisions
+
+- The 3 items of Open are answered at their defaults (the operator accepted the 7 stories of
+  the stage with every open item at its default, 2026-11-23): one chat post per message id,
+  for every kind, while the record holds the id, and an entry dropped when its message is gone
+  from the service and its `expires` plus a retention has passed, the flag
+  `--chat-post-retention <seconds>`, default 24 h (1 A); one reply in the thread of the chat
+  post at the end of a message nobody answered (2 A); the bridge learns how a message ended
+  from the `Thread` view (3 A).
+- The settle of the story before changes. There an entry whose message left `Pending` became
+  `read`, one state for every way out. Check 3 of this story sends `MarkRead` for a reposted
+  message whose entry is `read`, and a message lost by a new start of the service was never
+  read by the person. So an entry is `read` only when the bridge knows it (the service
+  answered the `read` of a reaction, or the row is in `Read`), and an entry now has a second
+  member, its end: `answered`, `decided`, `expired` or `gone`. The case of the adversary of
+  the story before that stated the old settle
+  (`adversary_a_restart_on_another_channel_and_back_asks_about_the_first_channel_again`) is
+  changed to the new one.
+- A repost is held once per message id, not once per channel: an entry of another channel
+  than the bound one counts as held, and the bridge bound to this channel posts nothing and
+  still marks the message. The limits page says so.
+- The reply in the thread is `chat.postMessage` with `channel`, `text` and `thread_ts` under
+  `body` and the key `inbox-<message id>-end`, which differs from the key of the post and is
+  the same at every try. Its shape is taken from the session of `connectors` (its contract
+  and tests at 0.77.0); no call was run. Not verified: that the provider shows the message in
+  the thread, the class of a failure only a reply has, and a reply under a standing grant.
+  The order is the reply, then the record change: a bridge ended between the two sends the
+  reply again with the same key.
+- The texts of the 2 lines: "taken on silence: option <letter>, <text>" with the escapes of a
+  post, and "expired, not answered". A message the person answered or refused gets neither; a
+  refused message ends as `answered` (adversary pass 1, a mutant no case killed).
+- A decision taken on silence that its sender collected before the bridge looked gets the
+  line of an expired message: the row is gone and `expires` has passed, and the bridge cannot
+  tell the two apart. The design and the limits page say so.
+- The clock of the bridge: `inbox bridge --clock-file <PATH>`, a flag of a debug build only,
+  hidden from `--help` and the reference, read as the service reads its own; the bridge still
+  signs with the system clock.
+- A `read` lost on a repost (adversary pass 1, finding 1; check 3 failed). Options: A the
+  poll sends the `read` again while the entry is `read` and `Pending` lists the message in
+  `Delivered` (taken); B the sentence of round 1, "not sent again", which leaves a request
+  the person read in `Delivered` for good.
+- A record the rounds cannot read (adversary pass 1, finding 2). Options: A no post without
+  a readable record: the bridge ends with 4, as a post that cannot change the record does
+  (taken); B the round reads it as empty and relies on the key of `connectors` to replay the
+  post, which gives a second post operation against check 2. The case of the first bridge
+  story `a_post_that_cannot_be_recorded_is_not_marked_delivered` now counts no post
+  operation.
+- An entry without `expires`, written by a build of the stories before, which is not
+  released (adversary pass 1, finding 3). Options: A it is held as every other entry, the
+  record gets the instant at which the bridge first found its message gone, and it is
+  dropped after the retention from that instant, without the line of an expired message
+  (taken); B the first decision, dropped at once, which posts the message a second time at
+  the sender's repost; C the second post named as a limit.
+- A line of the record that is no entry (adversary pass 2, finding F-a: the read skipped
+  it, so its entry was not held and the message was posted a second time). Options: A the
+  record counts as one that cannot be read: the rounds end the bridge with 4 and post
+  nothing, the poll fails with one line per run of failures, and no change rewrites the
+  record, so no line is dropped (taken); B the read skips the line and the design names the
+  second post as a limit. An entry is a JSON object with the texts `message_id`, `reference`
+  and `state`; a line of an earlier build with fewer members reads; an empty line is no
+  entry; a last line without its line end reads. The bridge writes the record whole and
+  renames it into place, so it writes no cut and no empty line itself.
+- The resend of a lost `read` (adversary pass 2, finding F-b) is held by a unit case of the
+  function `lost_reads`, not by a count through the forwarder: a request in `Read` is not
+  listed in `Pending`, so no case over the service tells the widened resend from the right
+  one.
+- A reply that fails: the bridge stays up, writes one line per run of failures, sends the
+  reply again at a later poll with the same key and the same input, and changes the record
+  only after the reply went through. Held by a case since round 3.
+- The clock file of the bridge at the start (missing, a directory, empty, no instant): the
+  bridge opens it through the same `FileClock` as the service and ends with 4. Round 3
+  added no case, on the case of the service
+  `clock_file::a_clock_file_that_holds_no_instant_stops_serve_before_it_binds`; adversary
+  pass 3 showed that this case holds the path of the service only (a bridge that falls back
+  to the system clock survived it) and added a case of the bridge for an empty clock file at
+  the start; its case of pass 2 holds "removed while the bridge runs".
+- The wait of the adversary's case on a held line that does not read: round 3 left it red
+  (it waited for a second post or a delivery mark, and the decided behaviour sends neither),
+  and the implementor proposed a patch it did not apply. Options: A the adversary decides the
+  wait of its own case (taken: it now ends on a second post, a delivery mark or the end of
+  the bridge, and holds exit 4, no delivery mark and the message still `Sent`); B the
+  coordinator applies the implementor's patch to the adversary's file.
+- `website/docs/first-use.md` (in the Scope of the story) is not changed. Options: A the page
+  gets the bridge with the story of the real run
+  (story:the-operator-runs-the-chat-bridge-on-the-real-channel), since no run against
+  `connectors` was made (taken); B written now from the contract.
+- `connectors` 0.77.0, which has the standing grant, was released while this story was built
+  (2026-11-24). The sentences of the design, the limits page, the status page and the
+  changelog that said the grant is not released are corrected: the bridge needs `connectors`
+  0.77.0 or later and one standing grant of the operator for the channel. Every statement
+  about the answers of `connectors` stays marked as not verified.
+
+## Measured
+
+- Red first, round 1: the 2 cases of `bridge_once` against the build before the story, on
+  the implementor's run: `2 tests run: 0 passed, 2 failed, 359 skipped` ("the 3 are marked as
+  before the restart: not within 10 s"; the second was red because the build before refuses
+  the 2 new flags, and is red on each behaviour under the mutants below). Round 2: its new
+  and changed cases against the source of round 1, `6 tests run: 2 passed, 4 failed, 359
+  skipped` (the 3 cases of the adversary and the case of the retention; the 2 that passed
+  are red under the mutants of round 2). Round 3: the case of a line of the record that is
+  no entry against the source of round 2, "the poll fails on the record: not within 10 s".
+- Mutants of the 3 rounds, each red in a named case of `bridge_once`, `bridge`,
+  `adversary_bridge_once` or the unit cases of `outbox` and `bridge`: 13 of round 1 (m1 to
+  m12 and m6b: a repost posted again, `MarkRead` for an entry not read, no `MarkRead` for a
+  read entry, a new bridge that posts a held message, the bridge answering at `expires`,
+  the line of silence twice, twice after a new start, a line for an answered message, the
+  line of an expired message for one gone before `expires`, an entry dropped before
+  `expires` plus the retention, never dropped, the key of the reply equal to the key of the
+  post, the reply without `thread_ts`); 10 of round 2 (no resend of a lost `read` by the
+  poll, no `read` at a repost at all, the `read` of the repost removed, a record that cannot
+  be read taken as empty, an old entry dropped at once, never dropped, the end not cleared
+  at a repost, an entry held only when it is of the bound channel, `Refused` not an end, the
+  text of the line of silence without its escapes); 6 of round 3 (the resend widened to
+  every read entry, a cut line skipped, an empty line skipped, the check before a change of
+  the record removed, an entry marked as written although its reply failed, another key at
+  the second try of a reply).
+- Adversary pass 1 on round 1 (review-result:adversary-chat-bridge-once-pass-1), in a tree
+  of its own on the build node: 3 cases added, all 3 red, 7 findings (a `read` lost at a
+  repost is never sent again; a record the rounds cannot read is taken as empty and the
+  message is posted twice; an entry of the build before is dropped at once and posted
+  again; case A red under load on the line of the reconnect; 3 mutants no case of the story
+  killed). All 7 fixed in round 2.
+- Adversary pass 2 on round 2 (review-result:adversary-chat-bridge-once-pass-2): 3 cases
+  added, 1 red, 2 findings (a line of the record that does not parse hides its entry and the
+  message is posted twice; the mutant that widens the resend of a lost `read` survives).
+  Both fixed in round 3. The 3 cases of the story and the 6 of the adversary at that time,
+  run 10 times in a row: `10/10 stress run iterations: 10 passed`. Not reached by the pass
+  and not held by a case: a poll with 50 entries, a repost while a post of the same message
+  runs, a new start of the bridge between a post and its record change, the text of a reply
+  at the bound of a post's text.
+- Adversary pass 3 on round 3 (review-result:adversary-chat-bridge-once-pass-3): no finding.
+  It gave its case on a held line that does not read a wait of its own (a second post, a
+  delivery mark or the end of the bridge) and the claims of the decision (exit 4, no
+  delivery mark, the message still `Sent`), red under the mutant that skips a cut line; and
+  it added 1 case, green: an empty clock file of the bridge at the start ends it with 4
+  before any post, the only case red under a bridge that falls back to the system clock. 6
+  mutants, each red in a named case. `bridge_once` and its file, run 10 times in a row:
+  `10/10 stress run iterations: 10 passed`. Not reached: a run of a reply that fails at
+  every try, and of one answered `rate_limited` (read from the code: 1 reply operation per
+  poll and entry, 1 line per run of failures).
+- The cases: 15 added (5 in `bridge_once`, 7 in `adversary_bridge_once`, 3 unit cases of the
+  binary). No case over 5 s: the slowest of the story in the gate run below is
+  `bridge_once::a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice` at
+  3.3 s. The 2 cases of round 3, run 10 times in a row with its 3 unit cases: `10/10 stress
+  run iterations: 10 passed`, at most 1.3 s and 3.4 s.
+- The gate runs of the rounds on the build node (`task check`): round 1 983 passed, 8
+  skipped, the test step 14 s, exit 0; round 2 987 passed, 8 skipped, 19 s, exit 0; round 3
+  stopped at its first failure (the adversary's case that waited for a post the decided
+  behaviour does not make). The 19 s of round 2 was 5 s over round 1: adversary pass 2
+  measured the cases of `inbox-cli` alone at 8.7 s, not slower than before, and the run on
+  the final tree below, with 9 more cases than round 2, took 16 s. No part of the step is
+  named as grown.
+- `task check` on the branch, on top of `plan/stage-3`, 2026-11-24T07:46:35Z to 2026-11-24T07:47:07Z, on the build
+  node of the pool: exit 0, `996 tests run: 996 passed, 8 skipped`, the test step 16 s of
+  its bound of 120 s.

@@ -135,9 +135,13 @@ enum Command {
     /// succeeds. While one of its posts is open it reads the recent posts of the channel through
     /// `connectors` at an interval, and a reaction of the allowed chat user on a post marks its
     /// message read (a note is handled and removed); a reaction of any other chat user does
-    /// nothing. A read of the channel and a post never run at once. A released `connectors`
-    /// refuses the posts until the operator gave it a standing approval of the post operation
-    /// into the channel: the bridge passes no approval proof.
+    /// nothing. A read of the channel and a post never run at once. A message is posted once per
+    /// message id: one that comes back after a restart of the service, or that a new bridge finds
+    /// undelivered, is marked delivered (and read, when it was read) without a second post. At
+    /// the end of a message nobody answered it writes one line into the thread of its post: the
+    /// option silence took, or "expired, not answered"; it never answers in the person's place.
+    /// A released `connectors` refuses the posts until the operator gave it a standing approval
+    /// of the post operation into the channel: the bridge passes no approval proof.
     Bridge {
         #[command(flatten)]
         client: ClientArgs,
@@ -158,6 +162,18 @@ enum Command {
         #[arg(long, value_name = "SECONDS", default_value_t = 10,
               value_parser = clap::value_parser!(u64).range(1..))]
         chat_poll_interval: u64,
+        /// How long the record of the chat posts keeps the entry of a message once the message
+        /// is gone from the service, in seconds after its `expires`. A message whose id comes
+        /// back after that is posted again.
+        #[arg(long, value_name = "SECONDS", default_value_t = 86_400)]
+        chat_post_retention: u64,
+        /// For tests only, in a debug build only, hidden from `--help` and the reference: a file
+        /// that holds one RFC 3339 instant, which the bridge's clock reads each time it asks for
+        /// the time (`src/clock_file.rs`). It still signs with the system clock. A release build
+        /// has no such flag.
+        #[cfg(debug_assertions)]
+        #[arg(long, value_name = "PATH", hide = true)]
+        clock_file: Option<PathBuf>,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
     /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
@@ -825,6 +841,9 @@ fn main() {
         allowed_chat_user,
         chat_connector,
         chat_poll_interval,
+        chat_post_retention,
+        #[cfg(debug_assertions)]
+        clock_file,
     } = &cli.command
     {
         let given = bridge::Given {
@@ -832,6 +851,11 @@ fn main() {
             allowed_chat_user: allowed_chat_user.as_deref(),
             chat_connector: chat_connector.as_deref(),
             chat_poll_interval: *chat_poll_interval,
+            chat_post_retention: *chat_post_retention,
+            #[cfg(debug_assertions)]
+            clock_file: clock_file.as_deref(),
+            #[cfg(not(debug_assertions))]
+            clock_file: None,
         };
         let status = match client.client() {
             Ok(client) => bridge::run(&client, json, given),

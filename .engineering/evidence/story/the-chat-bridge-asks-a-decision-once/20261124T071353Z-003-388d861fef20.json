@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (case A of the story is red under load on the reconnect line of the bridge): the assertion of bridge_once now allows only lines of the reconnect; the 3 cases of bridge_once ran 10 times in a row, 10/10 stress run iterations: 10 passed",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

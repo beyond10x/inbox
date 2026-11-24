@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 7 (mutant o2, a held entry counted only when it is of the bound channel, survives): the second part of the same case starts the new bridge on another channel, which posts none of the 3 messages and still marks them, and is red under o2",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

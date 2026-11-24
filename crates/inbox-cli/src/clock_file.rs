@@ -16,6 +16,10 @@
 //! at once with exit 4 and one line on standard error that names the file and the cause: the
 //! request or sweep that asked for the time gets no answer and changes nothing, and the service
 //! never falls back to the system clock.
+//!
+//! `inbox bridge --clock-file <path>` reads its own clock the same way (a debug build only,
+//! hidden too): the bridge's clock decides when the `expires` of a message and the retention of
+//! its record have passed; it still signs its requests with the system clock.
 
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -38,19 +42,32 @@ const MOST: u64 = 64;
 pub struct FileClock {
     path: PathBuf,
     last: Mutex<Instant>,
+    /// The command whose line names the file when a reading fails: `inbox serve`, `inbox bridge`.
+    name: &'static str,
 }
 
 impl FileClock {
-    /// Reads the file once, for the start.
+    /// Reads the file once, for the start of `inbox serve`.
     ///
     /// # Errors
     ///
     /// The cause, as [`read`] states it, when the file does not hold one instant.
     pub fn open(path: &Path) -> Result<Self, String> {
+        Self::of("inbox serve", path)
+    }
+
+    /// Reads the file once, for the start of the command `name` (`inbox bridge`), whose line
+    /// names the file when a later reading fails.
+    ///
+    /// # Errors
+    ///
+    /// The cause, as [`read`] states it, when the file does not hold one instant.
+    pub fn of(name: &'static str, path: &Path) -> Result<Self, String> {
         let first = read(path)?;
         Ok(Self {
             path: path.to_owned(),
             last: Mutex::new(first),
+            name,
         })
     }
 
@@ -81,7 +98,8 @@ impl Clock for FileClock {
             Ok(at) => at,
             Err(cause) => {
                 warn(&format!(
-                    "inbox serve: the clock file {}: {cause}: stopping",
+                    "{}: the clock file {}: {cause}: stopping",
+                    self.name,
                     self.path.display()
                 ));
                 std::process::exit(LOCAL);

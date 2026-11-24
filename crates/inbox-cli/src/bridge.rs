@@ -59,8 +59,11 @@ use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use inbox::server::json::{self, Value};
+use inbox_server::{Clock, SystemClock, format_reading};
+use inbox_verify::Instant as Reading;
 
 use crate::client::declared_error;
+use crate::clock_file::FileClock;
 use crate::commands::{self, Client};
 use crate::failure::Failure;
 use crate::outbox::{self, ChatPost};
@@ -96,6 +99,10 @@ pub struct Given<'a> {
     pub chat_connector: Option<&'a str>,
     /// `--chat-poll-interval`, in seconds.
     pub chat_poll_interval: u64,
+    /// `--chat-post-retention`, in seconds.
+    pub chat_post_retention: u64,
+    /// `--clock-file`, a debug build's only; the system clock where absent.
+    pub clock_file: Option<&'a Path>,
 }
 
 /// A `ChatChannelBinding`: the chat channel the caller's inbox is posted into, the one chat user
@@ -182,11 +189,20 @@ fn bridge(client: &Client, given: Given<'_>) -> Result<i32, Failure> {
              the service without it"
         ))
     })?;
+    let clock: Arc<dyn Clock> = match given.clock_file {
+        Some(path) => Arc::new(FileClock::of(NAME, path).map_err(|cause| {
+            Failure::Local(format!("--clock-file {}: {cause}", path.display()))
+        })?),
+        None => Arc::new(SystemClock),
+    };
     let poll = Poll {
         client: client.again()?,
         binding: binding.clone(),
         program: program.clone(),
         interval: Duration::from_secs(given.chat_poll_interval),
+        retention: i64::try_from(given.chat_post_retention).unwrap_or(i64::MAX),
+        clock,
+        failing_end: false,
     };
     wake::rounds(
         client,
@@ -258,7 +274,9 @@ impl Surface for Chat {
     }
 
     /// Posts the rows in their order, each recorded before its `MarkDelivered`; a post that
-    /// fails ends the round.
+    /// fails ends the round. A row whose message id the record holds, of any channel, is not
+    /// posted: it is marked delivered, and read when its entry is `read` ([`Chat::again`]). A
+    /// record that cannot be read ends the bridge with 4 before any post or mark of the round.
     fn deliver(
         &mut self,
         client: &Client,
@@ -267,8 +285,33 @@ impl Surface for Chat {
     ) -> Result<(Option<Failure>, Vec<String>), Failure> {
         let mut first: Option<Failure> = None;
         let mut marked = Vec::new();
+        // No post without a readable record: a message it holds would be posted a second time.
+        // The bridge ends with 4, as after a post whose record cannot be written.
+        let held = client
+            .outbox
+            .chat_posts(&client.caller.principal)
+            .map_err(|failure| {
+                let message_id = output::rows(answer)
+                    .first()
+                    .map(|row| output::text(row, "message_id"))
+                    .unwrap_or_default();
+                Failure::Local(format!(
+                    "{message_id} is not posted into the chat channel and not marked delivered: \
+                     the record of the chat posts cannot be read: {}",
+                    failure.message()
+                ))
+            })?;
         for row in output::rows(answer) {
             let message_id = output::text(row, "message_id");
+            if let Some(entry) = held.iter().find(|entry| entry.message_id == message_id) {
+                match Self::again(client, entry) {
+                    Ok(()) => marked.push(message_id.to_owned()),
+                    Err(failure) => {
+                        first.get_or_insert(failure);
+                    }
+                }
+                continue;
+            }
             let reference = match post(&self.binding, &self.program, row) {
                 Ok(reference) => {
                     self.failing = false;
@@ -293,13 +336,23 @@ impl Surface for Chat {
                     return Ok((first, marked));
                 }
             };
+            let given = |name: &str| {
+                Some(output::text(row, name).to_owned()).filter(|text| !text.is_empty())
+            };
             client
                 .outbox
                 .record_chat_post(
                     &client.caller.principal,
-                    message_id,
-                    &self.binding.channel,
-                    &reference,
+                    &ChatPost {
+                        message_id: message_id.to_owned(),
+                        channel: Some(self.binding.channel.clone()),
+                        reference,
+                        state: outbox::POSTED.to_owned(),
+                        thread: given("thread"),
+                        expires: given("expires"),
+                        end: None,
+                        gone_at: None,
+                    },
                 )
                 .map_err(|cause| {
                     Failure::Local(format!(
@@ -320,6 +373,66 @@ impl Surface for Chat {
             }
         }
         Ok((first, marked))
+    }
+}
+
+impl Chat {
+    /// A row in `Sent` whose message id the record holds in `entry` (a repost after a restart of
+    /// the service, or a message a bridge before this one posted): no post. `MarkDelivered`; then
+    /// an end `gone` or `answered` and a `gone_at` are taken off the entry, since its message is
+    /// live again; then, when the entry is `read`, the `read` of `inbox read`
+    /// (the service answers a note `handled` and removes it). A `read` that fails is named in one
+    /// line and sent again by the poll, which sends it while the entry is `read` and `Pending`
+    /// lists the message in `Delivered` ([`Poll::once`]). The entry keeps its reference and its
+    /// channel.
+    ///
+    /// # Errors
+    ///
+    /// The `MarkDelivered` that failed, named in one line.
+    fn again(client: &Client, entry: &ChatPost) -> Result<(), Failure> {
+        let message_id = &entry.message_id;
+        if let Err(failure) = commands::mark_delivered(client, message_id) {
+            output::warn(&format!(
+                "{NAME}: {message_id} was posted before and is not marked delivered: {}",
+                failure.message()
+            ));
+            return Err(failure);
+        }
+        let ended_before = matches!(entry.end.as_deref(), Some(outbox::GONE | outbox::ANSWERED));
+        if ended_before || entry.gone_at.is_some() {
+            let live = ChatPost {
+                end: if ended_before {
+                    None
+                } else {
+                    entry.end.clone()
+                },
+                gone_at: None,
+                ..entry.clone()
+            };
+            if let Err(failure) =
+                client
+                    .outbox
+                    .change_chat_post(&client.caller.principal, entry, Some(&live))
+            {
+                output::warn(&format!(
+                    "{NAME}: {message_id} is live again, and the record of the chat posts could \
+                     not say so: {}",
+                    failure.message()
+                ));
+            }
+        }
+        if entry.state == outbox::READ {
+            match commands::read(client, message_id) {
+                Ok(_) => {}
+                Err(Failure::Refused { answer, .. }) if declared_error(&answer).is_some() => {}
+                Err(failure) => output::warn(&format!(
+                    "{NAME}: {message_id} was read before and is not marked read again yet: {}; \
+                     the poll sends it again",
+                    failure.message()
+                )),
+            }
+        }
+        Ok(())
     }
 }
 
@@ -369,24 +482,50 @@ struct Ran {
     stderr: Taken,
 }
 
-/// One chat post of `row` into the channel of `binding`: the input document, one invocation of
-/// `connectors`, and the reference of the post its answer names ([`judged`]). This is the one
-/// caller of [`invoke`].
+/// One chat post of `row` into the channel of `binding` ([`write`]), under the key of its message.
 ///
 /// # Errors
 ///
 /// Why the post was not made.
 fn post(binding: &Binding, program: &Path, row: &Value) -> Result<String, NotMade> {
+    let key = idempotency_key(output::text(row, "message_id"));
+    write(binding, program, &output::chat_post(row), None, &key)
+}
+
+/// The idempotency key of the line at the end of the message `message_id`: another key than its
+/// post's, the same at every try.
+fn end_key(message_id: &str) -> String {
+    format!("inbox-{message_id}-end")
+}
+
+/// One write of the post operation into the channel of `binding`: the input document
+/// `{"body":{"channel","text"}}`, with `thread_ts` the reference of the post a reply goes into,
+/// one invocation of `connectors` under the idempotency key `key`, and the reference of the post
+/// its answer names ([`judged`]).
+///
+/// # Errors
+///
+/// Why the post was not made.
+fn write(
+    binding: &Binding,
+    program: &Path,
+    text: &str,
+    thread_ts: Option<&str>,
+    key: &str,
+) -> Result<String, NotMade> {
     let mut input = String::from("{");
     json::member(&mut input, "body");
     input.push('{');
     json::member(&mut input, "channel");
     json::push_text(&mut input, &binding.channel);
     json::member(&mut input, "text");
-    json::push_text(&mut input, &output::chat_post(row));
+    json::push_text(&mut input, text);
+    if let Some(thread_ts) = thread_ts {
+        json::member(&mut input, "thread_ts");
+        json::push_text(&mut input, thread_ts);
+    }
     input.push_str("}}");
-    let key = idempotency_key(output::text(row, "message_id"));
-    let ran = invoke(program, &binding.connector, OPERATION, Some(&key), &input)
+    let ran = invoke(program, &binding.connector, OPERATION, Some(key), &input)
         .map_err(NotMade::because)?;
     judged(&ran)
 }
@@ -789,6 +928,13 @@ struct Poll {
     binding: Binding,
     program: PathBuf,
     interval: Duration,
+    /// `--chat-post-retention`, in seconds.
+    retention: i64,
+    /// The clock of the bridge: when the `expires` of a message and the retention have passed.
+    /// The requests are signed with the system clock all the same.
+    clock: Arc<dyn Clock>,
+    /// Whether the last line at the end of a message failed: a run of failures is named once.
+    failing_end: bool,
 }
 
 impl Poll {
@@ -796,7 +942,7 @@ impl Poll {
     /// named (`rate_limited`) and the pause of a failure ([`wake::pause`]) instead, and one line
     /// on standard error names the first failed poll of a run of them. It runs until the process
     /// ends.
-    fn run(self) {
+    fn run(mut self) {
         let mut failures = 0_u32;
         loop {
             match self.once() {
@@ -823,25 +969,42 @@ impl Poll {
         }
     }
 
-    /// One poll: with no `posted` entry of the bound channel in the record nothing; else the
-    /// person's `Pending` ([`Poll::listed`]), and each of those entries whose message it does not
-    /// list is settled `read` without a request and without a line; then, with an entry left
-    /// `posted`, the reactions of the channel from the oldest of them on ([`Poll::reacted`]), and
-    /// for each whose post the allowed chat user reacted to the `read` request of `inbox read`,
-    /// after which the entry is `read` or `due` in the record (the line of a due message once it
-    /// is recorded `due`). An entry of another channel is not looked at; one that names no
-    /// channel counts as of the bound channel.
+    /// One poll. It reads the entries of the bound channel in the record: those not at their end
+    /// (no `end`), those at their end whose retention the clock of the bridge has passed
+    /// ([`Poll::past_retention`]), and those at their end that have no start of a retention yet
+    /// (no `expires`, no `gone_at`: an entry of a build before this one). With none, nothing.
+    /// Else the person's `Pending` ([`Poll::listed`]); then, for each entry `read` not at its end
+    /// whose message `Pending` lists in `Delivered` (a `read` of a repost that was lost), the
+    /// `read` request of `inbox read` again; then, with an entry `posted` whose message it lists,
+    /// the reactions of the channel from the oldest of them on ([`Poll::reacted`]), and for each
+    /// whose post the allowed chat user reacted to the `read` request, after which the entry is
+    /// `read` or `due` in the record (the line of a due message once it is recorded `due`); then,
+    /// for each entry not at its end whose message `Pending` does not list, the row of the message
+    /// in `Thread` and what it shows ([`Poll::ended`]); then, for each entry at its end past the
+    /// retention, the row in `Thread`, and with none the entry is dropped; then, for each entry at
+    /// its end without a start of its retention, the row in `Thread`, and with none the entry
+    /// records the reading of the clock as `gone_at`. An entry of another channel is not looked
+    /// at; one that names no channel counts as of the bound channel.
+    ///
+    /// So a poll makes at most 1 read of `Pending`, 1 read of `Thread` per entry not at its end
+    /// whose message left `Pending`, per entry at its end past the retention and per entry at its
+    /// end without a start of its retention, 10 pages of the channel, 1 `read` per entry listed
+    /// in `Pending` (a reacted post, or an entry `read` whose message is `Delivered`) and 1 line
+    /// per message that reached its end.
     ///
     /// # Errors
     ///
-    /// Why the poll failed: the record that cannot be read, the read of `Pending` (then nothing is
-    /// settled), the read of the channel, a `read` request that got another answer than success,
-    /// `already-read`, `unknown-message` or `deadline-passed`, or a change of the record that
-    /// failed.
-    fn once(&self) -> Result<(), NotMade> {
-        let address = &self.client.caller.principal;
-        let channel = &self.binding.channel;
-        let open: Vec<ChatPost> = self
+    /// Why the poll failed: the record that cannot be read, the read of `Pending`, the read of
+    /// the channel, a `read` request that got another answer than success, `already-read`,
+    /// `unknown-message` or `deadline-passed`, a read of `Thread`, or a change of the record that
+    /// failed. A line at the end of a message that failed fails no poll.
+    fn once(&mut self) -> Result<(), NotMade> {
+        let address = self.client.caller.principal.clone();
+        let address = &address;
+        let channel = self.binding.channel.clone();
+        let channel = &channel;
+        let now = self.clock.now();
+        let entries: Vec<ChatPost> = self
             .client
             .outbox
             .chat_posts(address)
@@ -852,34 +1015,223 @@ impl Poll {
                 ))
             })?
             .into_iter()
-            .filter(|post| post.state == outbox::POSTED)
             .filter(|post| post.channel.as_ref().is_none_or(|of| of == channel))
             .collect();
-        if open.is_empty() {
+        let (ended, followed): (Vec<ChatPost>, Vec<ChatPost>) =
+            entries.into_iter().partition(|post| post.end.is_some());
+        let (rooted, unrooted): (Vec<ChatPost>, Vec<ChatPost>) = ended
+            .into_iter()
+            .partition(|post| retention_start(post).is_some());
+        let ripe: Vec<ChatPost> = rooted
+            .into_iter()
+            .filter(|post| self.past_retention(post, now))
+            .collect();
+        if followed.is_empty() && ripe.is_empty() && unrooted.is_empty() {
             return Ok(());
         }
         // `Pending` is read after the record: an entry read above was posted, so its message was
         // in `Pending` before this read, and one that is not listed now has left it.
-        let listed = self.listed()?;
-        let (left, open): (Vec<ChatPost>, Vec<ChatPost>) = open
+        let (listed, delivered) = self.listed()?;
+        let (left, open): (Vec<ChatPost>, Vec<ChatPost>) = followed
             .into_iter()
             .partition(|post| !listed.contains(&post.message_id));
+        for post in lost_reads(&open, &delivered) {
+            self.read(post)?;
+        }
+        let open: Vec<ChatPost> = open
+            .into_iter()
+            .filter(|post| post.state == outbox::POSTED)
+            .collect();
+        if !open.is_empty() {
+            self.marked(&open)?;
+        }
         for post in &left {
-            self.client
-                .outbox
-                .mark_chat_post(address, post, outbox::READ)
-                .map_err(|failure| {
-                    NotMade::because(format!(
-                        "{} left `Pending`, and the record of the chat posts could not say so: {}",
-                        post.message_id,
-                        failure.message()
-                    ))
-                })?;
+            self.ended(post, now)?;
         }
-        if open.is_empty() {
-            return Ok(());
+        for post in &ripe {
+            if self.row(post)?.is_none() {
+                self.change(post, None)?;
+            }
         }
-        let reacted = self.reacted(oldest(&open))?;
+        for post in &unrooted {
+            if self.row(post)?.is_none() {
+                self.change(
+                    post,
+                    Some(&ChatPost {
+                        gone_at: Some(format_reading(now)),
+                        ..post.clone()
+                    }),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether the clock of the bridge at `now` has passed the start of the retention of `post`
+    /// ([`retention_start`]) plus the retention; an entry without a start has not.
+    fn past_retention(&self, post: &ChatPost, now: Reading) -> bool {
+        retention_start(post).is_some_and(|start| now >= start.plus_seconds(self.retention))
+    }
+
+    /// The row of the message of `post` in the `Thread` view of its thread (the message id, in a
+    /// line of a build before the thread was recorded), as the read rule gives it to the person:
+    /// `None` when the service holds none.
+    ///
+    /// # Errors
+    ///
+    /// No answer, or one that is not the view.
+    fn row(&self, post: &ChatPost) -> Result<Option<Value>, NotMade> {
+        let thread = post.thread.as_deref().unwrap_or(&post.message_id);
+        let answer = commands::thread_now(&self.client, thread).map_err(|failure| {
+            NotMade::because(format!(
+                "the read of the thread of {} failed: {}",
+                post.message_id,
+                failure.message()
+            ))
+        })?;
+        let Some(Value::Array(rows)) = answer.member("rows") else {
+            return Err(NotMade::because(format!(
+                "the answer to the read of the thread of {} is not the view: {}",
+                post.message_id,
+                output::document(&answer)
+            )));
+        };
+        Ok(rows
+            .iter()
+            .find(|row| output::text(row, "message_id") == post.message_id)
+            .cloned())
+    }
+
+    /// Replaces the line of `post` in the record with `to`, or drops it.
+    ///
+    /// # Errors
+    ///
+    /// The record could not be changed.
+    fn change(&self, post: &ChatPost, to: Option<&ChatPost>) -> Result<(), NotMade> {
+        self.client
+            .outbox
+            .change_chat_post(&self.client.caller.principal, post, to)
+            .map(drop)
+            .map_err(|failure| {
+                NotMade::because(format!(
+                    "the record of the chat posts could not take the end of {}: {}",
+                    post.message_id,
+                    failure.message()
+                ))
+            })
+    }
+
+    /// An entry not at its end whose message left `Pending`: moved by what its row in `Thread`
+    /// shows (`docs/design/bridge.md`, "The nouns of the bridge"): `Read`, the read mark `read`;
+    /// answered or refused by the person, the end `answered`; answered on silence, the line of
+    /// silence and the end `decided`; no row, the line of an expired message and the end
+    /// `expired` once its `expires` has passed, the end `gone` before, and the entry dropped once
+    /// the retention has passed too. An entry that names no `expires` (of a build before this
+    /// one) gets no line and no end: the first poll that finds no row records the reading of the
+    /// clock as `gone_at`, from which its retention counts, and the poll after the retention that
+    /// finds no row drops it.
+    ///
+    /// # Errors
+    ///
+    /// The read of `Thread`, or a change of the record, failed.
+    fn ended(&mut self, post: &ChatPost, now: Reading) -> Result<(), NotMade> {
+        let with_end = |end: &str| ChatPost {
+            end: Some(end.to_owned()),
+            ..post.clone()
+        };
+        let Some(row) = self.row(post)? else {
+            return match expires(post) {
+                None if post.gone_at.is_none() => self.change(
+                    post,
+                    Some(&ChatPost {
+                        gone_at: Some(format_reading(now)),
+                        ..post.clone()
+                    }),
+                ),
+                None if self.past_retention(post, now) => self.change(post, None),
+                None => Ok(()),
+                Some(_) if self.past_retention(post, now) => self.change(post, None),
+                Some(expires) if now >= expires => {
+                    self.line(post, output::CHAT_EXPIRED, &with_end(outbox::EXPIRED))
+                }
+                Some(_) => self.change(post, Some(&with_end(outbox::GONE))),
+            };
+        };
+        match output::text(&row, "state") {
+            "Read" if post.state != outbox::READ => self.change(
+                post,
+                Some(&ChatPost {
+                    state: outbox::READ.to_owned(),
+                    ..post.clone()
+                }),
+            ),
+            "Answered" if output::text(&row, "answered_by") == "silence" => {
+                let letter = output::text(&row, "decided_option");
+                let text = row
+                    .member("decision")
+                    .and_then(|decision| decision.member("options"))
+                    .and_then(|options| match options {
+                        Value::Array(options) => options
+                            .iter()
+                            .find(|option| output::text(option, "letter") == letter),
+                        _ => None,
+                    })
+                    .map(|option| output::text(option, "text"));
+                let line = output::chat_silence(letter, text);
+                self.line(post, &line, &with_end(outbox::DECIDED))
+            }
+            "Answered" | "Refused" => self.change(post, Some(&with_end(outbox::ANSWERED))),
+            _ => Ok(()),
+        }
+    }
+
+    /// Writes `text` into the thread of the chat post of `post` (a reply under the key
+    /// [`end_key`], the same at every try), then changes the entry to `to`. A reply that fails
+    /// is named in one line per run of failures and tried again at a later poll; it fails no
+    /// poll.
+    ///
+    /// # Errors
+    ///
+    /// The change of the record failed after the reply: the next poll writes it again with the
+    /// same key.
+    fn line(&mut self, post: &ChatPost, text: &str, to: &ChatPost) -> Result<(), NotMade> {
+        let key = end_key(&post.message_id);
+        match write(
+            &self.binding,
+            &self.program,
+            text,
+            Some(&post.reference),
+            &key,
+        ) {
+            Ok(_) => {
+                self.failing_end = false;
+                self.change(post, Some(to))
+            }
+            Err(NotMade { why, .. }) => {
+                if !self.failing_end {
+                    output::warn(&format!(
+                        "{NAME}: the line at the end of {} in the thread of its post in the chat \
+                         channel {} failed: {why}; it is tried again at a later poll (no further \
+                         line until one succeeds)",
+                        post.message_id, self.binding.channel
+                    ));
+                }
+                self.failing_end = true;
+                Ok(())
+            }
+        }
+    }
+
+    /// The read marks of one poll: the reactions of the channel from the oldest of the `posted`
+    /// entries `open` on, and for each reacted post the `read` request and the entry's new state.
+    ///
+    /// # Errors
+    ///
+    /// As [`Poll::once`] says.
+    fn marked(&self, open: &[ChatPost]) -> Result<(), NotMade> {
+        let address = &self.client.caller.principal;
+        let channel = &self.binding.channel;
+        let reacted = self.reacted(oldest(open))?;
         for post in open.iter().filter(|post| reacted.contains(&post.reference)) {
             let state = self.read(post)?;
             self.client
@@ -906,24 +1258,30 @@ impl Poll {
     }
 
     /// The message ids of the rows of the person's `Pending`, read whole and at once
-    /// ([`commands::pending_now`]).
+    /// ([`commands::pending_now`]), and those of its rows in `Delivered`.
     ///
     /// # Errors
     ///
     /// No answer, or one that is not the view ([`listed_ids`]): the poll settles nothing then.
-    fn listed(&self) -> Result<HashSet<String>, NotMade> {
+    fn listed(&self) -> Result<(HashSet<String>, HashSet<String>), NotMade> {
         let answer = commands::pending_now(&self.client).map_err(|failure| {
             NotMade::because(format!(
                 "the read of `Pending` failed: {}",
                 failure.message()
             ))
         })?;
-        listed_ids(&answer).ok_or_else(|| {
+        let listed = listed_ids(&answer).ok_or_else(|| {
             NotMade::because(format!(
                 "the answer to the read of `Pending` is not the view: {}",
                 output::document(&answer)
             ))
-        })
+        })?;
+        let delivered = output::rows(&answer)
+            .iter()
+            .filter(|row| output::text(row, "state") == "Delivered")
+            .map(|row| output::text(row, "message_id").to_owned())
+            .collect();
+        Ok((listed, delivered))
     }
 
     /// The `read` request of the message of `post`, and the state its answer gives the entry:
@@ -987,6 +1345,34 @@ impl Poll {
              open post on"
         )))
     }
+}
+
+/// The `expires` the entry `post` names, when it names one that reads as an instant.
+fn expires(post: &ChatPost) -> Option<Reading> {
+    post.expires
+        .as_deref()
+        .and_then(|text| Reading::parse(text).ok())
+}
+
+/// Where the retention of the entry `post` starts: its `expires`, else the reading at which the
+/// bridge first found its message gone (`gone_at`, an entry of a build before `expires` was
+/// recorded); `None` when it names neither as an instant.
+fn retention_start(post: &ChatPost) -> Option<Reading> {
+    expires(post).or_else(|| {
+        post.gone_at
+            .as_deref()
+            .and_then(|text| Reading::parse(text).ok())
+    })
+}
+
+/// The entries of `open` whose `read` of a repost was lost: the entry is `read` and its own
+/// message is `Delivered` in `Pending` (`delivered`). An entry `read` whose message is in `Sent`
+/// (a repost the round has not marked yet) is not one, also when another message is
+/// `Delivered`.
+fn lost_reads<'a>(open: &'a [ChatPost], delivered: &HashSet<String>) -> Vec<&'a ChatPost> {
+    open.iter()
+        .filter(|post| post.state == outbox::READ && delivered.contains(&post.message_id))
+        .collect()
 }
 
 /// The least reference of `open` in the order of the provider's `ts` ([`ts_order`]): the
@@ -1218,11 +1604,43 @@ mod tests {
 
     use super::{
         Binding, Given, MOST_ANSWER_BYTES, NotMade, Page, Ran, Taken, applied, judged, judged_read,
-        listed_ids, oldest, page, read_input, read_into,
+        listed_ids, lost_reads, oldest, page, read_input, read_into,
     };
     use crate::outbox::ChatPost;
 
     const USER: &str = "U0000000001";
+
+    /// The poll's `read` again goes to an entry `read` whose own message is `Delivered`, and to
+    /// no other: not to an entry `read` whose message is in `Sent` while another message is
+    /// `Delivered` (a repost the round has not marked yet: its `MarkDelivered` comes first), not
+    /// to an entry `posted` whose message is `Delivered`.
+    #[test]
+    fn a_read_is_sent_again_only_for_an_entry_read_whose_own_message_is_delivered() {
+        let entry = |message_id: &str, state: &str| ChatPost {
+            message_id: message_id.to_owned(),
+            channel: Some("C0000000001".to_owned()),
+            reference: format!("1700000000.00000{}", message_id.len()),
+            state: state.to_owned(),
+            thread: None,
+            expires: None,
+            end: None,
+            gone_at: None,
+        };
+        let open = [
+            entry("lost", crate::outbox::READ),
+            entry("waiting", crate::outbox::READ),
+            entry("unread", crate::outbox::POSTED),
+        ];
+        let delivered: HashSet<String> = ["lost", "unread"].map(str::to_owned).into();
+        let again: Vec<&str> = lost_reads(&open, &delivered)
+            .into_iter()
+            .map(|post| post.message_id.as_str())
+            .collect();
+        assert_eq!(again, ["lost"]);
+        let only_other: HashSet<String> = ["unread"].map(str::to_owned).into();
+        assert!(lost_reads(&open, &only_other).is_empty());
+        assert!(lost_reads(&open, &HashSet::new()).is_empty());
+    }
 
     /// A page of a read with the body `body` (the members inside `result.result.body`).
     fn read_answer(body: &str) -> String {
@@ -1390,6 +1808,10 @@ mod tests {
             channel: Some("C0000000001".to_owned()),
             reference: reference.to_owned(),
             state: "posted".to_owned(),
+            thread: None,
+            expires: None,
+            end: None,
+            gone_at: None,
         };
         let open = [
             post("1700000010.000001"),
@@ -1425,6 +1847,8 @@ mod tests {
                 allowed_chat_user: Some(user),
                 chat_connector: Some(connector),
                 chat_poll_interval: 10,
+                chat_post_retention: 86_400,
+                clock_file: None,
             },
             "human:person",
         )

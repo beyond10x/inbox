@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (an entry of the build before this story, without expires, is dropped by the first poll and posted again): the coordinator's default of round 1 is replaced; round 2 (d148ab4) holds such an entry, records the instant the bridge first found its message gone and drops it after the retention, without the line of an expired message; the adversary's case adversary_an_entry_of_the_build_before_is_posted_again_after_a_restart_of_the_service was red against round 1 (left 2, right 1) and is green",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

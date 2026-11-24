@@ -15,8 +15,9 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   through `connectors`, one post per message with the body in a block of literal text, records
   the post beside the outbox file, then marks the message delivered; a post that fails is tried
   again after a pause. It opens the inbox with the adapter `slack` and takes the lock of
-  `inbox wake`. It passes no approval to `connectors`, so a released `connectors` refuses its
-  posts until it holds the operator's standing approval for the channel.
+  `inbox wake`. It passes no approval to `connectors`: it needs `connectors` 0.77.0 or later,
+  which refuses its posts (`approval_required`) until it holds the operator's standing grant for
+  the channel. No call of `connectors` was run yet, by the tests or by hand.
 - `inbox bridge` marks a message read when the allowed chat user reacts to its post: it reads the
   recent posts of the channel through `connectors` every `--chat-poll-interval` seconds (10 by
   default) while one of its posts is open, and sends `MarkRead` at least once per post that user
@@ -28,6 +29,20 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   are asked about. A read of the channel and a post never run at once, and a read that fails
   (also on a record of the chat posts that cannot be read) marks nothing and is tried again after
   a pause.
+- `inbox bridge` posts a message once per message id: a message its sender's outbox delivers
+  again after a restart of the service is marked delivered, and read when it was read before,
+  without a second post, also by a new bridge and when the post went into another channel. At the
+  end of a message nobody answered it writes one reply in the thread of the post, "taken on
+  silence" with the option and its text, or "expired, not answered", under the key
+  `inbox-<message id>-end`; it learns the end from the `Thread` view and never answers in the
+  person's place. An answered or refused message gets no reply. A post leaves the record of the
+  chat posts once its message is gone and its deadline plus `--chat-post-retention` seconds
+  (86400 by default) has passed (a post an older bridge recorded without a deadline: that long
+  after the bridge found its message gone), so the record no longer grows without end. A record
+  the bridge cannot read, also one with a line that is not a whole entry, ends it (exit 4) before
+  any post, and a `read` lost after a repost is sent again by the next poll. A reply that fails
+  is sent again at a later poll under the same key and with the same text, and stops no post and
+  no read.
 
 ## [0.6.1] - 2026-11-23
 

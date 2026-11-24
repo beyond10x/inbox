@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 6 (mutant o1, the end gone or answered not cleared on a repost, survives): the case a_message_posted_again_after_a_restart_is_marked_and_never_posted_twice waits until the bridge finds the messages gone before the repost and is red under o1",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

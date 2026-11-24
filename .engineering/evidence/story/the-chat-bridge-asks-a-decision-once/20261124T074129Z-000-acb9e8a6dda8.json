@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:41:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F-a (a line of the record that does not parse is skipped, so its entry is not held and the message gets a second post operation at a repost): round 3 (228b641) reads a record with a line that is no entry as a record that cannot be read: the rounds end the bridge with 4 and post nothing, the poll fails with one line per run of failures, and no change of the record rewrites it; the cases outbox::tests::a_record_of_the_chat_posts_with_a_line_that_is_no_entry_cannot_be_read, outbox::tests::a_record_of_the_chat_posts_with_a_line_that_is_no_entry_is_never_rewritten and bridge_once::a_held_line_that_is_no_entry_fails_the_poll_and_ends_the_bridge_at_a_repost hold it (the third was red against round 2: the poll fails on the record: not within 10 s). The adversary's own case adversary_a_held_line_that_does_not_read_gives_no_second_post_at_a_repost is still red at 228b641: it waits for a second post or a delivery mark, and the decided behaviour sends neither; pass 3 decides its wait",
+    "review": "review-result:adversary-chat-bridge-once-pass-2",
+    "outcome": "fixed"
+  }
+}

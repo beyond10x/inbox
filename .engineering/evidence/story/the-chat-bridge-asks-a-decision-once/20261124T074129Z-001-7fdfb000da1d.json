@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:41:29Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F-b (mutant o10, the resend of a lost read widened to every read entry whenever any row of Pending is Delivered, survives): round 3 (228b641) moves the filter into the function lost_reads and holds it with the unit case bridge::tests::a_read_is_sent_again_only_for_an_entry_read_whose_own_message_is_delivered, red under o10; a count through the forwarder in case A of the story was tried and stayed green under o10 (a request in Read is not listed in Pending, so it is never resent), and was removed",
+    "review": "review-result:adversary-chat-bridge-once-pass-2",
+    "outcome": "fixed"
+  }
+}

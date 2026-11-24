@@ -1030,10 +1030,12 @@ fn a_link_at_the_staged_place_of_the_record_is_removed_not_followed() {
 }
 
 /// Check 3: the record of a post is written before `MarkDelivered` is sent. With a directory in
-/// the place of the record file, the post the stand-in answered with success cannot be recorded:
-/// the bridge ends with 4 and one line naming the file, and the message stays in `Sent`. The poll
-/// that runs at the start cannot read the record either: a failed poll, named in one line of its
-/// own that names the file too, written before the post.
+/// the place of the record file, the round cannot read the record and makes no post (from
+/// story:the-chat-bridge-asks-a-decision-once on, no post without a readable record, since a
+/// message it holds is not posted again): the bridge ends with 4 and one line naming the message
+/// and the file, and the message stays in `Sent`. The poll that runs at the start cannot read the
+/// record either: a failed poll, named in one line of its own that names the file too, written
+/// before the round's.
 #[test]
 fn a_post_that_cannot_be_recorded_is_not_marked_delivered() {
     let world = world("bridge-record");
@@ -1055,7 +1057,7 @@ fn a_post_that_cannot_be_recorded_is_not_marked_delivered() {
     assert!(lines[0].contains(&name), "{stderr}");
     assert!(lines[1].contains(&note), "{stderr}");
     assert!(lines[1].contains(&name), "{stderr}");
-    assert_eq!(connectors.calls(), 1);
+    assert_eq!(connectors.calls(), 0, "no post without a readable record");
     assert_eq!(state(&world, &note), "Sent", "no mark without the record");
 }
 

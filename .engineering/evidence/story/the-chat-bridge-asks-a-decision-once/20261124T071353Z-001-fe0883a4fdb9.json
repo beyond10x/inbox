@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (a record the rounds cannot read is read as empty and the message gets a second post operation): round 2 (d148ab4) ends the bridge with 4 and posts nothing when the record cannot be read; the adversary's case adversary_a_record_the_rounds_cannot_read_at_a_repost_gives_no_second_post was red against round 1 (left 2, right 1) and is green",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}

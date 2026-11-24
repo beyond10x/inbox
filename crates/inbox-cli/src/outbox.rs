@@ -41,10 +41,13 @@
 //!
 //! The record of the chat posts of an address beside it (`<outbox>.chat.<16 hex digits>`,
 //! [`Outbox::record_chat_post`]) holds one JSON line per message `inbox bridge` posted into a
-//! chat channel: its message id, the channel, the provider's reference of the post and its state,
-//! `posted`, then `read` or `due` ([`Outbox::mark_chat_post`]). It is changed under the same lock and
-//! replaced the same way, and a file that cannot be read fails the change, and the read of
-//! [`Outbox::chat_posts`], instead of being read as holding nothing.
+//! chat channel: its message id, the channel, the provider's reference of the post, the thread and
+//! the `expires` of the message, its read mark, `posted`, then `read` or `due`
+//! ([`Outbox::mark_chat_post`]), and its end, if it has one ([`Outbox::change_chat_post`], which
+//! also drops a line). It is changed under the same lock and
+//! replaced the same way, and a file that cannot be read, or holds a line that is no entry
+//! ([`chat_posts_of`]), fails the change, and the read of [`Outbox::chat_posts`], instead of being
+//! read as holding nothing or without that line.
 //!
 //! No read of these files blocks or fails a command that only reads them
 //! ([`Outbox::read_or_nothing`]): each is opened without blocking, read only when it is a
@@ -140,6 +143,14 @@ pub const POSTED: &str = "posted";
 pub const READ: &str = "read";
 /// The state of a `ChatPost` whose message's deadline had passed at the read mark.
 pub const DUE: &str = "due";
+/// The end of a `ChatPost` whose message the person answered or refused.
+pub const ANSWERED: &str = "answered";
+/// The end of a `ChatPost` whose decision silence decided, once its line is written.
+pub const DECIDED: &str = "decided";
+/// The end of a `ChatPost` whose message expired unanswered, once its line is written.
+pub const EXPIRED: &str = "expired";
+/// The end of a `ChatPost` whose message is gone before its `expires`.
+pub const GONE: &str = "gone";
 
 /// One line of the record of the chat posts of `inbox bridge`: a `ChatPost`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,8 +162,20 @@ pub struct ChatPost {
     pub channel: Option<String>,
     /// The chat provider's reference of the post (its `ts`).
     pub reference: String,
-    /// [`POSTED`], [`READ`] or [`DUE`].
+    /// The read mark: [`POSTED`], [`READ`] or [`DUE`].
     pub state: String,
+    /// The thread of the message; `None` in a line of a build before it was recorded.
+    pub thread: Option<String>,
+    /// The `expires` of the message when it was posted; `None` in a line of a build before it
+    /// was recorded.
+    pub expires: Option<String>,
+    /// How the message ended: [`ANSWERED`], [`DECIDED`], [`EXPIRED`] or [`GONE`]; `None` while
+    /// the bridge follows it.
+    pub end: Option<String>,
+    /// The reading of the bridge's clock at which the bridge first found the message of an entry
+    /// without `expires` gone from the service: its retention counts from there. `None` for every
+    /// other entry.
+    pub gone_at: Option<String>,
 }
 
 /// The outbox file.
@@ -469,51 +492,74 @@ impl Outbox {
         Ok(recorded)
     }
 
-    /// Records a `ChatPost` in the record of the chat posts of `address` beside the outbox file,
-    /// `<outbox>.chat.<16 hex digits>` (the digits of the lock of the wake,
-    /// [`crate::wake::digits`]): the message `message_id` is shown by the chat post `reference`
-    /// in the chat channel `channel`, in the state `posted`. One JSON line per message id,
-    /// `{"message_id","channel","reference","state"}`, in place of the line that id had; the other
-    /// lines are kept as they are. Changed under the lock of the outbox file and replaced whole, as
-    /// the other files beside it (mode 0600).
+    /// Records the `ChatPost` `post` in the record of the chat posts of `address` beside the
+    /// outbox file, `<outbox>.chat.<16 hex digits>` (the digits of the lock of the wake,
+    /// [`crate::wake::digits`]). One JSON line per message id,
+    /// `{"message_id","channel","reference","state","thread","expires","end"}`, in place of the
+    /// line that id had; the other lines are kept as they are. Changed under the lock of the
+    /// outbox file and replaced whole, as the other files beside it (mode 0600).
     ///
     /// # Errors
     ///
     /// [`Failure::Local`] when the file cannot be read (also when it is no regular file or over
     /// its bound: its lines are never given up for a new one) or written.
-    pub fn record_chat_post(
-        &self,
-        address: &str,
-        message_id: &str,
-        channel: &str,
-        reference: &str,
-    ) -> Result<(), Failure> {
+    pub fn record_chat_post(&self, address: &str, post: &ChatPost) -> Result<(), Failure> {
         self.change_chat_posts(address, |lines| {
-            lines.retain(|line| chat_post_id(line).as_deref() != Some(message_id));
-            lines.push(chat_line(&ChatPost {
-                message_id: message_id.to_owned(),
-                channel: Some(channel.to_owned()),
-                reference: reference.to_owned(),
-                state: POSTED.to_owned(),
-            }));
+            lines.retain(|line| chat_post_id(line).as_deref() != Some(post.message_id.as_str()));
+            lines.push(chat_line(post));
             true
         })
         .map(drop)
     }
 
-    /// The `ChatPost`s of the record of the chat posts of `address`, in the order of its lines; a
-    /// line of another form is skipped. A missing record holds none.
+    /// Replaces the line of the record of `address` that is `post`, as [`Outbox::chat_posts`]
+    /// read it, with `to`, or removes it when `to` is `None`, under the lock of the outbox file.
+    /// A line that changed meanwhile is left as it is, and so is the record when no line is
+    /// `post`. Answers whether a line changed.
     ///
     /// # Errors
     ///
-    /// [`Failure::Local`] when the record cannot be read (also when it is no regular file or over
-    /// its bound).
+    /// [`Failure::Local`] when the record cannot be read or written.
+    pub fn change_chat_post(
+        &self,
+        address: &str,
+        post: &ChatPost,
+        to: Option<&ChatPost>,
+    ) -> Result<bool, Failure> {
+        self.change_chat_posts(address, |lines| {
+            let mut changed = false;
+            lines.retain_mut(|line| {
+                if chat_post(line).as_ref() != Some(post) {
+                    return true;
+                }
+                changed = true;
+                match to {
+                    Some(to) => {
+                        *line = chat_line(to);
+                        true
+                    }
+                    None => false,
+                }
+            });
+            changed
+        })
+    }
+
+    /// The `ChatPost`s of the record of the chat posts of `address`, in the order of its lines
+    /// ([`chat_posts_of`]). A missing record holds none.
+    ///
+    /// # Errors
+    ///
+    /// [`Failure::Local`] naming the record when it cannot be read: no regular file, over its
+    /// bound, not readable, or a line that is no entry.
     pub fn chat_posts(&self, address: &str) -> Result<Vec<ChatPost>, Failure> {
         let path = self.chat_path(address);
+        let local =
+            |why: &dyn std::fmt::Display| Failure::Local(format!("{}: {why}", path.display()));
         let text = read_bounded(&path, MOST_BYTES)
-            .map_err(|why| Failure::Local(format!("{}: {why}", path.display())))?
+            .map_err(|why| local(&why))?
             .unwrap_or_default();
-        Ok(text.lines().filter_map(chat_post).collect())
+        chat_posts_of(&text).map_err(|why| local(&why))
     }
 
     /// Gives the line of the record of `address` that is `post`, as [`Outbox::chat_posts`] read
@@ -530,19 +576,14 @@ impl Outbox {
         post: &ChatPost,
         state: &str,
     ) -> Result<bool, Failure> {
-        self.change_chat_posts(address, |lines| {
-            let mut changed = false;
-            for line in lines.iter_mut() {
-                if chat_post(line).as_ref() == Some(post) {
-                    *line = chat_line(&ChatPost {
-                        state: state.to_owned(),
-                        ..post.clone()
-                    });
-                    changed = true;
-                }
-            }
-            changed
-        })
+        self.change_chat_post(
+            address,
+            post,
+            Some(&ChatPost {
+                state: state.to_owned(),
+                ..post.clone()
+            }),
+        )
     }
 
     /// The record of the chat posts of `address` beside the outbox file.
@@ -555,7 +596,9 @@ impl Outbox {
 
     /// Runs `change` over the lines of the record of the chat posts of `address` under the lock,
     /// and replaces the record when it answers that it changed them. A record that cannot be read
-    /// fails it before `change` runs; a missing one is read as empty.
+    /// ([`Outbox::chat_posts`], a line that is no entry included) fails it before `change` runs,
+    /// and nothing is written, so no change drops a line it could not read; a missing one is read
+    /// as empty.
     fn change_chat_posts(
         &self,
         address: &str,
@@ -568,6 +611,7 @@ impl Outbox {
         let text = read_bounded(&path, MOST_BYTES)
             .map_err(|why| local(&why))?
             .unwrap_or_default();
+        chat_posts_of(&text).map_err(|why| local(&why))?;
         let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
         let changed = change(&mut lines);
         if changed {
@@ -1091,9 +1135,29 @@ fn chat_post_id(line: &str) -> Option<String> {
     }
 }
 
+/// The entries of the text of a record of the chat posts, one per line. The bridge writes the
+/// record whole, each line with its line end, and renames it over the old one, so it never leaves
+/// a line cut short or an empty line: a line that is no entry ([`chat_post`]), an empty one
+/// included, makes the whole record one that cannot be read, so the entry it held is never taken
+/// as missing (its message would be posted a second time). A last line without its line end is
+/// read as every other line: whole when it is an entry. A line of an earlier build, without
+/// members written later, is an entry.
+///
+/// # Errors
+///
+/// The number of the first line that is no entry.
+fn chat_posts_of(text: &str) -> Result<Vec<ChatPost>, String> {
+    text.lines()
+        .enumerate()
+        .map(|(at, line)| {
+            chat_post(line).ok_or_else(|| format!("line {} is no entry of the record", at + 1))
+        })
+        .collect()
+}
+
 /// The `ChatPost` a line of the record of the chat posts holds, when it is a JSON object with the
-/// text members `message_id`, `reference` and `state`, and the text member `channel` when the line
-/// has one.
+/// text members `message_id`, `reference` and `state`, and the text members `channel`, `thread`,
+/// `expires`, `end` and `gone_at` when the line has them (a line of a build before them has not).
 fn chat_post(line: &str) -> Option<ChatPost> {
     let value = json::parse(line).ok()?;
     let text = |name: &str| match value.member(name) {
@@ -1105,12 +1169,17 @@ fn chat_post(line: &str) -> Option<ChatPost> {
         channel: text("channel"),
         reference: text("reference")?,
         state: text("state")?,
+        thread: text("thread"),
+        expires: text("expires"),
+        end: text("end"),
+        gone_at: text("gone_at"),
     })
 }
 
 /// The line of the record of the chat posts that holds `post`:
-/// `{"message_id":…,"channel":…,"reference":…,"state":…}`, without `channel` when the post has
-/// none.
+/// `{"message_id":…,"channel":…,"reference":…,"state":…,"thread":…,"expires":…,"end":…,
+/// "gone_at":…}`, each of `channel`, `thread`, `expires`, `end` and `gone_at` left out when the
+/// post has none.
 fn chat_line(post: &ChatPost) -> String {
     let mut line = String::from("{");
     json::member(&mut line, "message_id");
@@ -1123,6 +1192,17 @@ fn chat_line(post: &ChatPost) -> String {
     json::push_text(&mut line, &post.reference);
     json::member(&mut line, "state");
     json::push_text(&mut line, &post.state);
+    for (name, value) in [
+        ("thread", &post.thread),
+        ("expires", &post.expires),
+        ("end", &post.end),
+        ("gone_at", &post.gone_at),
+    ] {
+        if let Some(value) = value {
+            json::member(&mut line, name);
+            json::push_text(&mut line, value);
+        }
+    }
     line.push('}');
     line
 }
@@ -1202,8 +1282,93 @@ mod tests {
     use inbox::server::wire;
     use inbox_verify::Instant;
 
-    use super::{Epochs, epoch_lines, of_sender, unexpired, unreadable, without};
+    use super::{Epochs, chat_posts_of, epoch_lines, of_sender, unexpired, unreadable, without};
     use crate::client::Epoch;
+
+    /// A record of the chat posts reads only whole: a line cut short, an empty line or a line
+    /// that is no object with the 3 text members makes it one that cannot be read, naming the
+    /// line; a line of an earlier build (no `channel`, `thread`, `expires`, `end`) reads, and so
+    /// does a last line without its line end. A record with no line holds no entry.
+    #[test]
+    fn a_record_of_the_chat_posts_with_a_line_that_is_no_entry_cannot_be_read() {
+        let whole = r#"{"message_id":"M1","channel":"C0000000001","reference":"1700000000.000001","state":"posted","thread":"T1","expires":"2026-11-24T12:00:00Z"}"#;
+        let older = r#"{"message_id":"M2","reference":"1700000000.000002","state":"read"}"#;
+        let read = chat_posts_of(&format!("{whole}\n{older}\n")).expect("whole lines read");
+        assert_eq!(
+            read.iter()
+                .map(|post| post.message_id.as_str())
+                .collect::<Vec<_>>(),
+            ["M1", "M2"]
+        );
+        assert_eq!(read[1].channel, None);
+        assert_eq!(read[1].expires, None);
+        let without_end = chat_posts_of(&format!("{whole}\n{older}")).expect("a last line reads");
+        assert_eq!(without_end, read);
+        assert_eq!(chat_posts_of(""), Ok(Vec::new()));
+        let cut = &older[..older.len() - 2];
+        assert_eq!(
+            chat_posts_of(&format!("{whole}\n{cut}\n")),
+            Err("line 2 is no entry of the record".to_owned())
+        );
+        assert_eq!(
+            chat_posts_of(&format!("{whole}\n\n{older}\n")),
+            Err("line 2 is no entry of the record".to_owned())
+        );
+        assert_eq!(
+            chat_posts_of(r#"{"message_id":"M3","state":"posted"}"#),
+            Err("line 1 is no entry of the record".to_owned())
+        );
+    }
+
+    /// A record with a line that is no entry: the read names the record and the line, and no
+    /// change (a new entry, a changed one, a read mark, a dropped one) writes it, so the line it
+    /// could not read is never dropped.
+    #[test]
+    fn a_record_of_the_chat_posts_with_a_line_that_is_no_entry_is_never_rewritten() {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/tmp/chat-record-cut")
+            .join(std::process::id().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("the directory is made");
+        let outbox = super::Outbox::locate(Some(&dir.join("outbox.jsonl"))).expect("the outbox");
+        let address = "agent:test/bob";
+        let first = super::ChatPost {
+            message_id: "M1".to_owned(),
+            channel: Some("C0000000001".to_owned()),
+            reference: "1700000000.000001".to_owned(),
+            state: super::POSTED.to_owned(),
+            thread: Some("M1".to_owned()),
+            expires: Some("2099-01-01T00:00:00Z".to_owned()),
+            end: None,
+            gone_at: None,
+        };
+        outbox.record_chat_post(address, &first).expect("recorded");
+        let path = outbox.chat_path(address);
+        let whole = std::fs::read_to_string(&path).expect("the record");
+        let cut = r#"{"message_id":"M2","reference":"1700000000.000002","state":"pos"#;
+        let text = format!("{whole}{cut}\n");
+        std::fs::write(&path, &text).expect("a line cut short");
+        let failed = outbox
+            .chat_posts(address)
+            .expect_err("a record that cannot be read");
+        assert!(
+            failed.message().contains(&path.display().to_string())
+                && failed
+                    .message()
+                    .contains("line 2 is no entry of the record"),
+            "{}",
+            failed.message()
+        );
+        let second = super::ChatPost {
+            message_id: "M3".to_owned(),
+            ..first.clone()
+        };
+        assert!(outbox.record_chat_post(address, &second).is_err());
+        assert!(outbox.mark_chat_post(address, &first, super::READ).is_err());
+        assert!(outbox.change_chat_post(address, &first, None).is_err());
+        assert_eq!(std::fs::read_to_string(&path).expect("the record"), text);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_line_that_does_not_decode_is_named_with_its_number_and_the_decoders_reason() {

@@ -83,9 +83,13 @@ record out.
 `inbox bridge` posts each message of a person's inbox into a chat channel through `connectors`,
 marks it delivered, and marks it read when the person reacts to its post. What it does not do:
 
-- **It cannot post through a released `connectors` yet.** `connectors` refuses each post until
-  the operator gave it a standing approval of posts into the channel, and that approval is not
-  released. The bridge passes no approval of its own.
+- **It needs `connectors` 0.77.0 or later and the operator's standing grant.** `connectors`
+  refuses each post (`approval_required`) until the operator gave it one standing grant of posts
+  into the channel (`connectors approvals grant-standing`); the post waits as undelivered until
+  then. The bridge passes no approval of its own and gives no grant.
+- **Not run on a real channel yet.** No call of `connectors` was run, by the bridge's tests or by
+  hand: what the bridge expects of the answers of `connectors` and of the chat provider is not
+  checked against them.
 - The operator's approval of the posts has an end time: once it has ended, posts wait as
   undelivered until the operator renews it.
 - The approval allows a number of posts per hour: over it, posts wait as undelivered until the
@@ -104,8 +108,8 @@ marks it delivered, and marks it read when the person reacts to its post. What i
   removed at its deadline.
 - A bridge reads only the channel it serves: started again with another `--chat-channel`, it
   does not see reactions on the posts it made in the channel before.
-- Whether a released `connectors` hands the reactions of a post through to the bridge is not
-  checked against the chat provider.
+- Whether `connectors` hands the reactions of a post through to the bridge is not checked
+  against the chat provider.
 - A posted message is marked delivered whether or not anyone reads the channel.
 - A message posted and not marked delivered, such as when the bridge was stopped between the
   two, is posted again by the next bridge, with the same idempotency key; `connectors` answers
@@ -115,9 +119,27 @@ marks it delivered, and marks it read when the person reacts to its post. What i
   SIGKILL of the bridge or a hang-up of its terminal does not: the running `connectors` goes on
   alone, and what it posts is not recorded.
 - A process that a finished `connectors` left behind is not ended by the bridge.
-- The record of the posts is never shortened. Once it reaches 64 MiB, about 700 thousand posts,
-  every post ends the bridge after the post was made, and each restart posts the same message
-  again and ends again, until the operator removes or shortens the record.
+- A message is posted once per message id while the record of the posts holds that id: after a
+  restart of the service the sender's outbox delivers it again, and the bridge marks it
+  delivered, and read when it was read before, without a second post. A message the bridge
+  posted into another channel before counts as posted.
+- A message nobody answered gets one reply in its thread at its end: "taken on silence" with the
+  option, or "expired, not answered". The bridge never answers in the person's place. A decision
+  taken on silence that its sender collected before the bridge looked gets "expired, not
+  answered". A reply that fails is tried again at a later read, under the same key and with the
+  same text; the bridge reads the end of a message only every `--chat-poll-interval` seconds.
+- A post leaves the record when its message is gone and its deadline plus
+  `--chat-post-retention` (one day by default) has passed; a post recorded by an older bridge,
+  which kept no deadline, leaves it that long after the bridge first found its message gone, and
+  never gets the "expired, not answered" reply. A message reposted after its post left the record
+  is posted again.
+- When the record of the posts cannot be read (no permission, over 64 MiB, not a regular file, a
+  line that is not a whole entry) as a message comes in, the bridge posts and marks nothing and
+  stops with exit status 4, naming the record; the message stays undelivered until the record is
+  fixed and the bridge started again.
+- A "read" sent again after a restart of the service that is lost on the way is sent again at the
+  next read of the channel, so the service may get it more than once.
+- A bridge bound to another channel writes no reply for a post in a channel it does not serve.
 - A body over 3000 bytes of text is cut in the post, with a line that names the message;
   `inbox pending` shows it whole.
 - How the post escapes a mention and the block of literal text is not checked against the chat

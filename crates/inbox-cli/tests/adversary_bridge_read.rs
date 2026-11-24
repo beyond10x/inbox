@@ -297,6 +297,26 @@ fn recorded(world: &World, message_id: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The end the bridge's record holds `message_id` at, or an empty text.
+fn ended(world: &World, message_id: &str) -> String {
+    let Some(record) = named(&world.dir.path, "bob.outbox.chat.")
+        .into_iter()
+        .next()
+    else {
+        return String::new();
+    };
+    fs::read_to_string(record)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| inbox::server::json::parse(line).ok())
+        .find(|line| support::text(line, "message_id") == message_id)
+        .and_then(|line| match line.member("end") {
+            Some(inbox::server::json::Value::Text(end)) => Some(end.clone()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 fn posted_and_delivered(world: &World, message_id: &str) -> bool {
     recorded(world, message_id) == "posted" && state(world, message_id) == "Delivered"
 }
@@ -596,7 +616,8 @@ fn bridge_on(world: &World, connectors: &Connectors, channel: &str) -> Bridge {
 
 /// Pass 3: a restart with a second channel and back to the first. The bridge of the second
 /// channel neither asks about nor settles the entries of the first (one of them left `Pending`
-/// meanwhile); back on the first channel, that entry is settled without a `read`, the other is
+/// meanwhile); back on the first channel, that entry is settled (at its end `gone`) without a
+/// `read`, the other is
 /// asked about from its own post on and read on its reaction, and the entry of the second
 /// channel is not asked about.
 #[test]
@@ -624,8 +645,8 @@ fn adversary_a_restart_on_another_channel_and_back_asks_about_the_first_channel_
     let asked = connectors.read_input(from + 1);
     assert!(asked.contains(other), "{asked}");
     assert_eq!(
-        recorded(&world, &left),
-        "posted",
+        (recorded(&world, &left), ended(&world, &left)),
+        ("posted".to_owned(), String::new()),
         "not settled by a bridge of another channel"
     );
     drop(second);
@@ -633,10 +654,13 @@ fn adversary_a_restart_on_another_channel_and_back_asks_about_the_first_channel_
     connectors.file("history", &page(&[("1700000000.000002", REACTED)], ""));
     let reads = connectors.reads();
     let third = Bridge::start(&world, &connectors);
+    // Since story:the-chat-bridge-asks-a-decision-once the note read in a terminal (handled, so
+    // gone before its `expires`) keeps its read mark `posted` and is at its end `gone`.
     wait_for(
         "back on the first channel, both entries are settled",
-        || recorded(&world, &left) == "read" && recorded(&world, &open) == "read",
+        || ended(&world, &left) == "gone" && recorded(&world, &open) == "read",
     );
+    assert_eq!(recorded(&world, &left), "posted");
     let asked = connectors.read_input(reads + 1);
     assert_eq!(
         asked,

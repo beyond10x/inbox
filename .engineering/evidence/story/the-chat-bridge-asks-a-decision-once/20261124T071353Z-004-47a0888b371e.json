@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T07:13:53Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-asks-a-decision-once",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 5 (mutant o9, the option text of the line of silence without its escapes, survives): the case a_message_nobody_answered_gets_one_line_at_its_end_and_none_in_the_persons_place uses an option text with a mention form, a link form, a line break and a control character and is red under o9",
+    "review": "review-result:adversary-chat-bridge-once-pass-1",
+    "outcome": "fixed"
+  }
+}
