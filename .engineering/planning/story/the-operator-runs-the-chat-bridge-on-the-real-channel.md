@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:the-operator-runs-the-chat-bridge-on-the-real-channel
 kind: story
-status: proposed
+status: active
 title: The operator runs the chat bridge once on the real chat channel and records it
 summary: An operator run by a written check against the real chat provider, recorded as evidence; no part of the gate reaches the provider.
 relations:
@@ -16,9 +16,10 @@ scope:
   path: website/docs/limits.md
 - confidence: cited
   path: website/docs/status.md
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-23T10:15:45Z", actor: "agent:inbox", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-24T10:56:21Z", actor: "agent:inbox", revision: 8, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 
