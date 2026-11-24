@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T18:23:32Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-variable-that-is-not-utf-8-is-a-usage-error",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F3 (with the words after a bare -- counted as flags on the line the story's cases stay green): the pass's case adversary_variable_not_utf_8::after_a_double_dash_the_variable_is_named_and_a_bad_flag_value_wins is taken into the suite; the pass showed it red under that mutant; no line of the product changes",
+    "review": "review-result:adversary-variable-not-utf-8-pass-1",
+    "outcome": "fixed"
+  }
+}

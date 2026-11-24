@@ -136,7 +136,7 @@ Every command takes `--json` and then prints one JSON document on standard outpu
 |---|---|
 | 0 | Done |
 | 1 | The service refused; the output names the error |
-| 2 | Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin with an `http://` URL |
+| 2 | Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_*` variable the command reads as text that is not UTF-8, an `INBOX_URL` that is not a loopback address, an `https://` URL without a pin and a pin with an `http://` URL |
 | 3 | The service could not be reached, its TLS certificate did not match the pin, or its answer was neither a success nor a refusal |
 | 4 | A local file could not be read or written |
 | 5 | `inbox wake` only: another `inbox wake` of the same inbox with the same outbox file runs on this host; nothing was sent |

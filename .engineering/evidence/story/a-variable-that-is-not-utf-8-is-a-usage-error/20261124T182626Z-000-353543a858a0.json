@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T18:26:26Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-variable-that-is-not-utf-8-is-a-usage-error",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

@@ -105,8 +105,16 @@ before any connection (`keys::caller`). The host of `INBOX_URL` (or `--url`) is 
 `Host`: one with a control character in the host or its port is wrong usage (exit 2), one line
 that names `INBOX_URL`, before the host is handed to the resolver (`Service::from_url`). Each of
 these lines shows the value escaped and at most its first 64 characters (`output::quoted_cut`).
-A client command refuses in this order: a wrong `--for`
-(exit 2), a wrong `INBOX_URL` (exit 2), then the secret key file (exit 4). The
+A client command refuses in this order: an argument that is not UTF-8 (exit 2), an `INBOX_URL`
+or `INBOX_TLS_PIN` that is not UTF-8 (exit 2; `INBOX_URL` when both are; a variable whose flag
+is on the line is not read), a wrong `--for` (exit 2), a wrong `INBOX_URL` (exit 2), then the
+secret key file (exit 4). A variable that is not UTF-8 is named in one line, `inbox: usage:
+<variable> is not UTF-8: "<shown>"`, its first 64 bytes in the escapes of an argument (`\xE9`,
+`\n`) and ` (and <n> more bytes)` when longer (`variable_not_utf_8`); clap's error does not
+name it, so `refused_variable` takes the first argument of the subcommand read as text whose
+variable clap applied. `inbox serve` refuses `INBOX_OPERATOR_PUBLIC_KEY` that is not UTF-8
+first, then `INBOX_BACKEND` that is not UTF-8 (read with `var_os`), both before it opens a
+listener; `INBOX_SECRET_KEY_FILE` and `INBOX_OUTBOX` are paths and take any bytes. The
 address is the caller's inbox in the command: the default of `--inbox` of `pending` and `wait`,
 and the default `on_behalf_of` of the reply of `answer` (an `--on-behalf-of` given stays as given,
 and `--authority` is the caller's to give). A request the service refuses because no live

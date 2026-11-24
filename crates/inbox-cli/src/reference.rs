@@ -55,7 +55,7 @@ const EXIT_STATUSES: [(i32, &str); 6] = [
     (REFUSED, "The service refused; the output names the error."),
     (
         USAGE,
-        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_URL` that is not a loopback address or whose host holds a control character, an `https://` URL without a pin, a pin beside an `http://` URL, an `inbox key new` whose `--key-id` holds a control character, and an `inbox bridge` without its binding or with only one of `--for` and `--authority`.",
+        "Wrong usage, including an argument read as text that is not UTF-8, an `INBOX_*` variable the command reads as text that is not UTF-8, an `INBOX_URL` that is not a loopback address or whose host holds a control character, an `https://` URL without a pin, a pin beside an `http://` URL, an `inbox key new` whose `--key-id` holds a control character, and an `inbox bridge` without its binding or with only one of `--for` and `--authority`.",
     ),
     (
         TRANSPORT,

@@ -670,7 +670,13 @@ fn local(command: Command, json: bool) -> Result<Option<Done>, Failure> {
                 #[cfg(not(debug_assertions))]
                 clock_file: None,
             };
-            let backend = std::env::var("INBOX_BACKEND").ok();
+            let backend = std::env::var_os("INBOX_BACKEND")
+                .map(|value| {
+                    value
+                        .into_string()
+                        .map_err(|value| variable_not_utf_8("INBOX_BACKEND", &value))
+                })
+                .transpose()?;
             serve::serve(&settings, backend.as_deref(), json)?;
             return Ok(None);
         }
@@ -744,10 +750,14 @@ fn takes_file_name(command: &clap::Command, name: &[u8]) -> bool {
 /// What a read of the command line along clap's rules found: the first argument that is not
 /// UTF-8 and that no file name explains (`named`), and the places of the arguments that are
 /// file names (`file_names`). A place is an index into the arguments; the program name is 0.
+/// Also the subcommands named on the line (`subcommands`) and the long options given after the
+/// last of them (`given`, `--url` for `--url x` and `--url=x`).
 #[derive(Debug, Default)]
 struct Scan {
     named: Option<usize>,
     file_names: Vec<usize>,
+    subcommands: Vec<String>,
+    given: Vec<Vec<u8>>,
 }
 
 /// Reads `arguments` as clap does, to tell a file name that is not UTF-8 (a path option has
@@ -757,9 +767,8 @@ struct Scan {
 ///   `-`, or the text after `=`;
 /// - such an option counts only under the subcommand that defines it, the subcommands named so
 ///   far on the line.
-fn scan(arguments: &[OsString]) -> Scan {
-    let root = Cli::command();
-    let mut command = &root;
+fn scan(root: &clap::Command, arguments: &[OsString]) -> Scan {
+    let mut command = root;
     let mut found = Scan::default();
     let mut after_double_dash = false;
     let mut value_next = false;
@@ -782,6 +791,7 @@ fn scan(arguments: &[OsString]) -> Scan {
         }
         if bytes.starts_with(b"--") {
             let name = bytes.split(|byte| *byte == b'=').next().unwrap_or(bytes);
+            found.given.push(name.to_vec());
             if takes_file_name(command, name) {
                 if name.len() < bytes.len() {
                     found.file_names.push(at);
@@ -796,6 +806,8 @@ fn scan(arguments: &[OsString]) -> Scan {
                 .and_then(|name| command.find_subcommand(name))
         {
             command = sub;
+            found.subcommands.push(sub.get_name().to_owned());
+            found.given.clear();
             continue;
         }
         if argument.to_str().is_none() {
@@ -817,7 +829,7 @@ fn refused_argument(
     arguments: &[OsString],
     kind: clap::error::ErrorKind,
 ) -> Option<(usize, &OsStr)> {
-    let found = scan(arguments);
+    let found = scan(&Cli::command(), arguments);
     let at = found.named.or_else(|| {
         (kind == clap::error::ErrorKind::InvalidUtf8)
             .then(|| {
@@ -831,13 +843,51 @@ fn refused_argument(
     Some((at, arguments[at].as_os_str()))
 }
 
-/// The usage failure for `argument`, the `at`th: its bytes in ASCII escapes (`\xE9` for each
-/// byte that is not printable ASCII, a byte of a letter included; `\n`, `\r`, `\t`, `\"` and
-/// `\\`), so no byte that is not printable ASCII reaches the terminal.
-fn not_utf_8(at: usize, argument: &OsStr) -> Failure {
+/// The variable to name for a line clap refused as `InvalidUtf8` when no argument is to blame,
+/// and its value: clap applies a variable to an argument of the subcommand the line names, when
+/// the argument is absent from the line, and a value that is not UTF-8 fails only an argument
+/// read as text (a file name takes any bytes). Of several such, the first the subcommand defines,
+/// the one clap failed on. `read` reads a variable (`std::env::var_os`). The arguments with a
+/// variable have no short name, so only the long one is looked for on the line.
+fn refused_variable(
+    root: &clap::Command,
+    arguments: &[OsString],
+    read: impl Fn(&OsStr) -> Option<OsString>,
+) -> Option<(String, OsString)> {
+    let found = scan(root, arguments);
+    let mut command = root;
+    for name in &found.subcommands {
+        command = command.find_subcommand(name)?;
+    }
+    command
+        .get_arguments()
+        .filter(|argument| {
+            argument.get_value_parser().type_id() != std::any::TypeId::of::<PathBuf>()
+        })
+        .filter(|argument| {
+            argument.get_long().is_none_or(|long| {
+                !found
+                    .given
+                    .iter()
+                    .any(|given| given.strip_prefix(b"--") == Some(long.as_bytes()))
+            })
+        })
+        .find_map(|argument| {
+            let name = argument.get_env()?;
+            let value = read(name)?;
+            value
+                .to_str()
+                .is_none()
+                .then(|| (name.to_string_lossy().into_owned(), value))
+        })
+}
+
+/// `bytes` in ASCII escapes: `\xE9` for each byte that is not printable ASCII, a byte of a
+/// letter included; `\n`, `\r`, `\t`, `\"` and `\\`. No byte that is not printable ASCII is left.
+fn ascii_escaped(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut shown = String::new();
-    for &byte in argument.as_bytes() {
+    for &byte in bytes {
         match byte {
             b'"' => shown.push_str("\\\""),
             b'\\' => shown.push_str("\\\\"),
@@ -850,7 +900,34 @@ fn not_utf_8(at: usize, argument: &OsStr) -> Failure {
             }
         }
     }
-    Failure::Usage(format!("argument {at} is not UTF-8: \"{shown}\""))
+    shown
+}
+
+/// The usage failure for `argument`, the `at`th: its bytes in ASCII escapes ([`ascii_escaped`]),
+/// so no byte that is not printable ASCII reaches the terminal.
+fn not_utf_8(at: usize, argument: &OsStr) -> Failure {
+    Failure::Usage(format!(
+        "argument {at} is not UTF-8: \"{}\"",
+        ascii_escaped(argument.as_bytes())
+    ))
+}
+
+/// The usage failure for the variable `name` with `value`: its first
+/// [`output::MOST_SHOWN_CHARACTERS`] bytes in ASCII escapes ([`ascii_escaped`]) between double
+/// quotes, and, when it is longer, ` (and <n> more bytes)` after the closing quote, as
+/// [`output::quoted_cut`] shows a text.
+fn variable_not_utf_8(name: &str, value: &OsStr) -> Failure {
+    let bytes = value.as_bytes();
+    let (first, rest) = bytes.split_at(bytes.len().min(output::MOST_SHOWN_CHARACTERS));
+    let more = match rest.len() {
+        0 => String::new(),
+        1 => " (and 1 more byte)".to_owned(),
+        more => format!(" (and {more} more bytes)"),
+    };
+    Failure::Usage(format!(
+        "{name} is not UTF-8: \"{}\"{more}",
+        ascii_escaped(first)
+    ))
 }
 
 fn main() {
@@ -868,8 +945,19 @@ fn main() {
                 error.exit();
             }
             let wants_json = arguments.iter().any(|arg| arg == "--json");
-            if let Some((at, argument)) = refused_argument(&arguments, error.kind()) {
-                let failure = not_utf_8(at, argument);
+            let refused = refused_argument(&arguments, error.kind())
+                .map(|(at, argument)| not_utf_8(at, argument))
+                .or_else(|| {
+                    (error.kind() == ErrorKind::InvalidUtf8)
+                        .then(|| {
+                            refused_variable(&Cli::command(), &arguments, |name| {
+                                std::env::var_os(name)
+                            })
+                        })
+                        .flatten()
+                        .map(|(name, value)| variable_not_utf_8(&name, &value))
+                });
+            if let Some(failure) = refused {
                 if wants_json {
                     output::print_document(&failure.document());
                 }
@@ -998,6 +1086,34 @@ mod tests {
     #[test]
     fn the_command_line_is_well_formed() {
         Cli::command().debug_assert();
+    }
+
+    /// A file name takes any bytes, so a path variable defined before a text variable is not the
+    /// one named; a variable whose flag is on the line is not named.
+    #[test]
+    fn the_refused_variable_is_the_first_text_variable_clap_applies() {
+        use std::ffi::{OsStr, OsString};
+        use std::os::unix::ffi::OsStrExt;
+        let root = clap::Command::new("t").subcommand(
+            clap::Command::new("go")
+                .arg(
+                    clap::Arg::new("file")
+                        .long("file")
+                        .env("T_FILE")
+                        .value_parser(clap::value_parser!(std::path::PathBuf)),
+                )
+                .arg(clap::Arg::new("text").long("text").env("T_TEXT"))
+                .arg(clap::Arg::new("other").long("other").env("T_OTHER")),
+        );
+        let bad = |_: &OsStr| Some(OsStr::from_bytes(b"\xff").to_owned());
+        let line = |words: &[&str]| words.iter().map(OsString::from).collect::<Vec<_>>();
+        let named = |words: &[&str]| {
+            super::refused_variable(&root, &line(words), bad).map(|(name, _)| name)
+        };
+        assert_eq!(named(&["t", "go"]).as_deref(), Some("T_TEXT"));
+        assert_eq!(named(&["t", "go", "--text=x"]).as_deref(), Some("T_OTHER"));
+        assert_eq!(named(&["t", "go", "--text", "x", "--other", "y"]), None);
+        assert_eq!(named(&["t"]), None);
     }
 
     /// `generated/cli/inbox.json` is what `reference` writes from the clap definition.

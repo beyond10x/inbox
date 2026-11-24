@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T18:23:32Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-variable-that-is-not-utf-8-is-a-usage-error",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F1 (a word --json after a bare -- still makes the path of a clap error print the usage document; a note, there before the story: main at a1881d9 has the same expression): filed as the draft story:a-json-word-after-a-double-dash-asks-for-no-usage-document with the pass's red case in its body; that case (a_json_word_after_a_double_dash_asks_for_no_document) is the one of the pass's 10 cases that is not taken into the suite; no line of the product changes for it in this story",
+    "review": "review-result:adversary-variable-not-utf-8-pass-1",
+    "outcome": "escalated"
+  }
+}

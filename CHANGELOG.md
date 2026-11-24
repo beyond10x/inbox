@@ -28,6 +28,14 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
 
 ### Fixed
 
+- `inbox serve` with an `INBOX_BACKEND` that is not UTF-8 no longer starts with the backend
+  `memory` without a word: it ends with exit status 2 and one line that names the variable, and
+  opens no listener. An `INBOX_URL`, `INBOX_TLS_PIN` or `INBOX_OPERATOR_PUBLIC_KEY` that is not
+  UTF-8 ended with exit status 2 and a message of 5 lines that named no variable; now it is one
+  line, `inbox: usage: <variable> is not UTF-8: "<value>"`, the value escaped (`\xE9`) and cut
+  after 64 bytes. A variable the command does not read is still ignored, and
+  `INBOX_SECRET_KEY_FILE` and `INBOX_OUTBOX` still take a file name that is not UTF-8.
+
 - `inbox key new` now refuses a `--key-id` that holds a control character (a line break, another
   C0 character, DEL or a C1 character) with exit status 2 and one line that names `--key-id`, and
   writes no file; before, it wrote the key file. A client command given a secret key file whose

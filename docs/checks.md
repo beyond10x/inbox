@@ -235,6 +235,30 @@ The limits are stated on the limits page of the site. Their stories are in
   `crates/inbox-cli/tests/adversary_argument_not_utf_8_2.rs` (after `--`, a value that
   starts with `-`, an option of another subcommand, every byte value, every path option) hold
   a listener that no request reaches.
+- **An `INBOX_*` variable that is not UTF-8 read as unset, or named no variable**
+  (`story:a-variable-that-is-not-utf-8-is-a-usage-error`; adversary pass 2 of
+  `story:an-argument-that-is-not-utf-8-is-a-usage-error`, finding 4). `inbox serve` read
+  `INBOX_BACKEND` with `std::env::var(..).ok()`, so a value that is not UTF-8 read as unset
+  and the service started with `memory`; `INBOX_URL`, `INBOX_TLS_PIN` and
+  `INBOX_OPERATOR_PUBLIC_KEY`, which clap reads as text, ended with exit 2 and clap's message
+  of 5 lines that named no variable. Now each ends with exit 2 and one line of printable ASCII,
+  `inbox: usage: <variable> is not UTF-8: "<shown>"`, the first 64 bytes in the escapes of an
+  argument and ` (and <n> more bytes)` when longer, before a listener or a request (with
+  `--json` the usage document too). `refused_variable` in `src/main.rs` names the variable
+  when clap's error is `InvalidUtf8` and no argument is to blame: the first argument of the
+  subcommand the line names that is read as text, has a variable and whose flag is not on
+  the line, clap's own condition. A variable the command does not read stays ignored, and
+  `INBOX_SECRET_KEY_FILE` and `INBOX_OUTBOX` take a name that is not UTF-8. The 17 cases of
+  `crates/inbox-cli/tests/variable_not_utf_8.rs` (each of the 4 variables, a value of 200
+  bytes, a line break and an escape byte, `--json` for a client variable and for the backend,
+  an argument beside a variable, 2 variables of a client command and of `serve`, a flag on
+  the line, a variable of another command, the 3 working invocations and the outbox file) and
+  the unit case `the_refused_variable_is_the_first_text_variable_clap_applies` hold it. The 9
+  cases of `crates/inbox-cli/tests/adversary_variable_not_utf_8.rs` hold 21 command lines
+  against each of the 6 variables, help and version beside a bad variable, the flag on the
+  line in each spelling, the words after `--`, a `serve` that opens no port and writes no
+  file, the line read back for values around the cut, the usage document, the same variable
+  named over 20 runs, and another usage error beside a bad variable.
 - **The core gave a client the rows of messages between others**
   (`story:the-core-applies-the-read-rule`). The read rule was in the HTTP listener only:
   `inbox_core::handle`, the entry for an embedding with another caller per request, ran

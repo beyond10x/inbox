@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T18:23:32Z",
+  "actor": "agent:inbox",
+  "artifact": "story:a-variable-that-is-not-utf-8-is-a-usage-error",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F4 (the count of one more byte is asserted by no case of the story): the pass's case adversary_variable_not_utf_8::the_line_reads_back_as_the_first_64_bytes_and_the_count_of_the_rest is taken into the suite (a value of 65 bytes); the pass showed it red under a wrong count; no line of the product changes",
+    "review": "review-result:adversary-variable-not-utf-8-pass-1",
+    "outcome": "fixed"
+  }
+}
