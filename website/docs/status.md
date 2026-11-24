@@ -85,8 +85,9 @@ In this order. None has a date.
 1. **Two hosts and wake-up.** Sessions on two hosts exchange messages through one service over
    TLS. A post wakes an idle agent session.
 2. **An inbox for a person.** A bridge posts a person's messages into a chat channel and turns
-   the person's reply into a signed answer. `inbox bridge` posts each message and marks it
-   delivered, but cannot post through a released `connectors` yet.
+   the person's reply into a signed answer. `inbox bridge` posts each message, marks it
+   delivered, and marks it read on the person's reaction, but cannot post through a released
+   `connectors` yet.
 3. **A persistent backend.** A restart of the service loses nothing.
 4. **Delegations in daily use.** A session acts on a relayed decision because its delegation
    verifies.

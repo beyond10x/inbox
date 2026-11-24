@@ -368,7 +368,8 @@ impl Drop for Bridge {
     }
 }
 
-/// The flags of the binding of the cases.
+/// The flags of the binding of the cases, and a poll of the channel every hour: the stand-in of
+/// these cases knows the post only, and the read mark is `bridge_read`'s.
 fn binding() -> Vec<&'static str> {
     vec![
         "--chat-channel",
@@ -377,6 +378,8 @@ fn binding() -> Vec<&'static str> {
         USER,
         "--chat-connector",
         CONNECTOR,
+        "--chat-poll-interval",
+        "3600",
     ]
 }
 
@@ -1028,7 +1031,9 @@ fn a_link_at_the_staged_place_of_the_record_is_removed_not_followed() {
 
 /// Check 3: the record of a post is written before `MarkDelivered` is sent. With a directory in
 /// the place of the record file, the post the stand-in answered with success cannot be recorded:
-/// the bridge ends with 4 and one line naming the file, and the message stays in `Sent`.
+/// the bridge ends with 4 and one line naming the file, and the message stays in `Sent`. The poll
+/// that runs at the start cannot read the record either: a failed poll, named in one line of its
+/// own that names the file too, written before the post.
 #[test]
 fn a_post_that_cannot_be_recorded_is_not_marked_delivered() {
     let world = world("bridge-record");
@@ -1038,12 +1043,18 @@ fn a_post_that_cannot_be_recorded_is_not_marked_delivered() {
     let name = format!("person.outbox.chat.{:016x}", fnv1a(PERSON.as_bytes()));
     fs::create_dir(world.dir.join(&name)).expect("a directory in the place of the record");
     let bridge = Bridge::bound(&world, &connectors);
+    wait_for("the poll names the record", || {
+        bridge.stderr().contains("the read of the reactions")
+    });
     let note = post(&world, "note", "Build 7 is green.");
     let (status, _, stderr) = bridge.end();
     assert_eq!(status.code(), Some(LOCAL), "{stderr}");
     let lines: Vec<&str> = stderr.lines().collect();
-    assert_eq!(lines.len(), 1, "{stderr}");
+    assert_eq!(lines.len(), 2, "the poll's line and the post's: {stderr}");
+    assert!(lines[0].contains("the read of the reactions"), "{stderr}");
     assert!(lines[0].contains(&name), "{stderr}");
+    assert!(lines[1].contains(&note), "{stderr}");
+    assert!(lines[1].contains(&name), "{stderr}");
     assert_eq!(connectors.calls(), 1);
     assert_eq!(state(&world, &note), "Sent", "no mark without the record");
 }

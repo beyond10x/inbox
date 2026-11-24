@@ -5,14 +5,18 @@
 long-running client of the service: it holds the caller's own `Pending` open as
 `inbox wake --follow` does, and for each message in `Sent` that is not due it makes one chat post
 through `connectors`, records it, then sends `MarkDelivered`. The message moves from `Sent` to
-`Delivered` with no typed command. The bridge holds no token of the chat provider and starts no
-listener: it reaches the provider only by starting `connectors`, which holds the connection. The
-code is `crates/inbox-cli/src/bridge.rs`.
+`Delivered` with no typed command. At an interval it reads the recent posts of the channel
+through `connectors`, and for each of its posts the allowed chat user reacted to it sends
+`MarkRead` (story:the-chat-bridge-marks-a-message-read-on-a-reaction): a request or a decision
+moves from `Delivered` to `Read`, a note is handled and removed. The bridge holds no token of the
+chat provider and starts no listener: it reaches the provider only by starting `connectors`,
+which holds the connection. The code is `crates/inbox-cli/src/bridge.rs`.
 
 ## The command
 
 ```
 inbox bridge --chat-channel <id> --allowed-chat-user <id> --chat-connector <connector[/instance]>
+             [--chat-poll-interval <seconds>]
 ```
 
 with the client's `INBOX_URL`, `INBOX_SECRET_KEY_FILE` and outbox file, as every client command.
@@ -30,7 +34,8 @@ it writes nothing to standard output but the document of a failure with `--json`
 
 ## The nouns of the bridge
 
-Drafted here, outside `ess/`; no file under `ess/` is changed by this story.
+Drafted here, outside `ess/`; no file under `ess/` is changed by the stories of the bridge so
+far.
 
 - `ChatChannelBinding`: the address of the inbox of the person, the chat channel the messages are
   posted into (an id of the provider), the allowed chat user (an id of the provider), and the
@@ -38,6 +43,9 @@ Drafted here, outside `ess/`; no file under `ess/` is changed by this story.
   given by the 3 flags of the command; the address is the caller's own inbox.
 - `ChatPost`: one inbox message id, the chat provider's reference of the post that shows it (the
   `ts` of the answer), and the state of the bridge's handling of it.
+- `ChatReaction`: the chat user id that reacted, the reaction (its name, such as `eyes`), and the
+  chat post it is on (the `ts` of that post). The bridge keeps none: it reads them from the
+  channel at each poll (below) and acts on them at once.
 
 Relations:
 
@@ -47,20 +55,46 @@ Relations:
   answered A.)
 - `ChatChannelBinding` to the allowed chat user: exactly one chat user id per binding, given by
   the operator with the binding. It must not be empty and holds no white space and no control
-  character; this story stores and checks it and compares it with nothing.
-  story:the-chat-bridge-marks-a-message-read-on-a-reaction is the first to compare it, with the
-  user id the provider's answer names, never with a display name. (Open 3, answered A.)
+  character. It is compared, as text and in whole, with the chat user ids the provider's answer
+  lists for a reaction, never with a display name. (Open 3 of
+  story:the-chat-bridge-posts-a-pending-message, answered A.)
 - `ChatPost` to Message: UNMAPPED: whether a note or a request has at most one chat post, as a
   decision has by "asked once" (epic:human-inbox), no source says. Open 1 of
   story:the-chat-bridge-asks-a-decision-once answers it. Today the record holds one line per
   message id: a second post of a message replaces its line.
+- `ChatReaction` to `ChatPost`: many reactions may be on one chat post (the provider lists them per
+  post, each with the ids of the users who made it; not verified against the provider). Any
+  reaction of the allowed chat user on the post counts, whatever its name (Open 1 of
+  story:the-chat-bridge-marks-a-message-read-on-a-reaction, answered A).
+- `ChatReaction` to the allowed chat user: a reaction counts when one of the user ids the
+  provider lists for it is the allowed chat user's id. A reaction of every other chat user changes
+  nothing: no request to the service, no chat post, no line (Open 2, answered A).
 
-The states of a `ChatPost`: this story gives it one, `posted`, and no transition. The later
-stories add read (story:the-chat-bridge-marks-a-message-read-on-a-reaction), answered
-(story:the-chat-bridge-turns-a-thread-reply-into-an-answer), and decided on silence or expired
-(story:the-chat-bridge-asks-a-decision-once), and with them the transitions; the ESS document of
-the bridge is written then, not in this story (Open 6, answered A with iii: the draft stays here).
-No entry is ever removed yet.
+The states of a `ChatPost` and their transitions:
+
+- `posted`: the post was made and recorded (story:the-chat-bridge-posts-a-pending-message). The
+  only state the bridge asks the channel about.
+- `posted` to `read`: a reaction of the allowed chat user on the post was read, and the service
+  answered the `read` request with success (outcome `handled` or `read`), `already-read`, or
+  `unknown-message` (the message was read meanwhile, or is gone).
+- `posted` to `read`, settled: the person's `Pending`, read by a poll after it read the entry,
+  does not list the message, so it left `Pending` another way (read with `inbox read`, answered
+  or refused, removed or decided at its deadline, or lost by a new start of the service). No
+  request and no line. So `read` means: the bridge has nothing left to mark of this post, the
+  message was read through a reaction or it left `Pending` without one. One state and not a
+  fourth: the later stories ask the service for the state of a message (a thread reply to a
+  request in `Read` is an answer however the request was read), and none reads from the record
+  how the message left `Pending`.
+- `posted` to `due`: the service answered the `read` request `deadline-passed` (`Expired`): the
+  message's `expires` has passed, and the expiry task decides it.
+- An entry that is `read` or `due` is never asked about and never marked again. A message posted
+  again (after a restart of the service that lost it, as a reposted envelope) gets its line
+  replaced by a new `posted` line with the new reference.
+
+The later stories add answered (story:the-chat-bridge-turns-a-thread-reply-into-an-answer) and
+decided on silence (story:the-chat-bridge-asks-a-decision-once); the ESS document of the bridge
+is written then (Open 6 of story:the-chat-bridge-posts-a-pending-message, answered A with iii:
+the draft stays here).
 
 ## The rounds, the lock and the adapter
 
@@ -95,7 +129,7 @@ is gone") belongs to the surface that writes rows there; the bridge writes none 
 ## A post
 
 One `connectors` child process per post (Open 5, answered A), started from one function
-(`invoke`), whose one caller is `post`:
+(`invoke`), whose callers are `post` and the read of the channel (below, "The read mark"):
 
 ```
 connectors --output json invoke <target> chat.postMessage --input-stdin --idempotency-key inbox-<message id>
@@ -215,7 +249,137 @@ The order is fixed: the post, then the record, then `MarkDelivered`.
   starts after the pause of a failure. The row may come again, and is then posted again with the
   same key.
 - That a message whose id the record holds is not posted again after a restart of the bridge is
-  story:the-chat-bridge-asks-a-decision-once; this story does not read the record.
+  story:the-chat-bridge-asks-a-decision-once; the posts do not read the record.
+
+## The read mark
+
+story:the-chat-bridge-marks-a-message-read-on-a-reaction. The person reads a message in the
+channel by reacting to its post, as the person reads one with `inbox read` in a terminal.
+
+- The poll. Once the inbox is open (the start of the rounds), a thread of the bridge
+  (`inbox-bridge-poll`) polls: at once, then every `--chat-poll-interval` seconds (default 10,
+  at least 1) while the rounds of `Pending` run (Open 3, answered A). It has a client of its own
+  (the same service, key and outbox file); the rounds and the poll share no state but the files
+  beside the outbox file and the turn (below).
+- What one poll asks for (Open 4, answered B: one read of the recent posts of the channel per
+  poll, so the invocations per poll do not grow with the open posts). The poll reads the record
+  of the chat posts and keeps the entries `posted` of the bound channel (`--chat-channel`): an
+  entry of another channel, written by a bridge of the same inbox started with another channel,
+  is never asked about, settled or marked by this one; an entry without a channel (a line of a
+  build before the channel was recorded) counts as of the bound channel. With no such entry it
+  starts no child and asks nothing. A record it cannot read (no regular file, over its bound, not
+  readable) is a failed poll whose line names the record (below), and is tried again after the
+  pause of a failure; a post that has to change it still ends the bridge with 4 and its own line.
+  Otherwise it reads the person's `Pending`
+  whole and at once (`commands::pending_now`: no `wait` and no `undelivered`, so every row of a
+  message in `Sent` or `Delivered`, due ones included; the view has no page and no bound of
+  rows), and settles each `posted` entry it read whose message id no row holds: the entry
+  becomes `read` through the `replace` of the files beside the outbox file under the outbox lock
+  (`Outbox::mark_chat_post`, only while the line is still the one the poll read), with no
+  request and no line. The record is read before `Pending`: an entry the poll read was written
+  after its post, while its message was in `Sent`, so a message not listed by the later read of
+  `Pending` has left it; an entry a round writes after the poll read the record waits for the
+  next poll. A read of `Pending` that fails, or whose answer is no list `rows` with a text
+  `message_id` in each row, is a failed poll: it settles nothing and reads no channel. The
+  rounds of `Pending` do not settle: they read it with `undelivered=1`, which lists the rows in
+  `Sent` only, and hand a round over only when it has a row, so their rows never list a message
+  in `Delivered`. With no entry left `posted` after the settle the poll starts no child. Else it
+  reads the channel from the oldest `posted` entry on, that entry's post included: `oldest` is the
+  least reference of them in the order of the provider's `ts` (whole seconds, then the fraction),
+  sent with `inclusive` `true`, since the provider lists only the posts after `oldest` without it
+  and the oldest open post would never be seen; a reference that is not `<digits>.<digits>` is
+  never sent as `oldest`, and with none of that form the read has no `oldest` and no
+  `inclusive`.
+- The read, through the same `invoke` as a post (the turn, the slot `wake::child`, the group of
+  its own, the bounds on the streams, so SIGINT and SIGTERM end a running read as they end a
+  running post; the thread whose child the signal path took writes no line and waits for the end
+  of the process, so a bridge ended during a read names no failed read):
+
+  ```
+  connectors --output json invoke <target> conversations.history --input-stdin
+  ```
+
+  with the input `{"channel":"<channel id>","oldest":"<ts>","inclusive":true,"limit":100}` on
+  standard input: flat, the provider's parameters as top-level members, `oldest` a string (a JSON
+  number would lose its trailing zeros). No idempotency key and no approval: a read changes
+  nothing.
+- Paging. The next page is the same input with `cursor`, the `response_metadata.next_cursor` of
+  the page before; an empty text or no `response_metadata` (or no `next_cursor` in it) ends the
+  pages, `has_more` is not read. A poll reads at most 10 pages (`MOST_PAGES`, 1000 posts): a
+  channel that has a further page then is a failed poll with its own line, and nothing is marked.
+  Since an entry whose message left `Pending` is settled, the bound is met only while a message
+  posted more than 1000 posts back in the channel is still in `Pending`; the polls fail until it
+  leaves `Pending`.
+- The turn: one `connectors` child at a time, a poll and a post never together. `invoke` takes a
+  lock in the memory of the process (`TURN`, a `Mutex`) before it starts the child and holds it
+  until the child has ended and its streams are read: a post waits for a poll that runs, a poll for
+  a post that runs. A read of several pages takes the turn once per page, so a post may run
+  between 2 pages. No file: the turn is of one process, and 2 bridges of one inbox are already
+  kept apart by the lock of the wake. The cases see a thread waiting for it as a thread whose
+  system call is `futex` (Linux `/proc/<pid>/task/<tid>/syscall`).
+- The end by a signal. The signal path takes the slot's guard, takes the child from the slot and
+  holds the guard from then until the process ends: no thread starts a child after it, and the
+  thread whose child it took blocks on the guard, when it next looks whether its child has
+  exited, until the process ends, so it writes no line. No thread finds the slot empty: only
+  `invoke` fills and empties it, one at a time under the turn, and the signal path never gives
+  the guard back. `invoke` still answers a slot found empty with a failed post or read and its
+  line, a defensive check that no path reaches. That the guard is held until the end has no
+  case: the window between the end of the child's group and the exit of the process is too short
+  to be hit by a case without a race on the scheduler.
+- The answer is untrusted input, judged as a post's is: standard output on exit 0, standard error
+  on exit 1, each bounded to 256 KiB (an answer over it is a failed poll whose line says so). A
+  page is read only when the process exited 0 with one JSON document whose
+  `result.result.status` is 200, `result.result.body.ok` `true`, and `result.result.body.messages`
+  a list; each post of it an object with a `ts` text that is not empty, and its `reactions`
+  absent or a list. A member missing or of another type fails the whole poll: nothing of it is
+  marked, also a post before the member that fails it. A reaction is one of the allowed chat user
+  when it has a list `users` that holds the allowed chat user's id as a text; a reaction that is
+  no object, has no such list, or lists the id as no text counts as no reaction of the allowed
+  chat user.
+- A refused read (exit 1): standard output empty, one document on standard error
+  `{"ok":false,"error":{"code":…,"data":{…}}}`, `error.data.code` `service_failure`,
+  `error.data.stage` `dispatch`, the class in `error.data.service_code` (`forbidden`,
+  `not_found`, `unauthorized`, `rate_limited`, `invalid_input`, `internal`,
+  `upstream_protocol`). This differs from a refused post, where the code of the operator's grant
+  is `error.data.code` itself. The line names the code and the class and repeats no reason of the
+  provider. After `rate_limited` the next poll is not before `error.data.retry_after_seconds`
+  when it is a whole number from 1 to 3600, as after a post. An input `connectors` refuses before
+  any request exits 2, a usage error.
+- The match: each `posted` entry whose reference is the `ts` of a post the allowed chat user
+  reacted to gets one `read` request, the one `inbox read` sends (`commands::read`): `handled`,
+  `read` and `already-read` and the refusal `unknown-message` make the entry `read`, with no
+  line; the refusal `deadline-passed` (`Expired`) makes it `due` and writes one line that names
+  the message id, the channel and `Expired`, only after the record says `due`. That line is
+  written at most once: a bridge ended between the record change and the line never writes it,
+  and the entry is `due` and not asked about again. Each entry changes
+  through the `replace` of the files beside the outbox file, under the outbox lock, right after
+  its answer and before the next poll; the line of the entry changes only while it is still the
+  `posted` line the poll read (a post of the same message meanwhile keeps its new line). Every
+  other failure of the request (no answer, another refusal) leaves the entry `posted` and fails
+  the poll; the entries marked before it stay marked.
+- The read is sent at least once per reacted post, not exactly once: a `read` whose answer is lost,
+  or whose answer came but whose change of the record failed, leaves the entry `posted`, and the
+  next poll sends the same `read` again. The service answers a second `read` of a message that is
+  already read with `already-read` (or the message has left `Pending` and the entry is settled),
+  so a repeat changes nothing at the service.
+- A failed poll (a record of the chat posts that cannot be read, a read of `Pending` that failed
+  or answered no view, a child that did not answer a page, a refusal, an answer that is not a
+  page, the bound of pages, a change of the record that failed, a `read` request that failed)
+  marks
+  nothing more and is tried again after the pause of a failure (`wake::pause`: 100 ms, doubled
+  per failed poll in a row, up to 30 s), not after the interval, and after a named
+  `retry_after_seconds` first. One line on standard error names the first failed poll of a run of
+  them (`inbox bridge: the read of the reactions in the chat channel <id> failed: …`); the next
+  line comes after a poll succeeded and another failed. A failed poll does not stop the rounds of
+  `Pending`: a message posted meanwhile is posted and marked delivered.
+- The poll never ends the bridge: only a signal or a failure of the rounds does.
+
+Not verified against the provider or a released `connectors` (from the contract and the tests of
+`connectors` 0.76.1 as its session states them; no read was run): the name and the input of the
+read operation; that `connectors` hands the provider's `reactions` member through (inferred by
+the session of `connectors`: its selection has no field list, and no test of it has the member);
+the shape of a page and of the refusal; the classes; that posts come newest first; the provider's
+rate limits and the cost of one `connectors invoke`.
 
 ## The text of a post
 
@@ -254,7 +418,11 @@ post operation (`connectors invoke --describe true` was not run) nor against the
 
 `<outbox>.chat.<16 hex digits>` beside the outbox file (Open 6, answered A with iii): the digits
 are the FNV-1a hash of the address, as in the lock of the wake. One JSON line per `ChatPost`,
-`{"message_id":…,"reference":…,"state":"posted"}`, mode 0600, changed under the lock of the
+`{"message_id":…,"channel":…,"reference":…,"state":…}` with the chat channel the post was made in
+(a line without `channel`, of a build before it was recorded, is read as of the bound channel) and
+the state `posted`, `read` or `due` (a post writes it `posted` with `Outbox::record_chat_post`; the poll changes its state with
+`Outbox::mark_chat_post`, and reads the record with `Outbox::chat_posts`, which skips a line of
+another form), mode 0600, changed under the lock of the
 outbox file and replaced whole by a file written beside it and renamed over it, as the other files
 beside the outbox file (`Outbox::record_chat_post` in `crates/inbox-cli/src/outbox.rs`, through
 `replace`): whatever is at the name of the staged file `<record>.new` is removed and the file is
@@ -263,8 +431,12 @@ id is replaced; every other line is kept as it is. A file that is no regular fil
 64 MiB or cannot be read fails the change (exit 4) instead of being read as holding nothing: its
 lines are never given up for a new one.
 
-No line is removed in this story; how long a line is kept is settled by the stories that read the
-record. At the bound of 64 MiB (about 700 thousand posts) the record cannot be read before a
+No line is removed. The read mark needs no pruning to hold its rule that an entry `read` or
+`due` is never asked about again: the poll starts from the `posted` entries, and a `ts` the
+provider lists that no `posted` entry holds is not looked at, removed or not. It removes none
+all the same: story:the-chat-bridge-turns-a-thread-reply-into-an-answer finds the post of a
+request in `Read` in the record to read its thread, and when an entry may leave the record is
+Open 1 of story:the-chat-bridge-asks-a-decision-once. At the bound of 64 MiB (about 700 thousand posts) the record cannot be read before a
 change: every post then ends the bridge with 4 after the post was made, and no mark is sent. A
 restart posts the same message again, which `connectors` answers as a replay by its key, and ends
 again, until the operator removes or shortens the record.
@@ -276,10 +448,12 @@ The bridge refuses to start with one line on standard error and no request:
 - no binding is configured: one of the 3 flags is missing (exit 2, `no binding is configured for
   <address>`), or a value is empty or holds white space or a control character (exit 2);
 - `connectors` is not on `PATH` (exit 4);
-- the URL of the service is not a loopback URL (exit 2, the client's own refusal).
+- the URL of the service is not a loopback URL (exit 2, the client's own refusal);
+- `--chat-poll-interval` is not a whole number of at least 1 (exit 2, a usage error of the
+  command line).
 
-It starts no listener (Open 8, answered A): it asks the provider through `connectors`, and later
-stories ask for reactions and replies the same way.
+It starts no listener (Open 8, answered A): it asks the provider through `connectors` for the
+reactions, and a later story asks for the replies the same way.
 
 ## What stays open
 
@@ -308,9 +482,17 @@ stories ask for reactions and replies the same way.
 - The grant ends and has a cap per hour: when it ended, posts wait in `Sent`
   (`approval_required`) until the operator renews it; over the cap they wait until the hour's
   cap frees (`rate_limited`).
-- A `connectors` that never ends holds the bridge: no post has a time bound yet.
-- The allowed chat user is compared with nothing yet; no reaction, reply or decision is read from
-  the channel (the later stories of epic:human-inbox).
+- A `connectors` that never ends holds the bridge: no post and no read has a time bound yet, and
+  while one holds the turn the other waits.
+- A message that stays in `Pending` (`Delivered`, not read) while more than 10 pages of 100 posts
+  are made in the channel after its post keeps every poll failing at the bound of pages, and no
+  reaction marks a message read, until it leaves `Pending` (read with `inbox read`, answered, or
+  removed or decided at its deadline).
+- A message lost by a new start of the service is settled `read`; its repost is posted again
+  with a new line.
+- A reaction removed after the poll read it does not make the message unread; the provider's
+  answer names no time of a reaction, so a reaction made before the post was recorded counts.
+- No reply or decision is read from the channel (the later stories of epic:human-inbox).
 
 ## Cases
 
@@ -319,6 +501,16 @@ stand-in `connectors`, a POSIX shell script the case writes and puts first on `P
 the arguments, the environment and the input document of each invocation and answers from files
 the case gives it, holding an answer until the case releases it. No case reaches a chat provider,
 a network beyond loopback or a model, and none holds an upper bound of time. The adversary's cases
-are in `crates/inbox-cli/tests/adversary_bridge.rs`, in the same form. The unit cases of the
-text are in `crates/inbox-cli/src/output.rs`, those of the answer in
+are in `crates/inbox-cli/tests/adversary_bridge.rs`, in the same form. The cases of the read
+mark are in `crates/inbox-cli/tests/bridge_read.rs`: a stand-in that answers each read with the
+posts and reactions the case scripts for it and each post with a reference of its own, a forwarder
+in front of the service that keeps what each connection carried (the `read` requests are counted
+there, a read of the whole `Pending` is failed or held there, and a `read` request is dropped
+without an answer there, as a case says), and the interval of the poll set to 1 s. The stand-in
+lists the posts of a read as the provider does: those after `oldest`, and the one at `oldest` only
+with `inclusive` `true`. The cases wait for the stand-in's record of an invocation or for a fact,
+a thread waiting for the turn through Linux `/proc/<pid>/task/<tid>/syscall`. The cases of
+`bridge.rs` and
+`adversary_bridge.rs` poll every 3600 s, so their stand-ins, which know the post only, see no
+read. The unit cases of the text are in `crates/inbox-cli/src/output.rs`, those of the answers in
 `crates/inbox-cli/src/bridge.rs`.

@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T04:24:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F6 (a record entry holds no channel): each entry records the channel it was posted in, the poll asks about and settles only the entries of the bound channel, an entry without a channel counts as of the bound channel; case a_bridge_bound_to_another_channel_asks_about_and_marks_only_its_own_posts, red under the mutant (the channel comparison dropped); the limits page names that a bridge started with another channel does not see reactions on its earlier posts",
+    "review": "review-result:adversary-chat-bridge-read-pass-1",
+    "outcome": "fixed"
+  }
+}

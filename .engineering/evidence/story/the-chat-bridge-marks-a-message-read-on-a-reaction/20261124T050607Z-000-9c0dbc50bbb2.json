@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-24T05:06:07Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check"
+  }
+}

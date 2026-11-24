@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T05:02:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 (the park and the flag of the signal path cannot be reached, and the design describes a path that cannot run): round 4 (724b6a7) removes the flag and the park; one defensive return is left for a slot found empty, with a comment that no path reaches it; docs/design/bridge.md and AGENTS.md say what happens on a signal: the thread whose child was taken blocks on the guard of the slot until the process ends",
+    "review": "review-result:adversary-chat-bridge-read-pass-2",
+    "outcome": "fixed"
+  }
+}

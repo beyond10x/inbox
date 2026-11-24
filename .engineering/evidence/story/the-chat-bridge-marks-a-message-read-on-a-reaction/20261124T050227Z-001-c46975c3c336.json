@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T05:02:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 (mutant N10, mark_chat_post drops the channel of the entry, survives the story's cases): the adversary's case adversary_a_marked_entry_keeps_its_channel is in the repository and is red under N10",
+    "review": "review-result:adversary-chat-bridge-read-pass-2",
+    "outcome": "fixed"
+  }
+}

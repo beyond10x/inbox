@@ -62,6 +62,24 @@ impl Client {
         }
     }
 
+    /// A client of the same service, key and outbox file that has seen nothing yet: for a thread
+    /// of its own (the poll of `inbox bridge`), since a client is used by one thread.
+    ///
+    /// # Errors
+    ///
+    /// None in fact: the outbox file is the one this client has.
+    pub fn again(&self) -> Result<Self, Failure> {
+        Ok(Self::new(
+            self.service.clone(),
+            Caller {
+                key: self.caller.key.clone(),
+                key_id: self.caller.key_id.clone(),
+                principal: self.caller.principal.clone(),
+            },
+            Outbox::locate(Some(self.outbox.path()))?,
+        ))
+    }
+
     /// Sends one request and reads its answer, keeping the epoch it named ([`Client::seen`]).
     /// Every request of the client goes through here.
     fn exchange(
@@ -240,7 +258,7 @@ pub fn close(client: &Client) -> Result<Done, Failure> {
     Err(failure)
 }
 
-/// `inbox read`.
+/// `inbox read`, and the read mark `inbox bridge` sends on a reaction of the allowed chat user.
 pub fn read(client: &Client, message_id: &str) -> Result<Done, Failure> {
     let mut body = String::new();
     wire::encode_command_inbox_messaging_mark_read(
@@ -344,6 +362,13 @@ pub fn pending(client: &Client, inbox: Option<&str>, wait: Option<u64>) -> Resul
 /// which only a row in `Sent` ends (`docs/design/service.md`, the wait); the view as answered.
 pub fn undelivered(client: &Client, wait: u64) -> Result<Value, Failure> {
     pending_view(client, None, Some(wait), true)
+}
+
+/// The caller's own `Pending` view, answered at once and whole (no `wait`, no `undelivered`):
+/// every row of a message in `Sent` or `Delivered`, due ones included. The poll of `inbox bridge`
+/// reads it to settle the posts whose message left `Pending`.
+pub fn pending_now(client: &Client) -> Result<Value, Failure> {
+    pending_view(client, None, None, false)
 }
 
 /// What `inbox pending` prints of a view answer: the document as it is, or its rows for a person.

@@ -80,8 +80,8 @@ record out.
 
 ## The chat bridge
 
-`inbox bridge` posts each message of a person's inbox into a chat channel through `connectors`
-and marks it delivered. What it does not do:
+`inbox bridge` posts each message of a person's inbox into a chat channel through `connectors`,
+marks it delivered, and marks it read when the person reacts to its post. What it does not do:
 
 - **It cannot post through a released `connectors` yet.** `connectors` refuses each post until
   the operator gave it a standing approval of posts into the channel, and that approval is not
@@ -90,8 +90,22 @@ and marks it delivered. What it does not do:
   undelivered until the operator renews it.
 - The approval allows a number of posts per hour: over it, posts wait as undelivered until the
   hour's cap frees.
-- It reads nothing from the channel: no reaction, no reply, no decision. The person reads and
-  answers with `inbox read` and `inbox answer`.
+- It reads no reply and no decision from the channel. The person answers with `inbox answer`.
+- Only reactions of the allowed chat user count, any reaction of theirs: a reaction of anyone
+  else does nothing and is not reported.
+- A reaction is seen at the next read of the channel, every 10 s by default
+  (`--chat-poll-interval`). Taking a reaction back does not make the message unread.
+- A reaction on a message past its deadline does not mark it read: the bridge writes one line,
+  and the message is removed or decided at its deadline as any other. A bridge stopped just
+  before that line never writes it.
+- The bridge reads at most 1000 posts of the channel at a time. While a message the person has
+  not read yet was posted more than 1000 posts back, every read of the channel fails and no
+  reaction marks a message read, until that message is read with `inbox read`, answered, or
+  removed at its deadline.
+- A bridge reads only the channel it serves: started again with another `--chat-channel`, it
+  does not see reactions on the posts it made in the channel before.
+- Whether a released `connectors` hands the reactions of a post through to the bridge is not
+  checked against the chat provider.
 - A posted message is marked delivered whether or not anyone reads the channel.
 - A message posted and not marked delivered, such as when the bridge was stopped between the
   two, is posted again by the next bridge, with the same idempotency key; `connectors` answers
@@ -108,7 +122,8 @@ and marks it delivered. What it does not do:
   `inbox pending` shows it whole.
 - How the post escapes a mention and the block of literal text is not checked against the chat
   provider.
-- A `connectors` that never ends holds the bridge; there is no time bound on a post.
+- A `connectors` that never ends holds the bridge; there is no time bound on a post or a read of
+  the channel.
 - One bridge serves one inbox and one channel; `inbox wake` and the bridge do not serve one
   inbox with one outbox file on a host at the same time.
 

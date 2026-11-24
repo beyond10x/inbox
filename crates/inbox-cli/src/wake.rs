@@ -638,8 +638,9 @@ fn in_sent(answer: Value) -> Value {
     )
 }
 
-/// The child process a surface waits for while it runs (the `connectors` of a post of `inbox
-/// bridge`): the signal path ends it before the process ends ([`end_on_signal`]).
+/// The child process a surface waits for while it runs (the `connectors` of a post or of a read of
+/// the channel of `inbox bridge`, one at a time by the bridge's turn): the signal path ends it
+/// before the process ends ([`end_on_signal`]).
 static CHILD: Mutex<Option<Child>> = Mutex::new(None);
 
 /// The slot of the child process a surface waits for ([`CHILD`]). A surface puts its child there
@@ -649,10 +650,12 @@ pub fn child() -> MutexGuard<'static, Option<Child>> {
 }
 
 /// SIGINT and SIGTERM end the process at once by their default action, also when it was started
-/// with them ignored: a thread waits for either, ends the child in [`CHILD`] with its process group
-/// ([`end_group`]) and waits for it, and takes the signal by its default action. So no process of
-/// the group of a running post of the bridge outlives a bridge ended by one of them. The `flock` is
-/// the kernel's to release.
+/// with them ignored: a thread waits for either, takes the slot of the child
+/// ([`CHILD`]), ends the child in it with its process group ([`end_group`]) and waits for it, and
+/// takes the signal by its default action. It holds the slot until the process has ended, so no
+/// thread starts a child after the group was ended. So no process of the group of a running
+/// `connectors` of the bridge outlives a bridge ended by one of them. The `flock` is the kernel's
+/// to release.
 fn end_on_signal() -> Result<(), Failure> {
     let mut signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|error| Failure::Local(format!("the signal handlers: {error}")))?;
@@ -660,7 +663,8 @@ fn end_on_signal() -> Result<(), Failure> {
         .name("inbox-wake-signals".to_owned())
         .spawn(move || {
             if let Some(signal) = signals.forever().next() {
-                if let Some(running) = child().take() {
+                let mut held = child();
+                if let Some(running) = held.take() {
                     end_group(running);
                 }
                 let _ = signal_hook::low_level::emulate_default_handler(signal);
@@ -704,18 +708,34 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 }
 
 /// Takes the lock of the wake of `address`: the open file whose `flock` this process holds, or
-/// `None` when another process holds it. The directory of the outbox file is made (mode 0700) as
-/// the outbox lock makes it; the file is created with mode 0600, opened without blocking and
-/// without following a symbolic link in its place (`O_NOFOLLOW`: a link is refused, nothing is
-/// created through it), and must be a regular file.
+/// `None` when another process holds it. The file is opened as [`lock_file`] opens it.
 ///
 /// # Errors
 ///
 /// [`Failure::Local`] when the file cannot be opened or locked, or is no regular file.
 fn lock(outbox: &Path, address: &str) -> Result<Option<File>, Failure> {
     let path = lock_path(outbox, address);
+    let file = lock_file(&path)?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => {
+            Err(Failure::Local(format!("{}: {error}", path.display())))
+        }
+    }
+}
+
+/// Opens the lock file at `path`, not yet locked: its directory (the directory of the outbox
+/// file) is made with mode 0700 as the outbox lock makes it; the file is created with mode 0600,
+/// opened without blocking and without following a symbolic link in its place (`O_NOFOLLOW`: a
+/// link is refused, nothing is created through it), and must be a regular file.
+///
+/// # Errors
+///
+/// [`Failure::Local`] when the file cannot be opened, or is no regular file.
+fn lock_file(path: &Path) -> Result<File, Failure> {
     let local = |error: std::io::Error| Failure::Local(format!("{}: {error}", path.display()));
-    if let Some(parent) = outbox
+    if let Some(parent) = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
     {
@@ -731,7 +751,7 @@ fn lock(outbox: &Path, address: &str) -> Result<Option<File>, Failure> {
         .truncate(false)
         .mode(0o600)
         .custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW)
-        .open(&path)
+        .open(path)
         .map_err(local)?;
     if !file.metadata().map_err(local)?.is_file() {
         return Err(Failure::Local(format!(
@@ -739,11 +759,7 @@ fn lock(outbox: &Path, address: &str) -> Result<Option<File>, Failure> {
             path.display()
         )));
     }
-    match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
-        Err(TryLockError::WouldBlock) => Ok(None),
-        Err(TryLockError::Error(error)) => Err(local(error)),
-    }
+    Ok(file)
 }
 
 #[cfg(test)]

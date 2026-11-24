@@ -17,6 +17,17 @@ release; what came before it is in the git log and in `docs/plan/`. How a releas
   again after a pause. It opens the inbox with the adapter `slack` and takes the lock of
   `inbox wake`. It passes no approval to `connectors`, so a released `connectors` refuses its
   posts until it holds the operator's standing approval for the channel.
+- `inbox bridge` marks a message read when the allowed chat user reacts to its post: it reads the
+  recent posts of the channel through `connectors` every `--chat-poll-interval` seconds (10 by
+  default) while one of its posts is open, and sends `MarkRead` at least once per post that user
+  reacted to (again at the next read when an answer was lost), so a request or a decision moves to
+  `Read` and a note is handled. A reaction of any other chat user does nothing; a reaction on a
+  message past its deadline is named in at most one line. A post whose message left `Pending` another way
+  (`inbox read`, an answer, its deadline) is no longer open, so the channel is read only back to
+  the oldest post still open, that post included. Only the posts of the channel the bridge serves
+  are asked about. A read of the channel and a post never run at once, and a read that fails
+  (also on a record of the chat posts that cannot be read) marks nothing and is tried again after
+  a pause.
 
 ## [0.6.1] - 2026-11-23
 

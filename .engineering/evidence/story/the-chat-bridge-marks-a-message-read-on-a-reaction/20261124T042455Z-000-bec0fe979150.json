@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T04:24:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F1 (the read sends oldest without inclusive, so a reaction on the oldest open post is never seen): the read sends inclusive true beside oldest, and the stand-in of the story's cases lists the post at oldest only when inclusive is true; adversary_a_reaction_on_the_oldest_open_post_is_seen is green and the mutant (inclusive dropped) is red in it and in the unit case a_read_asks_from_the_oldest_open_post_on",
+    "review": "review-result:adversary-chat-bridge-read-pass-1",
+    "outcome": "fixed"
+  }
+}

@@ -178,6 +178,8 @@ impl Bridge {
                 USER,
                 "--chat-connector",
                 CONNECTOR,
+                "--chat-poll-interval",
+                "3600",
             ])
             .env("PATH", connectors.path())
             .stdout(std::process::Stdio::null())
@@ -315,6 +317,8 @@ fn a_bridge_started_before_the_service_answers_waits_for_it() {
             USER,
             "--chat-connector",
             CONNECTOR,
+            "--chat-poll-interval",
+            "3600",
         ])
         .env("PATH", connectors.path())
         .env("INBOX_URL", format!("http://127.0.0.1:{port}"))
@@ -421,6 +425,8 @@ fn spawn_bridge(
             USER,
             "--chat-connector",
             CONNECTOR,
+            "--chat-poll-interval",
+            "3600",
         ])
         .env("PATH", connectors.path())
         .envs(env.iter().copied())

@@ -132,22 +132,32 @@ enum Command {
     /// it delivered, until SIGINT or SIGTERM. It opens the inbox with the adapter slack and takes
     /// the lock of `inbox wake`; an inbox this host opened with another adapter ends it with 1. A
     /// post that fails is tried again after a pause, and the message stays undelivered until it
-    /// succeeds. A released `connectors` refuses the posts until the operator gave it a standing
-    /// approval of the post operation into the channel: the bridge passes no approval proof.
+    /// succeeds. While one of its posts is open it reads the recent posts of the channel through
+    /// `connectors` at an interval, and a reaction of the allowed chat user on a post marks its
+    /// message read (a note is handled and removed); a reaction of any other chat user does
+    /// nothing. A read of the channel and a post never run at once. A released `connectors`
+    /// refuses the posts until the operator gave it a standing approval of the post operation
+    /// into the channel: the bridge passes no approval proof.
     Bridge {
         #[command(flatten)]
         client: ClientArgs,
         /// The chat channel the messages are posted into: its id, such as C0000000001.
         #[arg(long)]
         chat_channel: Option<String>,
-        /// The one chat user allowed to act on the posts: its id, such as U0000000001. Recorded;
-        /// nothing compares it with a user yet.
+        /// The one chat user allowed to act on the posts: its id, such as U0000000001. Any
+        /// reaction of this user on a post marks the message read.
         #[arg(long)]
         allowed_chat_user: Option<String>,
         /// The target `connectors invoke` is called with: a connector, or a connector and its
         /// instance.
         #[arg(long, value_name = "CONNECTOR[/INSTANCE]")]
         chat_connector: Option<String>,
+        /// How often the bridge reads the recent posts of the chat channel for the reactions on
+        /// its open posts, in seconds; at least 1. A poll that fails is tried again after a pause
+        /// instead.
+        #[arg(long, value_name = "SECONDS", default_value_t = 10,
+              value_parser = clap::value_parser!(u64).range(1..))]
+        chat_poll_interval: u64,
     },
     /// Mark a message read: a note is handled and removed, a request or decision waits for its
     /// answer. A message past its `expires` is not marked: refused with `Expired`, exit status 1;
@@ -814,12 +824,14 @@ fn main() {
         chat_channel,
         allowed_chat_user,
         chat_connector,
+        chat_poll_interval,
     } = &cli.command
     {
         let given = bridge::Given {
             chat_channel: chat_channel.as_deref(),
             allowed_chat_user: allowed_chat_user.as_deref(),
             chat_connector: chat_connector.as_deref(),
+            chat_poll_interval: *chat_poll_interval,
         };
         let status = match client.client() {
             Ok(client) => bridge::run(&client, json, given),

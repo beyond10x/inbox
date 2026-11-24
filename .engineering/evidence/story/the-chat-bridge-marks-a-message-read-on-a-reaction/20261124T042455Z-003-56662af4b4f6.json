@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T04:24:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding F4 (the signal path releases the guard of the slot before the process ends, so a child can start in that window): the signal path keeps the guard until exit; no case, because the window between the end of the group and the exit cannot be hit without a race on the scheduler; docs/design/bridge.md says so",
+    "review": "review-result:adversary-chat-bridge-read-pass-1",
+    "outcome": "fixed"
+  }
+}

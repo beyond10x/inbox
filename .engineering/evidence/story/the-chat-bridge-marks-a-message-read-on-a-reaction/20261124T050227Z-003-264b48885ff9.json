@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T05:02:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 4 (the line of a due message can be lost and the design does not say so): docs/design/bridge.md says the line is written at most once; the CHANGELOG.md bullet and the bullet of website/docs/limits.md say the same",
+    "review": "review-result:adversary-chat-bridge-read-pass-2",
+    "outcome": "fixed"
+  }
+}

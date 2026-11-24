@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T04:24:55Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding (mutant Ma, retry_after_seconds ignored, survives the story's cases): the adversary's case adversary_a_rate_limited_read_waits_its_named_time_and_a_failed_one_its_pause stays in the repository and is red under Ma after round 3",
+    "review": "review-result:adversary-chat-bridge-read-pass-1",
+    "outcome": "fixed"
+  }
+}

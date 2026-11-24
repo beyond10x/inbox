@@ -40,8 +40,8 @@ const ENVIRONMENT: [(&str, &str, Option<&str>); 4] = [
     ),
     (
         "PATH",
-        "`inbox bridge` posts through the first executable `connectors` in it, and refuses to \
-         start without one.",
+        "`inbox bridge` posts and reads the chat channel through the first executable \
+         `connectors` in it, and refuses to start without one.",
         Some("bridge"),
     ),
 ];

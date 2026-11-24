@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-24T05:02:27Z",
+  "actor": "agent:inbox",
+  "artifact": "story:the-chat-bridge-marks-a-message-read-on-a-reaction",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 (mutant N6, an entry without a channel counted as of another channel, survives the story's cases): the adversary's case adversary_an_entry_without_a_channel_is_asked_about_as_of_the_bound_channel is in the repository and is red under N6",
+    "review": "review-result:adversary-chat-bridge-read-pass-2",
+    "outcome": "fixed"
+  }
+}
