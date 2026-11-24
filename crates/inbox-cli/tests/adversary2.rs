@@ -63,12 +63,6 @@ fn message_id_of(line: &str) -> String {
     }
 }
 
-/// A URL on 127.0.0.1 where nothing listens: a port bound and given back.
-fn closed_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
-    format!("http://{}", listener.local_addr().expect("an address"))
-}
-
 // --- 400 and 413 are not final for an envelope the decoder admitted -----------------------------
 
 /// The claim (fix-1, F5): a `413` is final for the envelope's text. The service answers `413`
@@ -84,7 +78,8 @@ fn a_413_of_a_lowered_request_limit_does_not_drop_an_envelope_a_later_repost_del
     let body = "b".repeat(3000);
 
     // The service is down: the post fails in transport and the envelope is kept for repost.
-    let closed = closed_url();
+    let closed_port = support::ClosedPort::new();
+    let closed = closed_port.url();
     let posted = run(
         &dir.path,
         &[

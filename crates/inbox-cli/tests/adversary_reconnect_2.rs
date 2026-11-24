@@ -20,14 +20,6 @@ use support::{BOB, REFUSED, TRANSPORT, World, ids, text};
 /// The bound of every wait in these cases: it only ends a hang.
 const HANG: Duration = Duration::from_secs(15);
 
-/// A loopback URL on which nothing listens: the service is down.
-fn down_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
-}
-
 /// The message ids in bob's `Pending`, read with bob's own command.
 fn pending_of_bob(world: &World) -> Vec<String> {
     ids(&world.client("bob", &["pending", "--json"]).ok().json())
@@ -169,7 +161,8 @@ fn reconnect_reposted(document: &Value) -> Vec<String> {
 fn a_post_on_its_way_is_not_answered_duplicate_because_another_command_reposted_it() {
     let world = World::new("adv2-on-its-way");
     world.client("bob", &["open"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let failed = world.client_env(
         "alice",
         &["post", "--to", BOB, "--body", "while the service was down"],
@@ -228,7 +221,8 @@ fn a_post_on_its_way_is_not_answered_duplicate_because_another_command_reposted_
 fn an_envelope_the_service_answered_duplicate_key_is_not_posted_again_by_every_command() {
     let world = World::new("adv2-duplicate-key");
     world.client("bob", &["open"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let post = |body: &str, url: Option<&str>| {
         let args = [
             "post",

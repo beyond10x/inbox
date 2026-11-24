@@ -303,11 +303,7 @@ fn a_grandchild_holding_the_pipes_does_not_hold_the_post_of_an_ended_child() {
 fn a_bridge_started_before_the_service_answers_waits_for_it() {
     let world = world("adv-bridge-early");
     let connectors = Connectors::new(&world);
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .expect("a loopback port")
-        .local_addr()
-        .expect("its address")
-        .port();
+    let closed_port = support::ClosedPort::new();
     let mut child = world
         .client_command("person", &["bridge"])
         .args([
@@ -321,7 +317,7 @@ fn a_bridge_started_before_the_service_answers_waits_for_it() {
             "3600",
         ])
         .env("PATH", connectors.path())
-        .env("INBOX_URL", format!("http://127.0.0.1:{port}"))
+        .env("INBOX_URL", closed_port.url())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -512,12 +508,8 @@ fn an_answer_of_exactly_the_bound_is_a_post_made() {
 fn a_bridge_that_waits_for_the_service_says_so_once_and_ends_on_a_signal() {
     let world = world("adv2-bridge-early");
     let connectors = Connectors::new(&world);
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .expect("a loopback port")
-        .local_addr()
-        .expect("its address")
-        .port();
-    let url = format!("http://127.0.0.1:{port}");
+    let closed_port = support::ClosedPort::new();
+    let url = closed_port.url();
     let errors = world.dir.join("early.err");
     let mut child = spawn_bridge(
         &world,

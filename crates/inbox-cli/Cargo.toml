@@ -28,5 +28,8 @@ rustix = { version = "1.1", default-features = false, features = ["process", "st
 signal-hook = "0.4"
 zeroize = "1.8"
 
+[dev-dependencies]
+rustix = { version = "1.1", default-features = false, features = ["net", "std"] }
+
 [lints]
 workspace = true

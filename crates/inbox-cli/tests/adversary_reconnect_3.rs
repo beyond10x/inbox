@@ -22,14 +22,6 @@ use support::{BOB, REFUSED, TRANSPORT, World, ids, text};
 /// The bound of every wait in these cases: it only ends a hang.
 const HANG: Duration = Duration::from_secs(15);
 
-/// A loopback URL on which nothing listens: the service is down.
-fn down_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
-}
-
 /// The file beside the outbox file at `outbox` whose name ends in `suffix`.
 fn beside(outbox: &Path, suffix: &str) -> PathBuf {
     let mut path = outbox.as_os_str().to_owned();
@@ -313,7 +305,8 @@ fn a_post_the_stopping_service_answered_503_is_posted_again_by_a_later_command()
 fn two_commands_that_post_one_envelope_at_once_leave_one_epoch_and_no_mark() {
     let world = World::new("adv3-at-once-epochs");
     world.client("bob", &["open"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let failed = world.client_env(
         "alice",
         &["post", "--to", BOB, "--body", "while the service was down"],

@@ -26,14 +26,6 @@ fn beside(outbox: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// A loopback URL on which nothing listens: the service is down.
-fn down_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
-}
-
 /// The message ids in bob's `Pending`, read with bob's own command.
 fn pending_of_bob(world: &World) -> Vec<String> {
     ids(&world.client("bob", &["pending", "--json"]).ok().json())
@@ -48,7 +40,8 @@ fn pending_of_bob(world: &World) -> Vec<String> {
 fn a_request_posted_while_the_service_was_down_arrives_after_the_restart_by_itself() {
     let mut world = World::new("adv-reconnect-down");
     world.client("bob", &["open", "--adapter", "slack"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let failed = world.client_env(
         "alice",
         &[

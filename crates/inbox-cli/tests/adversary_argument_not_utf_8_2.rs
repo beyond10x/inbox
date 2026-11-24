@@ -11,7 +11,7 @@ use std::ffi::{OsStr, OsString};
 use std::net::TcpListener;
 use std::os::unix::ffi::OsStrExt;
 
-use crate::support::{ALICE, Dir, USAGE, command, key_new};
+use crate::support::{ALICE, ClosedPort, Dir, USAGE, command, key_new};
 
 fn os(bytes: &[u8]) -> OsString {
     OsStr::from_bytes(bytes).to_owned()
@@ -39,14 +39,6 @@ impl Quiet {
             other => panic!("{what} sent a request: {other:?}"),
         }
     }
-}
-
-/// An address on loopback where nothing listens.
-fn dead_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("the listener binds");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
 }
 
 struct Output {
@@ -191,7 +183,8 @@ fn a_surrogate_half_and_an_overlong_encoding_are_refused_and_escaped() {
 fn the_path_options_of_every_command_take_a_file_name_that_is_not_utf_8() {
     let dir = Dir::new("adv2-paths");
     let public_key = key_new(&dir.path, "alice.key", Some(("alice-test-key", ALICE)));
-    let url = dead_url();
+    let closed_port = ClosedPort::new();
+    let url = closed_port.url();
     let runs: [(&str, Vec<OsString>); 5] = [
         (
             "keyfile add-key --file <bytes> --operator-secret-key-file=<bytes>",

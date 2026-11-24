@@ -13,6 +13,7 @@ mod adversary_bridge_once;
 mod adversary_bridge_own_key;
 mod adversary_bridge_read;
 mod adversary_clock_file;
+mod adversary_closed_port;
 mod adversary_collect_record;
 mod adversary_collect_record_2;
 mod adversary_control_sequences;

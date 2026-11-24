@@ -748,14 +748,6 @@ fn the_reconnect_of_a_typed_post_does_not_post_its_own_envelope_again() {
     );
 }
 
-/// A loopback URL on which nothing listens.
-fn down_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
-}
-
 /// `inbox close` that fails in transport, or that the service refuses for another reason than
 /// `UnknownInbox`, keeps the record of the opened inbox as it was, so a later command after a
 /// restart opens the inbox again.
@@ -767,7 +759,8 @@ fn a_close_that_failed_in_transport_or_was_refused_keeps_the_record() {
     let record = lines(&beside(&outbox, ".opened"));
     assert_eq!(record.len(), 1);
 
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let gone = world.client_env("bob", &["close"], &[("INBOX_URL", down.as_str())]);
     assert_eq!(gone.status, TRANSPORT, "{gone:#?}");
     assert_eq!(lines(&beside(&outbox, ".opened")), record, "{gone:#?}");
@@ -1014,7 +1007,8 @@ fn a_typed_repost_at_a_new_start_posts_each_kept_envelope_once() {
 fn a_marked_envelope_refused_413_by_a_reconnect_is_not_posted_again() {
     let world = World::new("reconnect-413");
     world.client("bob", &["open"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let failed = world.client_env(
         "alice",
         &["post", "--to", BOB, "--body", "while the service was down"],
@@ -1246,7 +1240,8 @@ fn a_reconnects_close_after_closed_meanwhile_is_followed_by_an_open_when_a_recor
 fn a_marked_envelope_answered_503_by_a_reconnect_is_posted_again_by_the_next_command() {
     let world = World::new("reconnect-503");
     world.client("bob", &["open"]).ok();
-    let down = down_url();
+    let closed_port = support::ClosedPort::new();
+    let down = closed_port.url();
     let failed = world.client_env(
         "alice",
         &["post", "--to", BOB, "--body", "while the service was down"],

@@ -10,7 +10,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 
-use crate::support::{ALICE, Dir, USAGE, command, key_new};
+use crate::support::{ALICE, ClosedPort, Dir, USAGE, command, key_new};
 
 fn os(bytes: &[u8]) -> OsString {
     OsStr::from_bytes(bytes).to_owned()
@@ -19,15 +19,6 @@ fn os(bytes: &[u8]) -> OsString {
 /// A path inside `dir` whose file name is `name`, bytes that need not be UTF-8.
 fn path_in(dir: &Dir, name: &[u8]) -> PathBuf {
     dir.path.join(OsStr::from_bytes(name))
-}
-
-/// An address on loopback where nothing listens: a request to it fails with a transport error,
-/// so reaching it shows the client read its key and accepted its arguments.
-fn dead_url() -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("the listener binds");
-    let url = format!("http://{}", listener.local_addr().expect("an address"));
-    drop(listener);
-    url
 }
 
 /// A listener no request may reach.
@@ -121,7 +112,8 @@ fn the_secret_key_file_option_takes_the_path_its_variable_takes() {
     key_new(&dir.path, "alice.key", Some(("alice-test-key", ALICE)));
     let key = path_in(&dir, b"caf\xe9.key");
     std::fs::rename(dir.join("alice.key"), &key).expect("the key file is renamed");
-    let url = dead_url();
+    let closed_port = ClosedPort::new();
+    let url = closed_port.url();
 
     let mut by_variable = command(&dir.path);
     by_variable

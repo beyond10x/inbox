@@ -999,12 +999,8 @@ fn a_helper_of_a_post_that_ended_by_itself_is_not_ended_by_the_bridge() {
 fn a_bridge_started_before_the_service_answers_says_so_and_keeps_trying() {
     let world = world("bridge-early");
     let connectors = Connectors::new(&world, "connectors");
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .expect("a loopback port")
-        .local_addr()
-        .expect("its address")
-        .port();
-    let url = format!("http://127.0.0.1:{port}");
+    let closed_port = support::ClosedPort::new();
+    let url = closed_port.url();
     let mut bridge = Bridge::start(
         &world,
         "person",
